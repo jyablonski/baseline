@@ -158,6 +158,7 @@ class SocialEntity(BaseModel):
     entity_id: UUID
     entity_name: str
     entity_abbreviation: str | None = None
+    entity_nickname: str | None = None
     post_count: int
     comment_count: int
     total_post_score: int

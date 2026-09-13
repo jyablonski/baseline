@@ -115,6 +115,13 @@ const COLUMNS: Column[] = [
     numeric: true,
     render: (row) => formatSignedMargin(row.plus_minus),
   },
+  {
+    key: "mvp",
+    label: "MVP",
+    value: (row) => row.mvp_game_score ?? null,
+    numeric: true,
+    render: (row) => formatNumber(row.mvp_game_score, 1),
+  },
 ];
 
 const DEFAULT_SORT = "points";

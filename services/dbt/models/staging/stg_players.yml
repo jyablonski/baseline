@@ -20,6 +20,31 @@ models:
       - name: is_active
         data_tests:
           - dbt_expectations.expect_column_values_to_not_be_null
+      - name: position
+        description: Full position name mapped from the roster code (PG, 1, G-F, ...).
+        data_tests:
+          # warn, not error: a new roster code should surface, not skip every
+          # model downstream of players in dbt build.
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set:
+                  [
+                    "Point Guard",
+                    "Shooting Guard",
+                    "Small Forward",
+                    "Power Forward",
+                    "Center",
+                    "Guard",
+                    "Forward",
+                    "Guard-Forward",
+                    "Forward-Guard",
+                    "Forward-Center",
+                    "Center-Forward",
+                  ]
+                quote_values: true
+                row_condition: "position is not null"
+              config:
+                severity: warn
       - name: from_year
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:

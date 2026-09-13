@@ -103,7 +103,7 @@ function HomeDesk() {
           )}
           <p className="mt-4 text-sm">
             <Link href="/games" className="text-primary hover:underline">
-              Play-by-play game flow →
+              PBP game flow →
             </Link>
             <span className="px-2 text-ink-3">·</span>
             <Link href="/players" className="text-primary hover:underline">

@@ -9,7 +9,6 @@ import {
   CONTENT_TYPE_LABELS,
   flairLabel,
   formatCount,
-  formatRatio,
   postSourceLabel,
   relativeAge,
 } from "@/lib/social";
@@ -57,7 +56,6 @@ export function PostCard({
             </a>
           </p>
 
-          <MetricStrip post={post} />
           <Mentions post={post} />
 
           <button
@@ -75,44 +73,6 @@ export function PostCard({
 
       {open ? <CapturedComments post={post} /> : null}
     </article>
-  );
-}
-
-function MetricStrip({ post }: { post: SocialPost }) {
-  // A score of 0 is Reddit's floor, so the two score-against-score ratios are
-  // undefined rather than infinite and come back null.
-  const undefinedRatios = post.top_comment_leverage == null && post.comment_concentration == null;
-  return (
-    <div className="mt-3 flex flex-wrap items-stretch border border-rule bg-tint">
-      <Metric label="Discussion ratio" value={formatRatio(post.discussion_ratio)} emphasis />
-      <Metric label="Top-comment leverage" value={formatRatio(post.top_comment_leverage)} />
-      <Metric label="Comment concentration" value={formatRatio(post.comment_concentration)} />
-      {undefinedRatios ? (
-        <p className="type-caption flex-1 px-[var(--ct-space-3)] py-2">
-          Ratios against a score of 0 are undefined, so they are left blank rather than shown as
-          infinite.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  emphasis = false,
-}: {
-  label: string;
-  value: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <div className="border-r border-rule px-[var(--ct-space-3)] py-2 last:border-r-0">
-      <p className="type-eyebrow whitespace-nowrap">{label}</p>
-      <p className={cn("tabular mt-1 text-[var(--ct-fs-num)]", emphasis && "text-ink-red")}>
-        {value}
-      </p>
-    </div>
   );
 }
 

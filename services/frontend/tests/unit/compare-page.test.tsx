@@ -181,7 +181,7 @@ describe("compare page", () => {
     renderPage();
 
     expect(await screen.findByRole("button", { name: "Head-to-head" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Career" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Season" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Kevin Durant" })).toBeInTheDocument();
     expect(screen.getByText("79")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "+/-" })).toBeInTheDocument();
@@ -189,7 +189,8 @@ describe("compare page", () => {
     expect(screen.getByText("+3.2")).toBeInTheDocument();
     expect(screen.getByText("+0.9")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "+/-" })).toBeInTheDocument();
-    expect(screen.getByText(/Totals cover the seasons we have game logs for/)).toBeInTheDocument();
+    // Coverage is the latest season only, so nothing is described as career.
+    expect(screen.queryByText(/career/i)).not.toBeInTheDocument();
     expect(comparePlayersHeadToHead).not.toHaveBeenCalled();
   });
 
@@ -222,10 +223,67 @@ describe("compare page", () => {
     expect(await screen.findByRole("link", { name: "Kevin Durant" })).toBeInTheDocument();
     expect(screen.getByText("+4.1")).toBeInTheDocument();
     const differenceCells = screen.getByText("Difference").closest("tr")?.querySelectorAll("td");
-    const plusMinusDiff = differenceCells?.[differenceCells.length - 1];
+    // Player, Games, PPG, RPG, APG, then +/-.
+    const plusMinusDiff = differenceCells?.[5];
     expect(plusMinusDiff?.textContent).toBe("—");
     expect(plusMinusDiff?.textContent).not.toBe("+0.0");
     expect(plusMinusDiff?.textContent).not.toBe("+0");
+  });
+
+  it("shows regular season and playoff MVP with league rank for the requested season", async () => {
+    search = new URLSearchParams(`ids=${CURRY_ID},${DURANT_ID}&stat=mvp&season=2024-25`);
+    comparePlayers.mockResolvedValue({
+      data: [
+        {
+          ...careerRow(CURRY_ID, {
+            games: 70,
+            seasons: 1,
+            ppg: 26.4,
+            rpg: 4.5,
+            apg: 6.1,
+            plus_minus: 5.2,
+          }),
+          mvp_season: "2024-25",
+          mvp_score: 27.3,
+          mvp_rank: 2,
+          playoff_mvp_score: 30.1,
+          playoff_mvp_rank: 1,
+        },
+        {
+          ...careerRow(DURANT_ID, {
+            games: 65,
+            seasons: 1,
+            ppg: 25.0,
+            rpg: 6.0,
+            apg: 4.0,
+            plus_minus: 4.0,
+          }),
+          mvp_season: "2024-25",
+          mvp_score: 24.8,
+          mvp_rank: 6,
+          playoff_mvp_score: null,
+          playoff_mvp_rank: null,
+        },
+      ],
+      meta: { total: 2, limit: 2, offset: 0 },
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: "Kevin Durant" })).toBeInTheDocument();
+    expect(comparePlayers).toHaveBeenCalledWith([CURRY_ID, DURANT_ID], "mvp", "2024-25");
+    expect(screen.getByRole("columnheader", { name: /^MVP/ })).toHaveAttribute(
+      "data-active",
+      "true"
+    );
+    expect(screen.getByRole("columnheader", { name: "Playoff MVP" })).toBeInTheDocument();
+    expect(screen.getByText("#2")).toBeInTheDocument();
+    expect(screen.getByText("#6")).toBeInTheDocument();
+    expect(screen.getByText("#1")).toBeInTheDocument();
+    const differenceCells = screen.getByText("Difference").closest("tr")?.querySelectorAll("td");
+    expect(differenceCells?.[6]?.textContent).toBe("+2.5");
+    expect(differenceCells?.[7]?.textContent).toBe("—");
+    expect(screen.getByText(/2024-25 regular season and playoffs/)).toBeInTheDocument();
   });
 
   it("renders head-to-head averages and game logs after toggling", async () => {

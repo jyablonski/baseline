@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -22,6 +24,8 @@ import { redirect } from "next/navigation";
 // Operational data: never statically rendered, never cached.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+export const metadata: Metadata = { title: "Admin" };
 
 const LEVEL_LABEL = {
   ok: "Healthy",

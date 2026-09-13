@@ -222,6 +222,8 @@ export const api = {
           search,
           active: params.active,
           team_id: params.team_id,
+          season: params.season,
+          sort: params.sort,
           limit: params.limit,
           offset: params.offset,
         })}`
@@ -249,12 +251,13 @@ export const api = {
       await fetchApi(`/api/v1/players/${id}/back-to-backs${buildQuery({ season })}`)
     ),
 
-  comparePlayers: async (ids: string[], stat?: string) =>
+  comparePlayers: async (ids: string[], stat?: string, season?: string) =>
     asPaginated<PlayerComparison>(
       await fetchApi(
         `/api/v1/players/compare${buildQuery({
           ids: ids.join(","),
           stat,
+          season,
         })}`
       )
     ),

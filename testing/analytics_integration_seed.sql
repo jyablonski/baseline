@@ -1,6 +1,6 @@
 -- Seeded gold mart rows for API/MCP integration tests (no dbt required).
 
-TRUNCATE gold.fct_standings, gold.fct_player_season_stats, gold.fct_player_game_logs,
+TRUNCATE gold.fct_standings, gold.fct_player_mvp_scores, gold.fct_player_season_stats, gold.fct_player_game_logs,
          gold.fct_team_game_results, gold.fct_games_schedule, gold.dim_players, gold.dim_teams
          RESTART IDENTITY CASCADE;
 
@@ -59,23 +59,24 @@ INSERT INTO gold.fct_player_game_logs (
     field_goals_made, field_goals_attempted, field_goal_pct,
     three_pointers_made, three_pointers_attempted, three_point_pct,
     free_throws_made, free_throws_attempted, free_throw_pct, plus_minus,
+    season_type, mvp_box_score, mvp_game_score,
     is_back_to_back, season_game_number, career_game_number,
     player_name, team_abbreviation, team_name
 ) VALUES
     ('00000000-0000-4000-8000-000000000102', '00000000-0000-4000-8000-000000000201', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '2024-10-22', '2024-25', 'LAC @ GSW', 'away', 'GSW',
-     'L', 36.0, 28, 8, 5, 2, 1, 2, 10, 20, 0.500, 2, 5, 0.400, 6, 6, 1.000, -8,
+     'L', 36.0, 28, 8, 5, 2, 1, 2, 10, 20, 0.500, 2, 5, 0.400, 6, 6, 1.000, -8, 'Regular Season', 25.4, 20.3,
      FALSE, 1, 1, 'Kawhi Leonard', 'LAC', 'LA Clippers'),
     ('00000000-0000-4000-8000-000000000102', '00000000-0000-4000-8000-000000000202', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '2024-10-23', '2024-25', 'LAC @ CHI', 'away', 'CHI',
-     'W', 34.0, 24, 7, 4, 1, 1, 1, 9, 18, 0.500, 1, 4, 0.250, 5, 5, 1.000, 6,
+     'W', 34.0, 24, 7, 4, 1, 1, 1, 9, 18, 0.500, 1, 4, 0.250, 5, 5, 1.000, 6, 'Regular Season', 21.3, 25.6,
      TRUE, 2, 2, 'Kawhi Leonard', 'LAC', 'LA Clippers'),
     ('00000000-0000-4000-8000-000000000102', '00000000-0000-4000-8000-000000000203', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '2024-10-25', '2024-25', 'LAC vs. GSW', 'home', 'GSW',
-     'W', 38.0, 30, 9, 6, 2, 0, 3, 11, 22, 0.500, 3, 7, 0.429, 5, 6, 0.833, 4,
+     'W', 38.0, 30, 9, 6, 2, 0, 3, 11, 22, 0.500, 3, 7, 0.429, 5, 6, 0.833, 4, 'Regular Season', 25.4, 30.5,
      FALSE, 3, 3, 'Kawhi Leonard', 'LAC', 'LA Clippers'),
     ('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000201', '7bf8726a-a852-452d-b81f-14839127c5fb', '2024-10-22', '2024-25', 'GSW vs. LAC', 'home', 'LAC',
-     'W', 35.0, 32, 4, 8, 1, 0, 3, 11, 23, 0.478, 6, 12, 0.500, 4, 4, 1.000, 10,
+     'W', 35.0, 32, 4, 8, 1, 0, 3, 11, 23, 0.478, 6, 12, 0.500, 4, 4, 1.000, 10, 'Regular Season', 25.5, 30.6,
      FALSE, 1, 1, 'Stephen Curry', 'GSW', 'Golden State Warriors'),
     ('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000203', '7bf8726a-a852-452d-b81f-14839127c5fb', '2024-10-25', '2024-25', 'GSW @ LAC', 'away', 'LAC',
-     'L', 37.0, 29, 5, 7, 2, 0, 2, 10, 24, 0.417, 5, 13, 0.385, 4, 4, 1.000, -3,
+     'L', 37.0, 29, 5, 7, 2, 0, 2, 10, 24, 0.417, 5, 13, 0.385, 4, 4, 1.000, -3, 'Regular Season', 23.1, 18.5,
      FALSE, 2, 2, 'Stephen Curry', 'GSW', 'Golden State Warriors');
 
 INSERT INTO gold.fct_player_season_stats (
@@ -83,6 +84,19 @@ INSERT INTO gold.fct_player_season_stats (
 ) VALUES
     ('00000000-0000-4000-8000-000000000102', '2024-25', 3, '2024-10-22', '2024-10-25', 27.3, 8.0, 5.0),
     ('00000000-0000-4000-8000-000000000101', '2024-25', 2, '2024-10-22', '2024-10-25', 30.5, 4.5, 7.5);
+
+-- Same numbers the dbt e2e derives: Curry missed one of three GSW games.
+INSERT INTO gold.fct_player_mvp_scores (
+    player_id, season, season_type, team_id, games_played, team_games, wins, losses,
+    win_pct, games_missed_pct, avg_box_score, avg_game_score, availability_multiplier,
+    mvp_score, mvp_rank
+) VALUES
+    ('00000000-0000-4000-8000-000000000102', '2024-25', 'Regular Season', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958',
+     3, 3, 2, 1, 0.667, 0.000, 24.0, 25.5, 1.000, 25.5, 1),
+    ('00000000-0000-4000-8000-000000000101', '2024-25', 'Regular Season', '7bf8726a-a852-452d-b81f-14839127c5fb',
+     2, 3, 1, 1, 0.500, 0.333, 24.3, 24.5, 0.915, 22.5, 2),
+    ('00000000-0000-4000-8000-000000000101', '2024-25', 'Playoffs', '7bf8726a-a852-452d-b81f-14839127c5fb',
+     1, 1, 1, 0, 1.000, 0.000, 29.3, 35.2, 1.000, 35.2, 1);
 
 INSERT INTO gold.fct_games_schedule (
     game_id, season, season_type, game_date, status, arena, arena_city, arena_state,

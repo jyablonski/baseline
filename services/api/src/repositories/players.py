@@ -9,7 +9,6 @@ from queries.players import (
     COMPARE_STAT_COLUMNS,
     HEAD_TO_HEAD_LOGS,
     LIST_GAME_LOGS_COUNT,
-    LIST_PLAYERS,
     LIST_PLAYERS_COUNT,
     LIST_SEASON_STATS,
     LIST_SEASON_STATS_COUNT,
@@ -19,6 +18,7 @@ from queries.players import (
     PLAYERS_BY_IDS,
     compare_players_stmt,
     list_game_logs_stmt,
+    list_players_stmt,
 )
 
 __all__ = ["COMPARE_STAT_COLUMNS", "PlayersRepository"]
@@ -38,6 +38,8 @@ class PlayersRepository:
         search: str | None,
         active: bool | None,
         team_id: UUID | None = None,
+        season: str | None = None,
+        sort: str = "name",
         limit: int,
         offset: int,
     ) -> tuple[int, list[dict]]:
@@ -46,20 +48,28 @@ class PlayersRepository:
             "search": search_pattern,
             "active": active,
             "team_id": team_id,
+            "season": season,
             "limit": limit,
             "offset": offset,
         }
         total = self.db.execute(LIST_PLAYERS_COUNT, params).scalar_one()
-        rows = self.db.execute(LIST_PLAYERS, params)
+        rows = self.db.execute(list_players_stmt(sort), params)
         return int(total), [dict(row._mapping) for row in rows]
 
     def get_player(self, player_id: UUID) -> dict | None:
-        row = self.db.execute(PLAYER_BY_ID, {"player_id": player_id}).mappings().first()
+        row = (
+            self.db.execute(PLAYER_BY_ID, {"player_id": player_id, "season": None})
+            .mappings()
+            .first()
+        )
         return dict(row) if row is not None else None
 
-    def compare_players(self, player_ids: list[UUID], order_column: str) -> list[dict]:
+    def compare_players(
+        self, player_ids: list[UUID], order_column: str, season: str | None = None
+    ) -> list[dict]:
         stmt = compare_players_stmt(order_column)
-        return [dict(row._mapping) for row in self.db.execute(stmt, {"player_ids": player_ids})]
+        params = {"player_ids": player_ids, "season": season}
+        return [dict(row._mapping) for row in self.db.execute(stmt, params)]
 
     def list_players_by_ids(self, player_ids: list[UUID]) -> list[dict]:
         return [

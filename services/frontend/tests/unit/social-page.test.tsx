@@ -109,6 +109,7 @@ vi.mock("@/lib/api", () => ({
           entity_id: `${entityType}-1`,
           entity_name: entityType === "player" ? "Kawhi Leonard" : "LA Clippers",
           entity_abbreviation: entityType === "team" ? "LAC" : null,
+          entity_nickname: entityType === "team" ? "Clippers" : null,
           post_count: 9,
           comment_count: 63,
           total_post_score: 41022,
@@ -212,13 +213,15 @@ describe("social page", () => {
     expect(screen.getByText(/top 10 per post, of 18,204 posted/i)).toBeInTheDocument();
   });
 
-  it("blanks the score-against-score ratios on a zero-score post", async () => {
+  it("leaves the per-post ratio strip off feed cards", async () => {
     renderPage();
     const card = await screen.findByRole("article");
-    // Comments per upvote keeps its floor; the two score ratios do not.
-    expect(within(card).getByText("132.00")).toBeInTheDocument();
-    expect(within(card).getAllByText("—").length).toBeGreaterThanOrEqual(2);
-    expect(within(card).getByText(/undefined, so they are left blank/i)).toBeInTheDocument();
+    expect(within(card).getByText("Score")).toBeInTheDocument();
+    for (const gone of ["Discussion ratio", "Top-comment leverage", "Comment concentration"]) {
+      expect(within(card).queryByText(gone)).not.toBeInTheDocument();
+    }
+    expect(within(card).queryByText("132.00")).not.toBeInTheDocument();
+    expect(screen.getByText(/What r\/nba is talking about\./)).toBeInTheDocument();
   });
 
   it("keeps comments collapsed until asked, then labels them as a sample", async () => {
@@ -235,14 +238,19 @@ describe("social page", () => {
 
   it("renders the rail, the boards, and the limits block", async () => {
     renderPage();
-    const rail = screen.getByText("Player mentions").closest("section") as HTMLElement;
-    expect(await within(rail).findByText("Kawhi Leonard")).toBeInTheDocument();
-    // The same name also headlines the summary strip, hence the scoped lookup.
-    expect(screen.getAllByText("Kawhi Leonard").length).toBeGreaterThan(1);
+    // The top player still headlines the summary strip; the player board is gone.
+    expect(await screen.findByText("Kawhi Leonard")).toBeInTheDocument();
+    expect(screen.getAllByText("Kawhi Leonard")).toHaveLength(1);
+    expect(screen.queryByRole("heading", { name: "Player mentions" })).not.toBeInTheDocument();
     // The rail shows the nickname so a long club name still fits.
     expect(await screen.findByText("Lakers")).toBeInTheDocument();
     expect(screen.queryByText("Los Angeles Lakers")).not.toBeInTheDocument();
-    expect(screen.getByText("Fanbases")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Fanbase comments" })).toBeInTheDocument();
+    // Team mentions use the nickname too, with no abbreviation beside it.
+    const teams = screen.getByText("Team mentions").closest("section") as HTMLElement;
+    expect(await within(teams).findByText("Clippers")).toBeInTheDocument();
+    expect(within(teams).queryByText("LA Clippers")).not.toBeInTheDocument();
+    expect(within(teams).queryByText("LAC")).not.toBeInTheDocument();
     // Removed panels stay removed.
     // Panel headings, not any occurrence: a card still badges a contested post.
     for (const gone of ["Posters", "Self posts against links", "Posting rhythm", "Contested"]) {

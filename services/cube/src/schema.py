@@ -14,6 +14,7 @@ REQUIRED_CUBES = (
     "team_games",
     "team_game_flow",
     "player_season_stats",
+    "player_mvp_scores",
     "player_contracts",
     "team_payroll",
     "games_schedule",
@@ -142,6 +143,14 @@ def validate_schema(root: Path | None = None) -> dict:
     for required in ("biggest_lead_blown", "biggest_comeback", "overtime_games"):
         if required not in flow_measures:
             raise ValueError(f"team_game_flow is missing measure {required}")
+
+    mvp_scores = next(item for item in cubes_payload if item["name"] == "player_mvp_scores")
+    if mvp_scores.get("sql_table") != "gold.fct_player_mvp_scores":
+        raise ValueError("player_mvp_scores must query gold.fct_player_mvp_scores")
+    mvp_dims = {dim["name"] for dim in mvp_scores.get("dimensions") or []}
+    for required in ("season_type", "mvp_score", "mvp_rank"):
+        if required not in mvp_dims:
+            raise ValueError(f"player_mvp_scores is missing dimension {required}")
 
     return {
         "root": project_dir,

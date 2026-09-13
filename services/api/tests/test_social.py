@@ -286,7 +286,38 @@ def test_entities(client, session, mapping_row, query_result, entity_type) -> No
     response = client.get("/api/v1/social/entities", params={"entity_type": entity_type})
     assert response.status_code == 200
     assert response.json()["data"][0]["post_count"] == 9
+    assert response.json()["data"][0]["entity_nickname"] is None
     assert session.calls[0][1]["entity_type"] == entity_type
+
+
+@pytest.mark.unit
+def test_team_entities_carry_the_nickname(client, session, mapping_row, query_result) -> None:
+    from queries.social import LIST_ENTITIES
+
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "entity_id": "a79dabb2-26c5-443c-bbb4-cabdd8db5958",
+                        "entity_name": "LA Clippers",
+                        "entity_abbreviation": "LAC",
+                        "entity_nickname": "Clippers",
+                        "post_count": 41,
+                        "comment_count": 66,
+                        "total_post_score": 9000,
+                        "top_post_score": 2100,
+                        "primary_color": "#C8102E",
+                        "alternate_color": None,
+                    }
+                )
+            ]
+        )
+    ]
+    response = client.get("/api/v1/social/entities", params={"entity_type": "team"})
+    assert response.status_code == 200
+    assert response.json()["data"][0]["entity_nickname"] == "Clippers"
+    assert "dim_teams.nickname AS entity_nickname" in str(LIST_ENTITIES)
 
 
 @pytest.mark.unit

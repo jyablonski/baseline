@@ -1,8 +1,12 @@
+import type { Metadata } from "next";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { signIn } from "@/auth";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Admin sign-in" };
 
 // NextAuth redirects here with ?error=... when the allowlist rejects an account.
 const ERROR_COPY: Record<string, string> = {

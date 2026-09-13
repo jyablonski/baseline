@@ -13,6 +13,16 @@ models:
       - name: is_back_to_back
         data_tests:
           - dbt_expectations.expect_column_values_to_not_be_null
+      - name: season_type
+        description: From stg_games (Regular Season, PlayIn, Playoffs, Cup).
+      - name: mvp_box_score
+        description: >
+          Unrounded Game Score adapted to the logged columns (no ORB/DRB split,
+          no fouls). Null when the log has no minutes.
+      - name: mvp_game_score
+        description: >
+          mvp_box_score scaled by the result: up by var mvp_win_weight on a win,
+          down on a loss. Unrounded; fct_player_mvp_scores averages this column.
       - name: season_game_number
         description: >
           row_number per player × season ordered by game_date. Counts every

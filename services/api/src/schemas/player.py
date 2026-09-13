@@ -16,6 +16,10 @@ class PlayerSummary(BaseModel):
     career_ppg: float | None = None
     career_rpg: float | None = None
     career_apg: float | None = None
+    # Regular Season MVP ladder for mvp_season (the requested season, else the latest).
+    mvp_season: str | None = None
+    mvp_score: float | None = None
+    mvp_rank: int | None = None
 
 
 class PlayerDetail(PlayerSummary):
@@ -50,6 +54,8 @@ class GameLogEntry(BaseModel):
     blocks: int | None = None
     turnovers: int | None = None
     plus_minus: int | None = None
+    season_type: str | None = None
+    mvp_game_score: float | None = None
     is_back_to_back: bool
 
 
@@ -79,6 +85,11 @@ class PlayerComparison(BaseModel):
     career_rpg: float | None = None
     career_apg: float | None = None
     career_avg_plus_minus: float | None = None
+    mvp_season: str | None = None
+    mvp_score: float | None = None
+    mvp_rank: int | None = None
+    playoff_mvp_score: float | None = None
+    playoff_mvp_rank: int | None = None
 
 
 class PlayerSeasonStats(BaseModel):

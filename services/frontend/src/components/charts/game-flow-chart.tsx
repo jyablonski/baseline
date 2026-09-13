@@ -159,7 +159,7 @@ export function GameFlowChart({
   if (data.length === 0) {
     return (
       <EmptyState
-        title="No play-by-play data available."
+        title="No PBP data available."
         message="There's no scoring timeline for this game."
       />
     );

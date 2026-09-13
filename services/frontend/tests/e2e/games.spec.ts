@@ -20,9 +20,9 @@ test("games index lists recent finals and opens empty play-by-play", async ({ pa
   await expect(collapses.getByRole("cell", { name: "MIA", exact: true })).toBeVisible();
   await expect(collapses.getByRole("cell", { name: "21", exact: true })).toBeVisible();
 
-  await recent.getByRole("link", { name: "Play-by-play →" }).first().click();
+  await recent.getByRole("link", { name: "PBP →" }).first().click();
   await expect(page).toHaveURL(/\/games\/0022400001/);
-  await expect(page.getByText("No play-by-play data available.")).toBeVisible();
+  await expect(page.getByText("No PBP data available.")).toBeVisible();
   await expect(page.getByText("There's no scoring timeline for this game.")).toBeVisible();
   await expect(page.getByRole("link", { name: "All recent final games →" })).toBeVisible();
   await expect(page.getByText("Recent final games", { exact: true })).toHaveCount(0);
@@ -44,7 +44,7 @@ test("game flow page narrates the comeback and charts the differential", async (
   await expect(page.getByText("Max lead +21")).toBeVisible();
   await expect(page.getByText("4 lead changes")).toBeVisible();
   await expect(page.getByText("97 plays")).toBeVisible();
-  await expect(page.getByText("No play-by-play data available.")).toHaveCount(0);
+  await expect(page.getByText("No PBP data available.")).toHaveCount(0);
 });
 
 test("blown-leads table links through to that game", async ({ page }) => {
@@ -53,7 +53,7 @@ test("blown-leads table links through to that game", async ({ page }) => {
 
   const collapses = page.getByRole("table").nth(1);
   await expect(collapses.getByRole("cell", { name: "Q3", exact: true })).toBeVisible();
-  await collapses.getByRole("link", { name: "Play-by-play →" }).first().click();
+  await collapses.getByRole("link", { name: "PBP →" }).first().click();
   await expect(page).toHaveURL(/\/games\/0022400002/);
   await expect(page.getByText("BOS erased a 21-point deficit, down 9 entering Q4")).toBeVisible();
 });

@@ -12,7 +12,7 @@ test("schedule lists the upcoming slate without scores or 2010-11 copy", async (
   await expect(page.getByText("GSW")).toBeVisible();
   await expect(page.getByRole("cell", { name: "Scheduled" })).toBeVisible();
   await expect(page.getByText("Chase Center")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Play-by-play →" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "PBP →" })).toHaveCount(0);
   await expectNo2010Range(page);
 });
 

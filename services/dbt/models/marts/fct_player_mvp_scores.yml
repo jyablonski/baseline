@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: fct_player_mvp_scores
+    description: >
+      Season-wide MVP score and rank per player. Grain is player_id x season x
+      season_type, Regular Season and Playoffs only (play-in and the Cup final
+      are excluded). mvp_score is the average game-level MVP score (box score
+      scaled by win/loss) times an availability multiplier that starts
+      penalizing past a grace share of team games missed and caps out. Knobs
+      are the mvp_* vars in dbt_project.yml.
+    columns:
+      - name: player_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+      - name: season_type
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["Regular Season", "Playoffs"]
+                quote_values: true
+      - name: team_id
+        description: Team of the player's latest game in the season type; its schedule is the availability denominator.
+        data_tests:
+          - not_null
+      - name: games_played
+        description: Logs with minutes. DNP rows are not games played.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 100
+      - name: team_games
+        description: Final games the player's latest team has played in the season type, to date.
+      - name: games_missed_pct
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: availability_multiplier
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: mvp_score
+        data_tests:
+          - not_null
+      - name: mvp_rank
+        description: rank() within season x season_type by unrounded score, so ties share a rank.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["player_id", "season", "season_type"]
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          arguments:
+            min_value: 1

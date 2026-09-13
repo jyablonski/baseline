@@ -328,7 +328,8 @@ LIST_BOX_SCORE = text(
                 3
             )
         END AS true_shooting_pct,
-        fct_player_game_logs.plus_minus
+        fct_player_game_logs.plus_minus,
+        fct_player_game_logs.mvp_game_score
     FROM gold.fct_player_game_logs
     WHERE fct_player_game_logs.game_id = :game_id
       -- Only players who actually checked in. A DNP is logged either as a null

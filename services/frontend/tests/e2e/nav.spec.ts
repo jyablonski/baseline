@@ -15,7 +15,7 @@ test("header shows Baseline tabs, watermark, and no sidebar", async ({ page }) =
   const nav = primaryNav(page);
   await page.goto("/games");
   await expect(page).toHaveURL(/\/games/);
-  await expect(page).toHaveTitle("Baseline — Games");
+  await expect(page).toHaveTitle("Games — Baseline");
   await expect(page.getByRole("heading", { name: "Game flow" })).toBeVisible();
 
   await nav.getByRole("link", { name: "Ask" }).click();
@@ -24,6 +24,10 @@ test("header shows Baseline tabs, watermark, and no sidebar", async ({ page }) =
 
   await nav.getByRole("link", { name: "About" }).click();
   await expect(page).toHaveURL(/\/about/);
-  await expect(page).toHaveTitle("Baseline — About");
+  await expect(page).toHaveTitle("About — Baseline");
   await expect(page.getByRole("heading", { name: "About", exact: true })).toBeVisible();
+
+  await nav.getByRole("link", { name: "Social" }).click();
+  await expect(page).toHaveURL(/\/social/);
+  await expect(page).toHaveTitle("Social — Baseline");
 });

@@ -61,12 +61,21 @@ Local `compose run` bind-mounts models and SQL, so YAML and SQL edits need no re
 
 **Staging** views mirror source tables one-to-one. **Intermediate** models do the real work — enriched game logs, contract and injury name matching, transaction participant resolution, play-by-play parsing and scoring.
 
-**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`, `fct_reddit_entity_mentions`, `fct_reddit_flair`, `fct_transactions`, `fct_transaction_participants`, and `fct_prediction_scorecard` (per-model evaluation metrics; see [ml.md](ml.md)).
+**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_player_mvp_scores`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`, `fct_reddit_entity_mentions`, `fct_reddit_flair`, `fct_transactions`, `fct_transaction_participants`, and `fct_prediction_scorecard` (per-model evaluation metrics; see [ml.md](ml.md)).
 
 Materialization is a real decision here — see `services/dbt/AGENTS.md` for the policy. Two things to know:
 
 - `int_play_by_play_events` is **incremental**. Its regex parsing costs ~2 minutes to rebuild in full, so changing its SQL needs `--full-refresh`.
 - `fct_play_by_play` carries both the raw actions and the typed event detail. It absorbed a former sibling mart; dbt does not drop removed models, so an existing database needs a one-off `DROP TABLE gold.fct_play_by_play_events`.
+
+### MVP score
+
+A house metric, not an official award model. Knobs are the `mvp_*` vars in `services/dbt/dbt_project.yml`.
+
+- **Game level** (`fct_player_game_logs.mvp_box_score` / `mvp_game_score`): Hollinger's Game Score with the terms the logs carry — points, FG and FT efficiency, rebounds at a single 0.4 weight (no ORB/DRB split), assists, steals, blocks, turnovers; no foul term. A win scales it up by `mvp_win_weight` (0.2), a loss scales it down. A log with no minutes is a DNP and scores null.
+- **Season level** (`fct_player_mvp_scores`, player × season × season type): average game score × availability multiplier, ranked per season and season type. Regular Season and Playoffs only — play-in and the Cup final are left out.
+- **Availability** compares games played to the games the player's latest team has played so far. The first 10% missed are free; past that the penalty ramps quadratically until 50% missed, where it caps at a quarter of the score.
+- **Served** by REST (players directory, profile, compare, game log), Cube (`player_mvp_scores`, plus `season_type` / `mvp_box_score` / `mvp_game_score` on `player_game_logs`), and MCP (`get_mvp_ladder`, `get_player_mvp_scores`).
 
 ## Serving
 
@@ -83,6 +92,8 @@ Contracts and payroll have no route of their own: they arrive as columns on `dim
 `score_margin` on gold games is the **unsigned winner margin**; team-game REST signs it for the requested team.
 
 Salary and payroll are Basketball-Reference **remaining-year snapshots**, not a paid ledger.
+
+Player `position` is a full name ("Point Guard") from `stg_players` onward. `source.players` keeps the roster code, which may be `PG`, an older `G-F`, or the `1`–`5` sort key an earlier scrape stored; all of them map to the same label.
 
 `fct_standings` is a season-to-date upsert. Joining it onto a past game does not give you the standings as of that night.
 

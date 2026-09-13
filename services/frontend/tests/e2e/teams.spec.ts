@@ -5,7 +5,7 @@ import { API_FAILURE_DETAIL, expectNo2010Range, mockApi, waitForApiCall } from "
 test("teams directory to profile shows cap position", async ({ page }) => {
   await mockApi(page);
   await page.goto("/teams");
-  await expect(page).toHaveTitle("Baseline — Teams");
+  await expect(page).toHaveTitle("Teams — Baseline");
   await expect(page.getByRole("heading", { name: "Teams" })).toBeVisible();
   await expect(page.getByText(/Records shown for/)).toHaveCount(0);
   await expect(page.getByText(/30 clubs/)).toHaveCount(0);

@@ -67,7 +67,13 @@ These questions use named Cube tools or query_cube (Cube query JSON only):
 10. **Season averages**: "Curry PPG by season"
    → Use get_player_season_stats(player_uuid)
 
-11. **Schedule / Elo WP / injuries / odds / PBP / reddit**: named tools or query_cube
+11. **MVP race**: "Who leads the MVP race?" / "Top 10 playoff MVP scores last season"
+   → Use get_mvp_ladder(season, season_type="Regular Season" or "Playoffs", limit)
+
+12. **Player MVP history**: "Where has Jokic ranked in MVP score each season?"
+   → Use get_player_mvp_scores(player_uuid)
+
+13. **Schedule / Elo WP / injuries / odds / PBP / reddit**: named tools or query_cube
 """
 
 
@@ -191,7 +197,8 @@ def get_player_game_log(
     season: str | None = None,
 ) -> list[dict]:
     """Get game-by-game stats for a player. If season is omitted, returns
-    current season. Returns date, opponent, minutes, pts, reb, ast, etc."""
+    current season. Returns date, opponent, minutes, pts, reb, ast, season_type,
+    and mvp_game_score (the game-level MVP score; null for a DNP), etc."""
     return get_analytics().get_player_game_log(player_id, season)
 
 
@@ -280,6 +287,31 @@ def get_team_payroll(team_abbreviation: str, season: str | None = None) -> dict:
 def get_player_season_stats(player_id: UUID) -> list[dict]:
     """Per-season PPG / RPG / APG from Cube player_season_stats."""
     return get_analytics().get_player_season_stats(player_id)
+
+
+@mcp.tool()
+def get_mvp_ladder(
+    season: str | None = None,
+    season_type: str | None = None,
+    limit: int | None = None,
+) -> dict:
+    """Baseline MVP score ladder for one season, best rank first (default 25, max 100).
+
+    season_type is 'Regular Season' (default) or 'Playoffs'; play-in games and the
+    Cup final are not scored. Omitting season uses the latest scored season.
+
+    mvp_score = avg_game_score x availability_multiplier. A game score is a Game
+    Score-style box score scaled up 20% in a win and down 20% in a loss. The
+    multiplier is 1.0 through the first 10% of team games missed, then ramps down
+    to 0.75 at half missed and never lower. A house metric, not the official award vote."""
+    return get_analytics().get_mvp_ladder(season=season, season_type=season_type, limit=limit)
+
+
+@mcp.tool()
+def get_player_mvp_scores(player_id: UUID, season: str | None = None) -> list[dict]:
+    """A player's Baseline MVP score and league rank by season, newest first.
+    Regular Season and Playoffs are separate rows. See get_mvp_ladder for the formula."""
+    return get_analytics().get_player_mvp_scores(player_id, season)
 
 
 @mcp.tool()

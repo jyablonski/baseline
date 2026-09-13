@@ -18,6 +18,8 @@ COMPARE_STAT_COLUMNS = {
     "plus_minus": "career_avg_plus_minus",
     "career_plus_minus": "career_avg_plus_minus",
     "career_avg_plus_minus": "career_avg_plus_minus",
+    "mvp": "mvp_score",
+    "mvp_score": "mvp_score",
 }
 
 COMPARE_ORDER_EXPR = {
@@ -25,8 +27,31 @@ COMPARE_ORDER_EXPR = {
     "career_ppg": "dim_players.career_ppg",
     "career_rpg": "dim_players.career_rpg",
     "career_apg": "dim_players.career_apg",
-    "career_avg_plus_minus": "career_pm.career_avg_plus_minus",
+    "career_avg_plus_minus": "career_plus_minus.career_avg_plus_minus",
+    "mvp_score": "regular_season_mvp.mvp_score",
 }
+
+PLAYER_SORT_ORDERS = {
+    "name": ["dim_players.full_name"],
+    "mvp": ["regular_season_mvp.mvp_rank NULLS LAST", "dim_players.full_name"],
+}
+
+# One season of the Regular Season MVP ladder: :season, else the latest season
+# scored. Play-in and the Cup final are never in the ladder.
+REGULAR_SEASON_MVP_CTES = """
+    mvp_season AS (
+        SELECT coalesce(:season, max(fct_player_mvp_scores.season)) AS season
+        FROM gold.fct_player_mvp_scores
+    ),
+    regular_season_mvp AS (
+        SELECT
+            fct_player_mvp_scores.player_id,
+            fct_player_mvp_scores.mvp_score,
+            fct_player_mvp_scores.mvp_rank
+        FROM gold.fct_player_mvp_scores
+        INNER JOIN mvp_season ON fct_player_mvp_scores.season = mvp_season.season
+        WHERE fct_player_mvp_scores.season_type = 'Regular Season'
+    )"""
 
 GAME_LOG_SORT_COLUMNS = {
     "game_date": "game_date",
@@ -43,6 +68,7 @@ GAME_LOG_SORT_COLUMNS = {
     "blocks": "blocks",
     "turnovers": "turnovers",
     "plus_minus": "plus_minus",
+    "mvp_game_score": "mvp_game_score",
     "is_back_to_back": "is_back_to_back",
 }
 
@@ -60,36 +86,51 @@ LIST_PLAYERS_COUNT = text(
     """
 )
 
-LIST_PLAYERS = text(
-    """
+
+def list_players_stmt(sort: str):
+    order = PLAYER_SORT_ORDERS.get(sort)
+    if order is None:
+        raise ValueError(f"Unsupported player sort '{sort}'")
+    order_by = ",\n        ".join(order)
+    return text(
+        f"""
+    WITH {REGULAR_SEASON_MVP_CTES}
     SELECT
         dim_players.player_id,
         dim_players.full_name,
         dim_players.position,
-        t.abbreviation AS team_abbreviation,
+        dim_teams.abbreviation AS team_abbreviation,
         dim_players.is_active,
         coalesce(dim_players.career_games_played, 0) AS career_games_played,
         dim_players.career_ppg,
         dim_players.career_rpg,
-        dim_players.career_apg
+        dim_players.career_apg,
+        mvp_season.season AS mvp_season,
+        regular_season_mvp.mvp_score,
+        regular_season_mvp.mvp_rank
     FROM gold.dim_players
-    LEFT JOIN gold.dim_teams t ON t.team_id = dim_players.team_id
+    CROSS JOIN mvp_season
+    LEFT JOIN gold.dim_teams ON dim_players.team_id = dim_teams.team_id
+    LEFT JOIN regular_season_mvp ON dim_players.player_id = regular_season_mvp.player_id
     WHERE
         (:search IS NULL OR dim_players.full_name ILIKE :search)
-      AND (:active IS NULL OR dim_players.is_active = :active)
-      AND (:team_id IS NULL OR dim_players.team_id = :team_id)
-    ORDER BY dim_players.full_name
+        AND (:active IS NULL OR dim_players.is_active = :active)
+        AND (:team_id IS NULL OR dim_players.team_id = :team_id)
+    ORDER BY
+        {order_by}
     LIMIT :limit OFFSET :offset
     """
-)
+    )
+
 
 PLAYER_BY_ID = text(
-    """
+    f"""
+    WITH {REGULAR_SEASON_MVP_CTES}
     SELECT
         dim_players.player_id,
         dim_players.full_name,
         dim_players.position,
-        t.abbreviation AS team_abbreviation,
+        dim_teams.abbreviation AS team_abbreviation,
         dim_players.is_active,
         dim_players.first_name,
         dim_players.last_name,
@@ -106,9 +147,14 @@ PLAYER_BY_ID = text(
         dim_players.career_apg,
         dim_players.current_season_salary,
         dim_players.current_remaining_guaranteed,
-        dim_players.current_contract_season
+        dim_players.current_contract_season,
+        mvp_season.season AS mvp_season,
+        regular_season_mvp.mvp_score,
+        regular_season_mvp.mvp_rank
     FROM gold.dim_players
-    LEFT JOIN gold.dim_teams t ON t.team_id = dim_players.team_id
+    CROSS JOIN mvp_season
+    LEFT JOIN gold.dim_teams ON dim_players.team_id = dim_teams.team_id
+    LEFT JOIN regular_season_mvp ON dim_players.player_id = regular_season_mvp.player_id
     WHERE dim_players.player_id = :player_id
     """
 )
@@ -199,6 +245,7 @@ def list_game_logs_stmt(order_column: str, descending: bool):
             game_id,
             game_date,
             season,
+            season_type,
             coalesce(opponent_abbreviation, '') AS opponent_abbreviation,
             coalesce(location, '') AS location,
             coalesce(result, '') AS result,
@@ -210,6 +257,7 @@ def list_game_logs_stmt(order_column: str, descending: bool):
             blocks,
             turnovers,
             plus_minus,
+            mvp_game_score,
             coalesce(is_back_to_back, false) AS is_back_to_back
         FROM gold.fct_player_game_logs
         WHERE {GAME_LOG_FILTERS}
@@ -370,10 +418,28 @@ def compare_players_stmt(order_column: str):
         raise ValueError(f"Unsupported compare order column '{order_column}'")
     return text(
         f"""
+        WITH career_plus_minus AS (
+            SELECT
+                player_id,
+                round(avg(plus_minus)::numeric, 1) AS career_avg_plus_minus
+            FROM gold.fct_player_game_logs
+            WHERE player_id IN :player_ids
+            GROUP BY player_id
+        ),
+        {REGULAR_SEASON_MVP_CTES},
+        playoff_mvp AS (
+            SELECT
+                fct_player_mvp_scores.player_id,
+                fct_player_mvp_scores.mvp_score,
+                fct_player_mvp_scores.mvp_rank
+            FROM gold.fct_player_mvp_scores
+            INNER JOIN mvp_season ON fct_player_mvp_scores.season = mvp_season.season
+            WHERE fct_player_mvp_scores.season_type = 'Playoffs'
+        )
         SELECT
             dim_players.player_id,
             dim_players.full_name,
-            t.abbreviation AS team_abbreviation,
+            dim_teams.abbreviation AS team_abbreviation,
             dim_players.position,
             coalesce(dim_players.career_games_played, 0) AS career_games_played,
             coalesce(dim_players.seasons_played, 0) AS seasons_played,
@@ -382,16 +448,18 @@ def compare_players_stmt(order_column: str):
             dim_players.career_ppg,
             dim_players.career_rpg,
             dim_players.career_apg,
-            career_pm.career_avg_plus_minus
+            career_plus_minus.career_avg_plus_minus,
+            mvp_season.season AS mvp_season,
+            regular_season_mvp.mvp_score,
+            regular_season_mvp.mvp_rank,
+            playoff_mvp.mvp_score AS playoff_mvp_score,
+            playoff_mvp.mvp_rank AS playoff_mvp_rank
         FROM gold.dim_players
-        LEFT JOIN gold.dim_teams t ON t.team_id = dim_players.team_id
-        LEFT JOIN (
-            SELECT
-                player_id,
-                round(avg(plus_minus)::numeric, 1) AS career_avg_plus_minus
-            FROM gold.fct_player_game_logs
-            GROUP BY player_id
-        ) career_pm ON career_pm.player_id = dim_players.player_id
+        CROSS JOIN mvp_season
+        LEFT JOIN gold.dim_teams ON dim_players.team_id = dim_teams.team_id
+        LEFT JOIN career_plus_minus ON dim_players.player_id = career_plus_minus.player_id
+        LEFT JOIN regular_season_mvp ON dim_players.player_id = regular_season_mvp.player_id
+        LEFT JOIN playoff_mvp ON dim_players.player_id = playoff_mvp.player_id
         WHERE dim_players.player_id IN :player_ids
         ORDER BY
         {order_expr} DESC NULLS LAST,

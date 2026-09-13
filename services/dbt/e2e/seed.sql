@@ -24,7 +24,7 @@ INSERT INTO source.players (
 ) VALUES
     ('22222222-2222-4222-8222-222222222222', 'Kawhi', 'Leonard', 'Kawhi Leonard', TRUE, 'F', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958',
      '6-7', 225, '1991-06-29', 2011, 2025, NOW()),
-    ('11111111-1111-4111-8111-111111111111', 'Stephen', 'Curry', 'Stephen Curry', TRUE, 'G', '7bf8726a-a852-452d-b81f-14839127c5fb',
+    ('11111111-1111-4111-8111-111111111111', 'Stephen', 'Curry', 'Stephen Curry', TRUE, '1', '7bf8726a-a852-452d-b81f-14839127c5fb',
      '6-2', 185, '1988-03-14', 2009, 2025, NOW());
 
 INSERT INTO source.games (
@@ -38,7 +38,15 @@ INSERT INTO source.games (
     ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', '2024-25', 'Regular Season', '2024-10-25',
      'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '7bf8726a-a852-452d-b81f-14839127c5fb', 118, 115, 'Crypto.com Arena', 'Los Angeles', 'CA', 'Final', NOW()),
     ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', '2024-25', 'Regular Season', '2024-10-27',
-     '7bf8726a-a852-452d-b81f-14839127c5fb', 'a96f53b4-0f5c-4cb6-8b88-21ba05224cae', NULL, NULL, 'Chase Center', 'San Francisco', 'CA', 'Scheduled', NOW());
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'a96f53b4-0f5c-4cb6-8b88-21ba05224cae', NULL, NULL, 'Chase Center', 'San Francisco', 'CA', 'Scheduled', NOW()),
+    -- GSW game Curry sits out: one missed game in three costs availability.
+    ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', '2024-25', 'Regular Season', '2024-10-30',
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'a96f53b4-0f5c-4cb6-8b88-21ba05224cae', 110, 100, 'Chase Center', 'San Francisco', 'CA', 'Final', NOW()),
+    -- Cup final and a playoff game: excluded from, and split out of, the Regular Season MVP score.
+    ('ffffffff-ffff-4fff-8fff-ffffffffffff', '2024-25', 'Cup', '2024-12-17',
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '7bf8726a-a852-452d-b81f-14839127c5fb', 125, 100, 'T-Mobile Arena', 'Las Vegas', 'NV', 'Final', NOW()),
+    ('99999999-9999-4999-8999-999999999999', '2024-25', 'Playoffs', '2025-04-20',
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 101, 99, 'Chase Center', 'San Francisco', 'CA', 'Final', NOW());
 
 INSERT INTO source.player_game_logs (
     player_id, game_id, team_id, game_date, season, matchup, wl, min,
@@ -56,7 +64,15 @@ INSERT INTO source.player_game_logs (
     ('11111111-1111-4111-8111-111111111111', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '7bf8726a-a852-452d-b81f-14839127c5fb', '2024-10-22', '2024-25', 'GSW vs. LAC', 'W', 35.0,
      32, 4, 8, 1, 0, 3, 11, 23, 0.478, 6, 12, 0.500, 4, 4, 1.000, 10, NOW()),
     ('11111111-1111-4111-8111-111111111111', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', '7bf8726a-a852-452d-b81f-14839127c5fb', '2024-10-25', '2024-25', 'GSW @ LAC', 'L', 37.0,
-     29, 5, 7, 2, 0, 2, 10, 24, 0.417, 5, 13, 0.385, 4, 4, 1.000, -3, NOW());
+     29, 5, 7, 2, 0, 2, 10, 24, 0.417, 5, 13, 0.385, 4, 4, 1.000, -3, NOW()),
+    -- Kawhi's Cup final line would top the ladder if it counted.
+    ('22222222-2222-4222-8222-222222222222', 'ffffffff-ffff-4fff-8fff-ffffffffffff', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '2024-12-17', '2024-25', 'LAC vs. GSW', 'W', 40.0,
+     50, 10, 10, 5, 5, 0, 20, 25, 0.800, 5, 8, 0.625, 5, 5, 1.000, 25, NOW()),
+    -- Playoffs
+    ('11111111-1111-4111-8111-111111111111', '99999999-9999-4999-8999-999999999999', '7bf8726a-a852-452d-b81f-14839127c5fb', '2025-04-20', '2024-25', 'GSW vs. LAC', 'W', 40.0,
+     35, 6, 9, 2, 1, 4, 12, 25, 0.480, 6, 14, 0.429, 5, 6, 0.833, 2, NOW()),
+    ('22222222-2222-4222-8222-222222222222', '99999999-9999-4999-8999-999999999999', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '2025-04-20', '2024-25', 'LAC @ GSW', 'L', 41.0,
+     30, 10, 4, 3, 1, 2, 11, 21, 0.524, 2, 6, 0.333, 6, 7, 0.857, -2, NOW());
 
 INSERT INTO source.player_contracts (
     player_id, team_id, player_name, player_name_normalized, season, salary,

@@ -51,6 +51,16 @@ class FakeAnalytics:
     def get_player_season_stats(self, player_id: int) -> list[dict]:
         return [{"player_id": player_id, "season": "2024-25", "ppg": 24.5}]
 
+    def get_mvp_ladder(self, **kwargs) -> dict:
+        return {
+            "season": kwargs.get("season") or "2025-26",
+            "season_type": kwargs.get("season_type") or "Regular Season",
+            "players": [{"full_name": "A", "mvp_rank": 1}],
+        }
+
+    def get_player_mvp_scores(self, player_id: int, season: str | None = None) -> list[dict]:
+        return [{"player_id": player_id, "season": season, "mvp_rank": 3}]
+
     def get_games_schedule(self, **kwargs) -> list[dict]:
         return [{"game_id": "1", "status": kwargs.get("status")}]
 
@@ -180,6 +190,12 @@ def test_server_tools(monkeypatch: pytest.MonkeyPatch) -> None:
         {"abbreviation": "OKC", "conference": "West"}
     ]
     assert server.get_player_season_stats(1)[0]["ppg"] == 24.5
+    ladder = server.get_mvp_ladder(season_type="Playoffs", limit=5)
+    assert ladder["season_type"] == "Playoffs"
+    assert ladder["players"][0]["mvp_rank"] == 1
+    assert server.get_player_mvp_scores(1, season="2024-25") == [
+        {"player_id": 1, "season": "2024-25", "mvp_rank": 3}
+    ]
     assert server.get_games_schedule(season="2024-25")[0]["game_id"] == "1"
     assert server.get_game_predictions(upcoming=True)[0]["model_wp"] == 0.58
     assert server.get_player_injuries(team_abbreviation="LAC")[0]["description"] == "knee"
@@ -237,6 +253,8 @@ def test_examples_resource() -> None:
     assert "salary" in result.lower()
     assert "payroll" in result.lower()
     assert "who leads the west" in result.lower()
+    assert "get_mvp_ladder" in result
+    assert "get_player_mvp_scores" in result
 
 
 @pytest.mark.unit

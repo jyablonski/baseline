@@ -59,10 +59,8 @@ export function EntityBoard({
                     style={{ backgroundColor: row.primary_color }}
                   />
                 ) : null}
-                <span>{row.entity_name}</span>
-                {row.entity_abbreviation ? (
-                  <span className="type-caption">{row.entity_abbreviation}</span>
-                ) : null}
+                {/* Teams show the nickname, like the fanbase board; players have none. */}
+                <span title={row.entity_name}>{row.entity_nickname ?? row.entity_name}</span>
               </span>
             </td>
             <td className="tabular text-right">{row.post_count}</td>

@@ -101,6 +101,20 @@ test("players pagination reports the match range and pins Prev on page one", asy
   await expect(page.getByRole("button", { name: "Next →" })).toBeDisabled();
 });
 
+test("players directory ranks by MVP by default and can sort by name", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/players");
+  await waitForApiCall(page, "sort=mvp");
+  await expect(page.getByRole("columnheader", { name: "MVP" })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "Stephen Curry" })).toContainText("24.9");
+
+  await page
+    .getByRole("group", { name: "Sort players" })
+    .getByRole("button", { name: "Name" })
+    .click();
+  await waitForApiCall(page, "sort=name");
+});
+
 test("players directory surfaces the API failure instead of an empty table", async ({ page }) => {
   await mockApi(page, { fail: true });
   await page.goto("/players");

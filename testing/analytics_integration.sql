@@ -105,6 +105,9 @@ CREATE TABLE IF NOT EXISTS gold.fct_player_game_logs (
     free_throws_attempted   INTEGER,
     free_throw_pct          REAL,
     plus_minus              INTEGER,
+    season_type             VARCHAR(20),
+    mvp_box_score           NUMERIC,
+    mvp_game_score          NUMERIC,
     is_back_to_back         BOOLEAN DEFAULT FALSE,
     season_game_number      INTEGER,
     career_game_number      INTEGER,
@@ -112,6 +115,25 @@ CREATE TABLE IF NOT EXISTS gold.fct_player_game_logs (
     team_abbreviation       VARCHAR(5),
     team_name               VARCHAR(100),
     PRIMARY KEY (player_id, game_id)
+);
+
+CREATE TABLE IF NOT EXISTS gold.fct_player_mvp_scores (
+    player_id               UUID NOT NULL,
+    season                  VARCHAR(10) NOT NULL,
+    season_type             VARCHAR(20) NOT NULL,
+    team_id                 UUID NOT NULL,
+    games_played            INTEGER NOT NULL,
+    team_games              INTEGER,
+    wins                    INTEGER,
+    losses                  INTEGER,
+    win_pct                 NUMERIC,
+    games_missed_pct        NUMERIC,
+    avg_box_score           NUMERIC,
+    avg_game_score          NUMERIC,
+    availability_multiplier NUMERIC,
+    mvp_score               NUMERIC,
+    mvp_rank                INTEGER,
+    PRIMARY KEY (player_id, season, season_type)
 );
 
 CREATE TABLE IF NOT EXISTS gold.fct_player_season_stats (

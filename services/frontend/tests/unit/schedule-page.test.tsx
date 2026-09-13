@@ -57,6 +57,6 @@ describe("schedule page", () => {
       "href",
       "/teams/1610612744?season=2026-27"
     );
-    expect(screen.queryByText("Play-by-play →")).not.toBeInTheDocument();
+    expect(screen.queryByText("PBP →")).not.toBeInTheDocument();
   });
 });

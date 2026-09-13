@@ -14,6 +14,7 @@ def test_validate_schema() -> None:
     assert "avg_points_b2b" in result["measures"]
     assert "teams" in result["cubes"]
     assert "team_games" in result["cubes"]
+    assert "player_mvp_scores" in result["cubes"]
     assert (result["root"] / "cube.js").is_file()
 
 

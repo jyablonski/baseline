@@ -13,7 +13,6 @@ import { api, queryErrorMessage } from "@/lib/api";
 import {
   formatBirthDate,
   formatDate,
-  formatHeight,
   formatNumber,
   formatStat,
   formatSignedMargin,
@@ -34,6 +33,7 @@ type SortKey =
   | "blocks"
   | "turnovers"
   | "plus_minus"
+  | "mvp_game_score"
   | "minutes";
 
 export default function PlayerProfilePage() {
@@ -133,7 +133,6 @@ function PlayerProfile() {
     player.team_abbreviation,
     player.jersey_number ? `#${player.jersey_number}` : null,
     player.position,
-    formatHeight(player.height),
     player.weight != null ? `${player.weight} lb` : null,
     formatBirthDate(player.birth_date),
     player.is_active ? "Active" : "Inactive",
@@ -172,12 +171,16 @@ function PlayerProfile() {
 
       <div className="grid gap-6 border-y border-border py-5 lg:grid-cols-[1.35fr_auto_0.9fr]">
         <div>
-          <p className="text-[11px] tracking-wide text-muted-foreground uppercase">Career</p>
+          <p className="text-[11px] tracking-wide text-muted-foreground uppercase">Season</p>
           <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-5">
             <CareerStat label="Games" value={formatNumber(player.career_games_played)} />
             <CareerStat label="PPG" value={formatStat(player.career_ppg)} />
             <CareerStat label="RPG" value={formatStat(player.career_rpg)} />
             <CareerStat label="APG" value={formatStat(player.career_apg)} />
+            <CareerStat
+              label={`${player.mvp_season ?? "Season"} MVP rank`}
+              value={player.mvp_rank != null ? `#${player.mvp_rank}` : "—"}
+            />
           </dl>
         </div>
         <div className="hidden w-px bg-border lg:block" aria-hidden />
@@ -202,7 +205,7 @@ function PlayerProfile() {
             </div>
           </dl>
           <p className="type-caption mt-3">
-            Basketball-Reference remaining-year snapshot, not career earnings.
+            Basketball-Reference remaining-year snapshot, not total earnings.
           </p>
         </div>
       </div>
@@ -298,6 +301,13 @@ function PlayerProfile() {
                       onClick={() => toggleSort("plus_minus")}
                     >
                       +/-
+                    </SortHead>
+                    <SortHead
+                      active={sortKey === "mvp_game_score"}
+                      dir={sortDir}
+                      onClick={() => toggleSort("mvp_game_score")}
+                    >
+                      MVP
                     </SortHead>
                     <th>B2B</th>
                     <th>PBP</th>
@@ -462,6 +472,7 @@ function LogRow({ row }: { row: GameLogEntry }) {
       <td className="tabular text-right">{formatNumber(row.blocks)}</td>
       <td className="tabular text-right">{formatNumber(row.turnovers)}</td>
       <td className="tabular text-right">{formatSignedMargin(row.plus_minus)}</td>
+      <td className="tabular text-right">{formatStat(row.mvp_game_score)}</td>
       <td className="text-muted-foreground">{row.is_back_to_back ? "B2B" : "—"}</td>
       <td>
         {row.game_id ? (
