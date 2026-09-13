@@ -1,0 +1,104 @@
+cubes:
+  - name: player_mvp_scores
+    sql_table: gold.fct_player_mvp_scores
+    description: >
+      Baseline MVP score and league rank per player, season, and season type
+      (Regular Season or Playoffs; play-in and the Cup final are not scored).
+      mvp_score is the average game-level MVP score (a Game Score-style box score
+      scaled up in wins and down in losses) times an availability multiplier for
+      team games missed. A house metric, not the award vote.
+
+    joins:
+      - name: players
+        sql: "{CUBE}.player_id = {players}.player_id"
+        relationship: many_to_one
+
+      # The team the player finished the season type with, not their current team.
+      - name: teams
+        sql: "{CUBE}.team_id = {teams}.team_id"
+        relationship: many_to_one
+
+    dimensions:
+      - name: id
+        sql: "CAST(player_id AS VARCHAR) || '-' || season || '-' || season_type"
+        type: string
+        primary_key: true
+        public: true
+
+      - name: player_id
+        sql: player_id
+        type: string
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: season_type
+        sql: season_type
+        type: string
+        description: Regular Season or Playoffs
+
+      - name: team_id
+        sql: team_id
+        type: string
+
+      - name: games_played
+        sql: games_played
+        type: number
+
+      - name: team_games
+        sql: team_games
+        type: number
+        description: Final games the player's team had played in the season type, the availability denominator
+
+      - name: wins
+        sql: wins
+        type: number
+
+      - name: losses
+        sql: losses
+        type: number
+
+      - name: win_pct
+        sql: win_pct
+        type: number
+        description: Win share of the games this player played
+
+      - name: games_missed_pct
+        sql: games_missed_pct
+        type: number
+
+      - name: avg_box_score
+        sql: avg_box_score
+        type: number
+
+      - name: avg_game_score
+        sql: avg_game_score
+        type: number
+        description: Average game-level MVP score, before the availability multiplier
+
+      - name: availability_multiplier
+        sql: availability_multiplier
+        type: number
+        description: 1.0 through the first 10% of team games missed, ramping down to 0.75 at half missed, never lower
+
+      - name: mvp_score
+        sql: mvp_score
+        type: number
+
+      - name: mvp_rank
+        sql: mvp_rank
+        type: number
+        description: League rank within season and season_type; 1 is best, ties share a rank
+
+    measures:
+      - name: count
+        type: count
+
+      - name: best_mvp_rank
+        sql: mvp_rank
+        type: min
+
+      - name: avg_mvp_score
+        sql: mvp_score
+        type: avg

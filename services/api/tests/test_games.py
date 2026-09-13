@@ -403,6 +403,7 @@ BOX_SCORE_ROW = {
     "free_throw_pct": 0.75,
     "true_shooting_pct": 0.571,
     "plus_minus": -7,
+    "mvp_game_score": 18.6,
 }
 
 
@@ -416,6 +417,7 @@ def test_game_box_score(client, session, mapping_row, query_result) -> None:
     assert row["field_goals_attempted"] == 21
     assert row["true_shooting_pct"] == 0.571
     assert row["plus_minus"] == -7
+    assert row["mvp_game_score"] == 18.6
 
 
 @pytest.mark.unit

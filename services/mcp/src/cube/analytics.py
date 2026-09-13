@@ -12,12 +12,16 @@ from cube.queries import (
     game_predictions_query,
     game_standings_query,
     games_schedule_query,
+    mvp_ladder_query,
+    mvp_seasons_query,
+    normalize_mvp_season_type,
     play_by_play_query,
     player_back_to_backs_query,
     player_contract_season_query,
     player_game_log_query,
     player_ids_query,
     player_injuries_query,
+    player_mvp_scores_query,
     player_profile_query,
     player_salary_query,
     player_season_stats_query,
@@ -316,6 +320,35 @@ class CubeAnalytics:
             for row in rows
         ]
 
+    def get_mvp_ladder(
+        self,
+        season: str | None = None,
+        season_type: str | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        resolved_type = normalize_mvp_season_type(season_type)
+        resolved_season = season or self._latest_mvp_season()
+        if resolved_season is None:
+            return {"season": None, "season_type": resolved_type, "players": []}
+        rows = self.client.load(mvp_ladder_query(resolved_season, resolved_type, limit))
+        return {
+            "season": resolved_season,
+            "season_type": resolved_type,
+            "players": [_mvp_row(row) for row in rows],
+        }
+
+    def get_player_mvp_scores(
+        self,
+        player_id: UUID,
+        season: str | None = None,
+    ) -> list[dict[str, Any]]:
+        rows = self.client.load(player_mvp_scores_query(player_id, season))
+        return [_mvp_row(row) for row in rows]
+
+    def _latest_mvp_season(self) -> str | None:
+        rows = self.client.load(mvp_seasons_query())
+        return rows[0].get("season") if rows else None
+
     def get_games_schedule(
         self,
         season: str | None = None,
@@ -459,6 +492,27 @@ def _player_profile_row(row: dict[str, Any]) -> dict[str, Any]:
         "current_contract_season": row.get("current_contract_season"),
         "current_season_salary": _as_int(row.get("current_season_salary")),
         "current_remaining_guaranteed": _as_int(row.get("current_remaining_guaranteed")),
+    }
+
+
+def _mvp_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "player_id": UUID(str(row.get("player_id"))) if row.get("player_id") else None,
+        "full_name": row.get("full_name"),
+        "team_abbreviation": row.get("abbreviation"),
+        "season": row.get("season"),
+        "season_type": row.get("season_type"),
+        "mvp_rank": _as_int(row.get("mvp_rank")),
+        "mvp_score": _as_float(row.get("mvp_score")),
+        "avg_game_score": _as_float(row.get("avg_game_score")),
+        "avg_box_score": _as_float(row.get("avg_box_score")),
+        "availability_multiplier": _as_float(row.get("availability_multiplier")),
+        "games_played": _as_int(row.get("games_played")),
+        "team_games": _as_int(row.get("team_games")),
+        "games_missed_pct": _as_float(row.get("games_missed_pct")),
+        "wins": _as_int(row.get("wins")),
+        "losses": _as_int(row.get("losses")),
+        "win_pct": _as_float(row.get("win_pct")),
     }
 
 

@@ -26,6 +26,8 @@ Player and career:
 - `get_player_season_stats` — PPG/RPG/APG by season
 - `get_career_stats`, `compare_players`
 - `get_player_back_to_backs` — B2B splits vs overall
+- `get_mvp_ladder` — Baseline MVP score ranking for a season; Regular Season (default) or Playoffs, latest scored season when omitted
+- `get_player_mvp_scores` — one player's MVP score and rank by season, Regular Season and Playoffs as separate rows. The per-game score is `mvp_game_score` on `get_player_game_log`
 
 Team and league:
 

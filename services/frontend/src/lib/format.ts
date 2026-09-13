@@ -185,13 +185,6 @@ export function formatSignedMargin(value: number | null | undefined, digits?: nu
   return formatted;
 }
 
-export function formatHeight(value: string | null | undefined) {
-  if (!value) return null;
-  const match = value.match(/^(\d+)\s*[-']\s*(\d+)/);
-  if (match) return `${match[1]}’${match[2]}”`;
-  return value;
-}
-
 export function formatBirthDate(value: string | null | undefined) {
   if (!value) return null;
   const date = new Date(value);

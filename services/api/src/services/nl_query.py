@@ -177,7 +177,7 @@ _PLAYER_NAME = re.compile(
 )
 
 _CAPABILITY = (
-    "I can answer back-to-back questions, player career compares, "
+    "I can answer back-to-back questions, player compares, "
     "team win percentage filtered by arena city, team head-to-head records, "
     "blown leads, salary/payroll snapshots, "
     "standings, and per-season averages "
@@ -630,7 +630,7 @@ class NaturalLanguageQueryService:
         rows = self.cube.compare_players(ids, stats=stat_keys)
         if len(rows) < 2:
             return QueryResponse(
-                answer="Could not load career rows for both players.",
+                answer="Could not load stats for both players.",
                 data=rows,
                 sql=None,
             )
@@ -642,17 +642,17 @@ class NaturalLanguageQueryService:
         if diff == 0:
             answer = (
                 f"{leader['full_name']} and {runner['full_name']} have played "
-                f"the same number of career games ({leader_games})."
+                f"the same number of games ({leader_games})."
             )
         else:
             answer = (
-                f"{leader['full_name']} has played {diff} more career games "
+                f"{leader['full_name']} has played {diff} more games "
                 f"({leader_games}) than {runner['full_name']} ({runner_games})."
             )
         return QueryResponse(
             answer=answer,
             data=self._ask_rows(rows, compare_keys),
-            sql="cube:players career compare ordered by career_games_played",
+            sql="cube:players compare ordered by career_games_played",
         )
 
     def _answer_team_record(self, question: str, header_season: str | None = None) -> QueryResponse:

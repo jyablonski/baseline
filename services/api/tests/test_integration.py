@@ -195,6 +195,52 @@ def test_player_directory_and_season_stats(integration_client) -> None:
 
 
 @pytest.mark.integration
+def test_player_mvp_ladder(integration_client) -> None:
+    ladder = integration_client.get("/api/v1/players", params={"sort": "mvp"})
+    assert ladder.status_code == 200
+    rows = ladder.json()["data"]
+    assert [row["full_name"] for row in rows] == ["Kawhi Leonard", "Stephen Curry"]
+    assert rows[0]["mvp_season"] == "2024-25"
+    assert rows[0]["mvp_rank"] == 1
+    assert rows[1]["mvp_score"] == 22.5
+
+    unscored = integration_client.get(
+        "/api/v1/players", params={"sort": "mvp", "season": "2023-24"}
+    )
+    assert unscored.status_code == 200
+    assert [row["full_name"] for row in unscored.json()["data"]] == [
+        "Kawhi Leonard",
+        "Stephen Curry",
+    ]
+    assert all(row["mvp_rank"] is None for row in unscored.json()["data"])
+    assert unscored.json()["data"][0]["mvp_season"] == "2023-24"
+
+    curry = integration_client.get(f"/api/v1/players/{PLAYER_CURRY}")
+    assert curry.json()["data"]["mvp_rank"] == 2
+
+    compare = integration_client.get(
+        "/api/v1/players/compare",
+        params={"ids": f"{PLAYER_CURRY},{PLAYER_KAWHI}", "stat": "mvp"},
+    )
+    assert compare.status_code == 200
+    by_id = {row["player_id"]: row for row in compare.json()["data"]}
+    assert compare.json()["data"][0]["player_id"] == PLAYER_KAWHI
+    assert by_id[PLAYER_KAWHI]["mvp_score"] == 25.5
+    assert by_id[PLAYER_KAWHI]["playoff_mvp_score"] is None
+    assert by_id[PLAYER_CURRY]["playoff_mvp_rank"] == 1
+    assert by_id[PLAYER_CURRY]["career_avg_plus_minus"] == 3.5
+
+    logs = integration_client.get(
+        f"/api/v1/players/{PLAYER_KAWHI}/game-log",
+        params={"sort": "mvp_game_score", "order": "desc"},
+    )
+    assert logs.status_code == 200
+    top = logs.json()["data"][0]
+    assert top["mvp_game_score"] == 30.5
+    assert top["season_type"] == "Regular Season"
+
+
+@pytest.mark.integration
 def test_compare_head_to_head(integration_client) -> None:
     h2h = integration_client.get(
         "/api/v1/players/compare/head-to-head",

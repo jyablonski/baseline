@@ -18,12 +18,17 @@ test("social reaches from the nav and labels its sampling honestly", async ({ pa
   await expect(page.getByText(/top 1 of 132 comments/i)).toBeVisible();
   await expect(page.getByText(/the rest of the thread is not stored/i)).toBeVisible();
 
-  // A zero-score post keeps its discussion ratio and blanks the score ratios.
-  await expect(page.getByText("132.00")).toBeVisible();
-  await expect(page.getByText(/undefined, so they are left blank/i)).toBeVisible();
+  // Feed cards carry score and comments only; the per-post ratio strip is gone.
+  await expect(page.getByText("132.00")).toHaveCount(0);
+  await expect(page.getByText(/What r\/nba is talking about\./)).toBeVisible();
 
-  await expect(page.getByRole("heading", { name: "Player mentions" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Fanbases" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Player mentions" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Team mentions" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Fanbase comments" })).toBeVisible();
+  // Team mentions read "Clippers", like the fanbase board, not "LA Clippers LAC".
+  const teams = page.locator("section").filter({ hasText: "Team mentions" });
+  await expect(teams.getByText("Clippers", { exact: true })).toBeVisible();
+  await expect(teams.getByText("LAC", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/what this page cannot tell you/i)).toBeVisible();
 });
 

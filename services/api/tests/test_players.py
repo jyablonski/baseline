@@ -477,6 +477,8 @@ def test_game_log(client, session, mapping_row, query_result) -> None:
                         "blocks": 1,
                         "turnovers": 3,
                         "plus_minus": 8,
+                        "season_type": "Regular Season",
+                        "mvp_game_score": 30.5,
                         "is_back_to_back": False,
                     }
                 )
@@ -490,6 +492,8 @@ def test_game_log(client, session, mapping_row, query_result) -> None:
     assert response.json()["data"][0]["season"] == "2024-25"
     assert response.json()["data"][0]["steals"] == 2
     assert response.json()["data"][0]["plus_minus"] == 8
+    assert response.json()["data"][0]["mvp_game_score"] == 30.5
+    assert response.json()["data"][0]["season_type"] == "Regular Season"
 
 
 @pytest.mark.unit
@@ -629,3 +633,99 @@ def test_season_stats(client, session, mapping_row, query_result) -> None:
     row = response.json()["data"][0]
     assert row["season"] == "2024-25"
     assert row["ppg"] == 27.3
+
+
+@pytest.mark.unit
+def test_list_players_mvp_sort_binds_season(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(scalar=1),
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "player_id": PLAYER_KAWHI,
+                        "full_name": "Kawhi Leonard",
+                        "position": "F",
+                        "team_abbreviation": "LAC",
+                        "is_active": True,
+                        "mvp_season": "2024-25",
+                        "mvp_score": 25.5,
+                        "mvp_rank": 1,
+                    }
+                )
+            ]
+        ),
+    ]
+    response = client.get("/api/v1/players", params={"sort": "mvp", "season": "2024-25"})
+    assert response.status_code == 200
+    row = response.json()["data"][0]
+    assert row["mvp_season"] == "2024-25"
+    assert row["mvp_score"] == 25.5
+    assert row["mvp_rank"] == 1
+    stmt, params = session.calls[1]
+    assert params["season"] == "2024-25"
+    assert "regular_season_mvp.mvp_rank NULLS LAST" in str(stmt)
+
+
+@pytest.mark.unit
+def test_list_players_rejects_bad_sort(client, session) -> None:
+    response = client.get("/api/v1/players", params={"sort": "ppg"})
+    assert response.status_code == 400
+    assert session.calls == []
+
+
+@pytest.mark.unit
+def test_player_sql_reads_one_mvp_ladder_per_season_type() -> None:
+    from queries.players import PLAYER_BY_ID, compare_players_stmt, list_players_stmt
+
+    for sql in (str(list_players_stmt("name")), str(PLAYER_BY_ID)):
+        assert "fct_player_mvp_scores" in sql
+        assert "season_type = 'Regular Season'" in sql
+        assert "season_type = 'Playoffs'" not in sql
+    assert "season_type = 'Playoffs'" in str(compare_players_stmt("mvp_score"))
+
+    with pytest.raises(ValueError, match="Unsupported player sort"):
+        list_players_stmt("ppg")
+
+
+@pytest.mark.unit
+def test_compare_accepts_mvp_stat(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "player_id": PLAYER_LEBRON,
+                        "full_name": "LeBron James",
+                        "career_games_played": 1500,
+                        "mvp_season": "2024-25",
+                        "mvp_score": 24.1,
+                        "mvp_rank": 4,
+                        "playoff_mvp_score": 27.9,
+                        "playoff_mvp_rank": 3,
+                    }
+                ),
+                mapping_row(
+                    {
+                        "player_id": PLAYER_CURRY,
+                        "full_name": "Stephen Curry",
+                        "career_games_played": 1000,
+                        "mvp_season": "2024-25",
+                        "mvp_score": 20.4,
+                        "mvp_rank": 11,
+                    }
+                ),
+            ]
+        )
+    ]
+    response = client.get(
+        "/api/v1/players/compare",
+        params={"ids": f"{PLAYER_LEBRON},{PLAYER_CURRY}", "stat": "mvp", "season": "2024-25"},
+    )
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body[0]["playoff_mvp_rank"] == 3
+    assert body[1]["playoff_mvp_score"] is None
+    stmt, params = session.calls[0]
+    assert params["season"] == "2024-25"
+    assert "regular_season_mvp.mvp_score DESC NULLS LAST" in str(stmt)

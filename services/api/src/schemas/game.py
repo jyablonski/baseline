@@ -182,6 +182,7 @@ class BoxScoreRow(BaseModel):
     free_throw_pct: float | None = None
     true_shooting_pct: float | None = None
     plus_minus: int | None = None
+    mvp_game_score: float | None = None
 
 
 class QueryRequest(BaseModel):

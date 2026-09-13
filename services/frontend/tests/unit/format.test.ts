@@ -6,7 +6,6 @@ import {
   formatBirthDate,
   formatDate,
   formatGamesBack,
-  formatHeight,
   formatNumber,
   formatScrapedAt,
   formatSignedMargin,
@@ -126,10 +125,6 @@ describe("format helpers", () => {
     expect(formatScrapedAt(null)).toBe("—");
     expect(formatScrapedAt("nope")).toBe("—");
     expect(formatScrapedAt("2026-09-04T04:12:00Z")).toMatch(/4 Sep[t]? 2026, 04:12 UTC/);
-    expect(formatHeight(null)).toBeNull();
-    expect(formatHeight("6-7")).toBe("6’7”");
-    expect(formatHeight("6'7\"")).toBe("6’7”");
-    expect(formatHeight("unknown")).toBe("unknown");
     expect(formatBirthDate(null)).toBeNull();
     expect(formatBirthDate("not-a-date")).toBe("not-a-date");
     expect(formatBirthDate("1991-06-29")).toContain("1991");
@@ -162,9 +157,6 @@ describe("format helpers", () => {
     expect(formatSignedMargin(null)).toBe("—");
     expect(formatSignedMargin(8)).toBe("+8");
     expect(formatSignedMargin(-3)).toBe("-3");
-    expect(formatHeight(null)).toBeNull();
-    expect(formatHeight("6-7")).toMatch(/6/);
-    expect(formatHeight("wing")).toBe("wing");
     expect(formatBirthDate(null)).toBeNull();
     expect(formatBirthDate("not-a-date")).toBe("not-a-date");
     expect(formatBirthDate("1991-06-29")).toMatch(/^b\. /);

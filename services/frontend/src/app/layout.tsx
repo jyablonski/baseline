@@ -28,7 +28,9 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: {
     default: "Baseline",
-    template: "Baseline — %s",
+    // Page first, brand last: tabs truncate from the right and screen readers
+    // announce the page before the site.
+    template: "%s — Baseline",
   },
   description: "Box scores, game logs, and splits.",
   applicationName: "Baseline",

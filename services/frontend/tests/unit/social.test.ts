@@ -5,7 +5,6 @@ import {
   facetCount,
   flairLabel,
   formatCount,
-  formatRatio,
   isSocialRange,
   postSourceLabel,
   rangeToDates,
@@ -36,9 +35,6 @@ describe("social helpers", () => {
   });
 
   it("renders missing numbers as a placeholder rather than NaN", () => {
-    expect(formatRatio(1.2345)).toBe("1.23");
-    expect(formatRatio(null)).toBe("—");
-    expect(formatRatio(Number.NaN)).toBe("—");
     expect(formatCount(18204)).toBe("18,204");
     expect(formatCount(null)).toBe("—");
   });

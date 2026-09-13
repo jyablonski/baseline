@@ -6,6 +6,7 @@ import {
   SOCIAL_SORTS,
   CONTENT_TYPE_LABELS,
   DEFAULT_SOCIAL_RANGE,
+  DEFAULT_SOCIAL_SORT,
   isSocialRange,
   type SocialRangeKey,
 } from "@/lib/social";
@@ -25,7 +26,7 @@ export function useSocialFilters() {
   const sortParam = searchParams.get("sort") ?? "";
   const sort = SOCIAL_SORTS.some((item) => item.key === sortParam)
     ? sortParam
-    : SOCIAL_SORTS[0].key;
+    : DEFAULT_SOCIAL_SORT;
 
   function set(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());

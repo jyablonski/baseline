@@ -102,6 +102,8 @@ PLAYER_GAME_LOG_DIMENSIONS = [
     "player_game_logs.matchup",
     "player_game_logs.team_abbreviation",
     "player_game_logs.season",
+    "player_game_logs.season_type",
+    "player_game_logs.mvp_game_score",
 ]
 
 TEAM_DIMENSIONS = [
@@ -742,6 +744,91 @@ def transactions_query(
         "filters": filters,
         "order": {"transactions.transaction_date": "desc"},
         "limit": clamp_limit(limit, TRANSACTIONS_DEFAULT_LIMIT, TRANSACTIONS_MAX_LIMIT),
+    }
+
+
+PLAYER_MVP_DIMENSIONS = [
+    "player_mvp_scores.player_id",
+    "players.full_name",
+    "teams.abbreviation",
+    "player_mvp_scores.season",
+    "player_mvp_scores.season_type",
+    "player_mvp_scores.mvp_rank",
+    "player_mvp_scores.mvp_score",
+    "player_mvp_scores.avg_game_score",
+    "player_mvp_scores.avg_box_score",
+    "player_mvp_scores.availability_multiplier",
+    "player_mvp_scores.games_played",
+    "player_mvp_scores.team_games",
+    "player_mvp_scores.games_missed_pct",
+    "player_mvp_scores.wins",
+    "player_mvp_scores.losses",
+    "player_mvp_scores.win_pct",
+]
+
+MVP_LADDER_DEFAULT_LIMIT = 25
+MVP_LADDER_MAX_LIMIT = 100
+
+_MVP_SEASON_TYPES = {
+    "regular season": "Regular Season",
+    "regular": "Regular Season",
+    "playoffs": "Playoffs",
+    "playoff": "Playoffs",
+    "postseason": "Playoffs",
+}
+
+
+def normalize_mvp_season_type(season_type: str | None) -> str:
+    """Only the Regular Season and Playoffs are scored; default to the Regular Season."""
+    if season_type is None or not season_type.strip():
+        return "Regular Season"
+    resolved = _MVP_SEASON_TYPES.get(season_type.strip().lower())
+    if resolved is None:
+        raise ValueError(
+            "season_type must be 'Regular Season' or 'Playoffs'; "
+            "play-in games and the Cup final are not scored"
+        )
+    return resolved
+
+
+def mvp_seasons_query() -> dict[str, Any]:
+    return {
+        "dimensions": ["player_mvp_scores.season"],
+        "measures": ["player_mvp_scores.count"],
+        "order": {"player_mvp_scores.season": "desc"},
+        "limit": 1,
+    }
+
+
+def mvp_ladder_query(
+    season: str,
+    season_type: str = "Regular Season",
+    limit: int | None = None,
+) -> dict[str, Any]:
+    return {
+        "dimensions": list(PLAYER_MVP_DIMENSIONS),
+        "filters": [
+            equals("player_mvp_scores.season", season),
+            equals("player_mvp_scores.season_type", season_type),
+        ],
+        "order": {"player_mvp_scores.mvp_rank": "asc"},
+        "limit": clamp_limit(limit, MVP_LADDER_DEFAULT_LIMIT, MVP_LADDER_MAX_LIMIT),
+    }
+
+
+def player_mvp_scores_query(player_id: UUID, season: str | None = None) -> dict[str, Any]:
+    filters: list[dict[str, Any]] = [equals("player_mvp_scores.player_id", player_id)]
+    if season and season.strip():
+        filters.append(equals("player_mvp_scores.season", season.strip()))
+    return {
+        "dimensions": list(PLAYER_MVP_DIMENSIONS),
+        "filters": filters,
+        # "Regular Season" sorts after "Playoffs", so desc lists it first within a season.
+        "order": {
+            "player_mvp_scores.season": "desc",
+            "player_mvp_scores.season_type": "desc",
+        },
+        "limit": 60,
     }
 
 

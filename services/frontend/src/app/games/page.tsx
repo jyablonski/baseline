@@ -31,7 +31,7 @@ function GamesIndex() {
         <p className="type-eyebrow">Recent final games</p>
         <h1 className="type-page">Game flow</h1>
         <p className="mt-1 text-sm text-ink-2">
-          Scoring-play differential from play-by-play. Not live win probability.
+          Scoring-play differential from PBP. Not live win probability.
         </p>
       </div>
       {gamesQuery.isLoading ? (
@@ -99,7 +99,7 @@ function BiggestCollapses() {
           <p className="type-eyebrow">Collapse of the season</p>
           <h2 className="type-module">Biggest blown leads</h2>
           <p className="mt-1 text-sm text-ink-2">
-            The largest lead a team held and still lost, from scoring play-by-play.
+            The largest lead a team held and still lost, from scoring PBP.
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm">
@@ -185,7 +185,7 @@ function CollapseRow({ collapse }: { collapse: GameCollapse }) {
       <td className="tabular whitespace-nowrap">{score}</td>
       <td>
         <Link href={`/games/${collapse.game_id}`} className="text-primary hover:underline">
-          Play-by-play →
+          PBP →
         </Link>
       </td>
     </tr>
@@ -212,7 +212,7 @@ function GameIndexRow({ game }: { game: LeagueGame }) {
       <td className="tabular font-semibold">{margin}</td>
       <td>
         <Link href={`/games/${game.game_id}`} className="text-primary hover:underline">
-          Play-by-play →
+          PBP →
         </Link>
       </td>
     </tr>

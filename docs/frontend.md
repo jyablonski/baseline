@@ -22,8 +22,8 @@ Tabs: **Home · Schedule · Players · Teams · Ask · Social · About** — the
 - `/games` — completed-game picker for play-by-play
 - `/games/[id]` — scoring-differential chart, time-led %, max lead, lead changes, biggest scoring run. Team brand colors come from the API; not live win probability
 - `/schedule` — upcoming slate (not Final, date ≥ today). No scores, odds, or WP
-- `/players`, `/players/[id]` — directory with search and filters; profile with career bar, game log, contract snapshot, B2B splits, PPG-by-season
-- `/players/compare` — up to N players, sortable, difference row. With exactly two, a head-to-head toggle shows games they played on opposite teams. Reached by selecting players on `/players`, not from the nav
+- `/players`, `/players/[id]` — directory ranked by Regular Season MVP score by default (name sort available), with search and filters; profile with career bar and season MVP rank, game log with per-game MVP score, contract snapshot, B2B splits, PPG-by-season
+- `/players/compare` — up to N players, sortable, difference row, Regular Season and Playoff MVP score for the season. With exactly two, a head-to-head toggle shows games they played on opposite teams. Reached by selecting players on `/players`, not from the nav
 - `/teams`, `/teams/[id]` — conference/division tables, scoring scatter, team profile with cap position and filterable game log
 - `/standings` — full conference tables (deep link, not a tab)
 - `/ask` — posts to `POST /api/v1/query`. One question, one answer, no transcript

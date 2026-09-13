@@ -95,6 +95,21 @@ cubes:
         sql: is_back_to_back
         type: boolean
 
+      - name: season_type
+        sql: season_type
+        type: string
+        description: Regular Season, PlayIn, Playoffs, or Cup (the Cup final)
+
+      - name: mvp_box_score
+        sql: mvp_box_score
+        type: number
+        description: Game Score-style box score behind the MVP score; null for a DNP
+
+      - name: mvp_game_score
+        sql: mvp_game_score
+        type: number
+        description: Game-level MVP score, the box score scaled up 20% in a win and down 20% in a loss
+
     measures:
       - name: games_played
         sql: game_id
@@ -102,6 +117,10 @@ cubes:
 
       - name: avg_points
         sql: points
+        type: avg
+
+      - name: avg_mvp_game_score
+        sql: mvp_game_score
         type: avg
 
       - name: avg_rebounds

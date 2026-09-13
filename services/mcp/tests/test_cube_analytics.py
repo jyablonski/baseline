@@ -16,11 +16,15 @@ from cube.queries import (
     game_predictions_query,
     game_standings_query,
     games_schedule_query,
+    mvp_ladder_query,
     normalize_conference,
+    normalize_mvp_season_type,
     play_by_play_query,
     player_back_to_backs_query,
+    player_game_log_query,
     player_ids_query,
     player_injuries_query,
+    player_mvp_scores_query,
     player_salary_query,
     player_season_stats_query,
     project_compare_stats,
@@ -477,3 +481,94 @@ def test_transactions_queries_build_optional_filters() -> None:
     # Abbreviations are upper-cased so a lowercase tool argument still matches.
     assert participants["filters"][1]["values"] == ["ATL"]
     assert transaction_participants_query()["filters"] == []
+
+
+@pytest.mark.unit
+def test_mvp_queries_and_season_types() -> None:
+    assert normalize_mvp_season_type(None) == "Regular Season"
+    assert normalize_mvp_season_type(" regular ") == "Regular Season"
+    assert normalize_mvp_season_type("Playoffs") == "Playoffs"
+    assert normalize_mvp_season_type("postseason") == "Playoffs"
+    # Play-in and the Cup final are never scored, so asking for them is an error, not [].
+    with pytest.raises(ValueError, match="not scored"):
+        normalize_mvp_season_type("PlayIn")
+
+    ladder = mvp_ladder_query("2025-26", "Playoffs", limit=500)
+    assert ladder["filters"] == [
+        {"member": "player_mvp_scores.season", "operator": "equals", "values": ["2025-26"]},
+        {"member": "player_mvp_scores.season_type", "operator": "equals", "values": ["Playoffs"]},
+    ]
+    assert ladder["order"] == {"player_mvp_scores.mvp_rank": "asc"}
+    assert ladder["limit"] == 100
+    assert mvp_ladder_query("2025-26")["limit"] == 25
+
+    history = player_mvp_scores_query(PLAYER_CURRY)
+    assert [item["member"] for item in history["filters"]] == ["player_mvp_scores.player_id"]
+    assert list(history["order"]) == ["player_mvp_scores.season", "player_mvp_scores.season_type"]
+    assert len(player_mvp_scores_query(PLAYER_CURRY, "2024-25")["filters"]) == 2
+
+    log_dims = player_game_log_query(PLAYER_CURRY, "2025-26")["dimensions"]
+    assert "player_game_logs.mvp_game_score" in log_dims
+    assert "player_game_logs.season_type" in log_dims
+
+
+@pytest.mark.unit
+def test_mvp_ladder_resolves_latest_season() -> None:
+    client = ScriptedCubeClient(
+        [
+            [{"season": "2025-26", "count": "450"}],
+            [
+                {
+                    "player_id": str(PLAYER_CURRY),
+                    "full_name": "Stephen Curry",
+                    "abbreviation": "GSW",
+                    "season": "2025-26",
+                    "season_type": "Regular Season",
+                    "mvp_rank": "1",
+                    "mvp_score": "27.4",
+                    "availability_multiplier": "0.994",
+                    "games_played": "70",
+                    "team_games": "82",
+                    "win_pct": "0.643",
+                }
+            ],
+            [
+                {
+                    "player_id": str(PLAYER_CURRY),
+                    "full_name": "Stephen Curry",
+                    "season": "2024-25",
+                    "season_type": "Playoffs",
+                    "mvp_rank": 3,
+                    "mvp_score": 25.0,
+                }
+            ],
+        ]
+    )
+    analytics = CubeAnalytics(client)
+
+    ladder = analytics.get_mvp_ladder(season_type="regular")
+    assert ladder["season"] == "2025-26"
+    assert ladder["season_type"] == "Regular Season"
+    leader = ladder["players"][0]
+    assert leader["player_id"] == PLAYER_CURRY
+    assert leader["team_abbreviation"] == "GSW"
+    assert leader["mvp_rank"] == 1
+    assert leader["mvp_score"] == 27.4
+    assert leader["team_games"] == 82
+    assert leader["wins"] is None
+    assert client.queries[1]["filters"][0]["values"] == ["2025-26"]
+
+    history = analytics.get_player_mvp_scores(PLAYER_CURRY, "2024-25")
+    assert history[0]["season_type"] == "Playoffs"
+    assert history[0]["mvp_rank"] == 3
+
+    empty = CubeAnalytics(ScriptedCubeClient([]))
+    assert empty.get_mvp_ladder() == {
+        "season": None,
+        "season_type": "Regular Season",
+        "players": [],
+    }
+    explicit = ScriptedCubeClient([[]])
+    CubeAnalytics(explicit).get_mvp_ladder(season="2023-24", season_type="Playoffs")
+    # An explicit season skips the latest-season lookup.
+    assert len(explicit.queries) == 1

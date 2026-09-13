@@ -72,6 +72,10 @@ DECLARE
   mention_alias text;
   flair_rows integer;
   flair_check text;
+  mvp_check text;
+  mvp_excluded integer;
+  cup_log_type text;
+  position_check text;
 BEGIN
   SELECT count(*) INTO team_count FROM gold.dim_teams;
   SELECT count(*) INTO player_count FROM gold.dim_players;
@@ -99,8 +103,8 @@ BEGIN
   IF b2b_count < 1 THEN
     RAISE EXCEPTION 'expected >= 1 back-to-back game log, got %', b2b_count;
   END IF;
-  IF kawhi_games IS DISTINCT FROM 3 THEN
-    RAISE EXCEPTION 'expected Kawhi career_games_played=3, got %', kawhi_games;
+  IF kawhi_games IS DISTINCT FROM 5 THEN
+    RAISE EXCEPTION 'expected Kawhi career_games_played=5, got %', kawhi_games;
   END IF;
 
   SELECT arena_latitude, arena_longitude INTO gsw_lat, gsw_lon
@@ -301,6 +305,50 @@ BEGIN
        ' | r/NBA => league/-/label'
   THEN
     RAISE EXCEPTION 'unexpected flair resolution: %', flair_check;
+  END IF;
+
+  -- Regular Season: Kawhi 3/3 LAC games, (20.32 + 25.56 + 30.48) / 3 = 25.45, and
+  -- the 50-point Cup final is not in it. Curry averages 24.54 but missed 1 of 3
+  -- GSW games: 1 - 0.25 * ((1/3 - 0.1) / 0.4)^2 = 0.915 -> 22.5.
+  -- Playoffs: Curry 29.3 * 1.2 = 35.2 in a win, Kawhi 27.8 * 0.8 = 22.2 in a loss.
+  SELECT string_agg(
+           players.full_name || ' ' || scores.season_type || ' #' || scores.mvp_rank || ' ' ||
+           scores.mvp_score || ' gp=' || scores.games_played || '/' || scores.team_games ||
+           ' avail=' || scores.availability_multiplier,
+           ' | ' ORDER BY scores.season_type DESC, scores.mvp_rank)
+  INTO mvp_check
+  FROM gold.fct_player_mvp_scores scores
+  JOIN gold.dim_players players ON players.player_id = scores.player_id;
+  IF mvp_check IS DISTINCT FROM
+       'Kawhi Leonard Regular Season #1 25.5 gp=3/3 avail=1.000'
+       ' | Stephen Curry Regular Season #2 22.5 gp=2/3 avail=0.915'
+       ' | Stephen Curry Playoffs #1 35.2 gp=1/1 avail=1.000'
+       ' | Kawhi Leonard Playoffs #2 22.2 gp=1/1 avail=1.000'
+  THEN
+    RAISE EXCEPTION 'unexpected MVP scores: %', mvp_check;
+  END IF;
+
+  SELECT count(*) INTO mvp_excluded
+  FROM gold.fct_player_mvp_scores
+  WHERE season_type NOT IN ('Regular Season', 'Playoffs');
+  IF mvp_excluded <> 0 THEN
+    RAISE EXCEPTION 'expected no play-in or Cup MVP rows, got %', mvp_excluded;
+  END IF;
+
+  SELECT season_type || ' ' || mvp_game_score INTO cup_log_type
+  FROM gold.fct_player_game_logs
+  WHERE player_id = '22222222-2222-4222-8222-222222222222'
+    AND game_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  IF cup_log_type IS DISTINCT FROM 'Regular Season 20.3' THEN
+    RAISE EXCEPTION 'expected Kawhi 10/22 log to be Regular Season 20.3, got %', cup_log_type;
+  END IF;
+
+  -- Kawhi is seeded with the old roster code F, Curry with the 1-5 sort key.
+  SELECT string_agg(full_name || '=' || position, ', ' ORDER BY full_name)
+  INTO position_check
+  FROM gold.dim_players;
+  IF position_check IS DISTINCT FROM 'Kawhi Leonard=Forward, Stephen Curry=Point Guard' THEN
+    RAISE EXCEPTION 'unexpected player positions: %', position_check;
   END IF;
 
   RAISE NOTICE 'dbt e2e assertions passed (teams=%, players=%, games=%, logs=%, b2b=%, standings=%, schedule=%, predictions=%, scoring=%, flow=%, reddit_posts=%, reddit_comments=%, reddit_documents=%)',

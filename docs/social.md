@@ -39,7 +39,7 @@ Four resolution paths: an emoji code with a numeric variant (`:lal-1: Lakers`), 
 
 Defined in `services/api/src/queries/social.py`.
 
-- **`discussion_ratio`** — `num_comments / greatest(score, 1)`. The score floor is deliberate: this is the feed's sort key, and nulling it at score 0 would drop exactly the contested posts it exists to surface.
+- **`discussion_ratio`** — `num_comments / greatest(score, 1)`. The score floor is deliberate: this is a feed sort option, and nulling it at score 0 would drop exactly the contested posts it exists to surface. It is not the default sort, because Reddit floors downvoted posts at 0 and the floor then puts them all first; the feed opens on Most recent.
 - **`top_comment_leverage`**, **`comment_concentration`** — top / summed captured comment score over post score, using `nullif(score, 0)`. These compare a score to a score, so a zero denominator is meaningless rather than floored, and they come back null.
 - **`is_contested`** — `score <= 25 AND num_comments >= 50`. Reddit reports a floor: across the first 169 posts there were 23 at exactly 0, no negatives, and 21 of those 23 were over a day old when scraped. **0 is not a score waiting to be revealed.** Only 9 posts fell between 1 and 25, so the comment floor does most of the filtering.
 - **`content_type`** — `highlight` / `report` / `discussion` / `link`, from the leading title bracket. `flair` is null on ~86% of posts; the bracket (`[Highlight]`, `[Charania]`, `[PTFO]`) is the real taxonomy.

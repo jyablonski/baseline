@@ -155,11 +155,11 @@ function Chip({
       aria-pressed={active}
       className={cn(
         "inline-flex h-[var(--ct-control-page)] items-center gap-1.5 border px-[var(--ct-space-3)] text-[var(--ct-fs-cell)]",
-        // bg-foreground/text-background, not bg-ink: the theme defines ink-2/3/4
-        // but no plain --color-ink, so bg-ink resolved to nothing and the
-        // paper-coloured label on the active chip rendered invisible.
+        // Theme tokens only (primary is the brand green, like .seg-btn-active):
+        // a class the theme does not define, such as bg-ink, resolves to nothing
+        // and leaves the paper-coloured label invisible on the active chip.
         active
-          ? "border-rule-strong bg-foreground text-background"
+          ? "border-primary bg-primary text-primary-foreground"
           : "border-rule bg-raised hover:bg-tint"
       )}
     >

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const searchPlayers = vi.fn();
@@ -26,7 +26,7 @@ import PlayersPage from "@/app/players/page";
 import { Providers } from "@/components/providers";
 
 describe("players directory", () => {
-  it("defaults Active only on, sorts teams A–Z, and keeps APG and Status apart", async () => {
+  it("defaults Active only on, ranks by MVP, sorts teams A–Z, and keeps APG and Status apart", async () => {
     searchPlayers.mockResolvedValue({
       data: [
         {
@@ -39,6 +39,9 @@ describe("players directory", () => {
           career_ppg: 21.3,
           career_rpg: 6.2,
           career_apg: 7.2,
+          mvp_season: "2025-26",
+          mvp_score: 23.6,
+          mvp_rank: 4,
         },
       ],
       meta: { total: 1, limit: 25, offset: 0 },
@@ -81,11 +84,22 @@ describe("players directory", () => {
       expect(searchPlayers).toHaveBeenCalledWith("", {
         active: true,
         team_id: undefined,
+        season: "2025-26",
+        sort: "mvp",
         limit: 25,
         offset: 0,
       });
     });
+    // Waiting on the season means the directory is fetched once, not once without it.
+    expect(searchPlayers).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole("columnheader", { name: "APG" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "MVP" })).toBeInTheDocument();
+    expect(screen.getByText("23.6")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(
+      screen.getByText(/MVP is a custom metric based on 2025-26 regular-season performance/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/career/i)).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Status" })).toBeInTheDocument();
     expect(screen.getByText("7.2")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
@@ -99,6 +113,15 @@ describe("players directory", () => {
           .getAllByRole("option")
           .map((option) => option.textContent)
       ).toEqual(["Team All", "ATL", "BOS", "WAS"]);
+    });
+
+    const sortGroup = screen.getByRole("group", { name: "Sort players" });
+    fireEvent.click(within(sortGroup).getByRole("button", { name: "Name" }));
+    await waitFor(() => {
+      expect(searchPlayers).toHaveBeenLastCalledWith(
+        "",
+        expect.objectContaining({ sort: "name", offset: 0 })
+      );
     });
   });
 });

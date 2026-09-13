@@ -33,6 +33,9 @@ vi.mock("@/lib/api", () => ({
       career_ppg: 24.6,
       career_rpg: 4.7,
       career_apg: 6.4,
+      mvp_season: "2025-26",
+      mvp_score: 22.8,
+      mvp_rank: 7,
     }),
     getPlayerBackToBacks: async () => ({
       player_id: "player-1",
@@ -69,6 +72,8 @@ describe("player profile", () => {
           blocks: 0,
           turnovers: 4,
           plus_minus: -13,
+          season_type: "Regular Season",
+          mvp_game_score: 12.4,
           is_back_to_back: false,
         },
       ],
@@ -88,12 +93,18 @@ describe("player profile", () => {
     expect(identity).toHaveTextContent("GSW");
     expect(identity).toHaveTextContent("#30");
     expect(identity).toHaveTextContent("PG");
-    expect(identity).toHaveTextContent("6’2”");
+    // Height is not shown: rosters have stored it as inches ("74.0") as well as "6-2".
+    expect(identity).not.toHaveTextContent("6’2”");
+    expect(identity).not.toHaveTextContent("6-2");
     expect(identity).toHaveTextContent("b. 14 Mar 1988");
     expect(identity).toHaveTextContent("Active");
     expect(screen.queryByText("Seasons")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Points in last 10 games" })).toBeInTheDocument();
     expect(screen.queryByText("Points per game by season")).not.toBeInTheDocument();
+    expect(screen.getByText("2025-26 MVP rank")).toBeInTheDocument();
+    expect(screen.getByText("#7")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "MVP" })).toBeInTheDocument();
+    expect(screen.getByText("12.4")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "PBP" })).toHaveAttribute(
       "href",
       "/games/game-1?season=2025-26"

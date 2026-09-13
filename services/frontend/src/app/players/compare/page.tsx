@@ -27,6 +27,7 @@ const STAT_OPTIONS = [
   { value: "rpg", label: "RPG" },
   { value: "apg", label: "APG" },
   { value: "plus_minus", label: "+/-" },
+  { value: "mvp", label: "MVP" },
 ];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -45,6 +46,8 @@ function ComparePlayers() {
   const idsParam = searchParams.get("ids") ?? "";
   const statParam = searchParams.get("stat") ?? "games_played";
   const viewParam = searchParams.get("view") === "h2h" ? "h2h" : "career";
+  // MVP columns follow ?season=; without it the API uses the latest scored season.
+  const seasonParam = searchParams.get("season") ?? "";
   const [stat, setStat] = useState(statParam);
   const [view, setView] = useState<CompareView>(viewParam);
   const [addOpen, setAddOpen] = useState(false);
@@ -64,8 +67,8 @@ function ComparePlayers() {
   const activeView: CompareView = canH2h ? view : "career";
 
   const compareQuery = useQuery({
-    queryKey: ["players", "compare", ids, stat],
-    queryFn: () => api.comparePlayers(ids, stat),
+    queryKey: ["players", "compare", ids, stat, seasonParam],
+    queryFn: () => api.comparePlayers(ids, stat, seasonParam || undefined),
     enabled: ids.length >= 2 && activeView === "career",
   });
   const h2hQuery = useQuery({
@@ -98,6 +101,7 @@ function ComparePlayers() {
     const params = new URLSearchParams();
     if (next.length) params.set("ids", next.join(","));
     params.set("stat", nextStat);
+    if (seasonParam) params.set("season", seasonParam);
     if (next.length === 2 && nextView === "h2h") params.set("view", "h2h");
     router.replace(`/players/compare?${params.toString()}`);
   }
@@ -157,7 +161,7 @@ function ComparePlayers() {
                 onClick={() => setCompareView("career")}
                 className={cn("seg-btn", activeView === "career" && "seg-btn-active")}
               >
-                Career
+                Season
               </button>
               <button
                 type="button"
@@ -251,6 +255,8 @@ function ComparePlayers() {
                   <SortHead active={stat === "rpg"}>RPG</SortHead>
                   <SortHead active={stat === "apg"}>APG</SortHead>
                   <SortHead active={stat === "plus_minus"}>+/-</SortHead>
+                  <SortHead active={stat === "mvp"}>MVP</SortHead>
+                  <th>Playoff MVP</th>
                 </tr>
               </thead>
               <tbody>
@@ -280,13 +286,24 @@ function ComparePlayers() {
                       value={formatSignedMargin(row.career_avg_plus_minus, 1)}
                       emphasize={stat === "plus_minus"}
                     />
+                    <MvpStat score={row.mvp_score} rank={row.mvp_rank} emphasize={stat === "mvp"} />
+                    <MvpStat
+                      score={row.playoff_mvp_score}
+                      rank={row.playoff_mvp_rank}
+                      emphasize={false}
+                    />
                   </tr>
                 ))}
                 {rows.length === 2 ? <DifferenceRow a={rows[0]} b={rows[1]} /> : null}
               </tbody>
             </table>
           </div>
-          <p className="type-caption">Totals cover the seasons we have game logs for.</p>
+          {rows[0]?.mvp_season ? (
+            <p className="type-caption">
+              MVP and Playoff MVP cover the {rows[0].mvp_season} regular season and playoffs, with
+              league rank. Scores weigh box-score production, wins, and games missed.
+            </p>
+          ) : null}
         </>
       )}
     </div>
@@ -335,6 +352,25 @@ function CompareStat({ value, emphasize }: { value: string; emphasize: boolean }
   );
 }
 
+function MvpStat({
+  score,
+  rank,
+  emphasize,
+}: {
+  score: number | null | undefined;
+  rank: number | null | undefined;
+  emphasize: boolean;
+}) {
+  return (
+    <td className={cn("tabular py-3 text-right", emphasize && "text-lg font-semibold")}>
+      {formatStat(score)}
+      {rank != null ? (
+        <span className="ml-1.5 text-xs font-normal text-muted-foreground">#{rank}</span>
+      ) : null}
+    </td>
+  );
+}
+
 function DifferenceRow({ a, b }: { a: PlayerComparison; b: PlayerComparison }) {
   const games = a.career_games_played - b.career_games_played;
   const ppg = (a.career_ppg ?? 0) - (b.career_ppg ?? 0);
@@ -349,6 +385,12 @@ function DifferenceRow({ a, b }: { a: PlayerComparison; b: PlayerComparison }) {
       <td className="tabular py-3 text-right text-primary">{signed(apg, 1)}</td>
       <td className="tabular py-3 text-right text-primary">
         {signedNullable(a.career_avg_plus_minus, b.career_avg_plus_minus, 1)}
+      </td>
+      <td className="tabular py-3 text-right text-primary">
+        {signedNullable(a.mvp_score, b.mvp_score, 1)}
+      </td>
+      <td className="tabular py-3 text-right text-primary">
+        {signedNullable(a.playoff_mvp_score, b.playoff_mvp_score, 1)}
       </td>
     </tr>
   );

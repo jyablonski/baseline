@@ -22,6 +22,12 @@ EXTRA_CUBES = """
   - name: reddit_flair
   - name: transactions
   - name: transaction_participants
+  - name: player_mvp_scores
+    sql_table: gold.fct_player_mvp_scores
+    dimensions:
+      - name: season_type
+      - name: mvp_score
+      - name: mvp_rank
 """
 
 PLAYER_DIMS = """
@@ -347,4 +353,62 @@ cubes:
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="season_type"):
+        validate_schema(tmp_path)
+
+
+@pytest.mark.unit
+def test_validate_schema_rejects_incomplete_mvp_scores(tmp_path: Path) -> None:
+    (tmp_path / "cube.js").write_text("module.exports = {}\n", encoding="utf-8")
+    cubes = tmp_path / "model" / "cubes"
+    views = tmp_path / "model" / "views"
+    cubes.mkdir(parents=True)
+    views.mkdir()
+    (views / "player_performance.yml").write_text(
+        "views:\n  - name: player_performance\n",
+        encoding="utf-8",
+    )
+
+    def write_model(mvp_cube: str) -> None:
+        (cubes / "all.yml").write_text(
+            f"""
+cubes:
+  - name: players
+{PLAYER_DIMS}
+  - name: games
+{_valid_player_game_logs()}
+  - name: team_game_results
+{STANDINGS}
+  - name: teams
+    sql_table: gold.dim_teams
+    dimensions:
+      - name: current_season_payroll
+  - name: team_games
+    sql: SELECT 1 FROM gold.fct_team_game_results
+    measures:
+      - name: games
+      - name: wins
+      - name: losses
+    dimensions:
+      - name: season_type
+  - name: player_season_stats
+  - name: player_contracts
+  - name: team_payroll
+{EXTRA_CUBES.split("  - name: player_mvp_scores")[0]}
+{mvp_cube}
+""",
+            encoding="utf-8",
+        )
+
+    write_model("  - name: player_mvp_scores\n    sql_table: gold.other\n")
+    with pytest.raises(ValueError, match="gold.fct_player_mvp_scores"):
+        validate_schema(tmp_path)
+
+    write_model(
+        "  - name: player_mvp_scores\n"
+        "    sql_table: gold.fct_player_mvp_scores\n"
+        "    dimensions:\n"
+        "      - name: season_type\n"
+        "      - name: mvp_score\n"
+    )
+    with pytest.raises(ValueError, match="missing dimension mvp_rank"):
         validate_schema(tmp_path)

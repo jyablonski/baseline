@@ -35,7 +35,7 @@ describe("charts", () => {
     render(<WinLossDonut wins={0} losses={0} />);
     expect(screen.getByText("No record yet")).toBeInTheDocument();
     render(<GameFlowChart events={[]} />);
-    expect(screen.getByText("No play-by-play data available.")).toBeInTheDocument();
+    expect(screen.getByText("No PBP data available.")).toBeInTheDocument();
     const { container: emptyRatings } = render(<TeamRatingsScatter teams={[]} />);
     expect(emptyRatings).toBeEmptyDOMElement();
   });

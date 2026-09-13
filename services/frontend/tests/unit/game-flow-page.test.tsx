@@ -50,6 +50,7 @@ const BOX_SCORE_ROW = {
   free_throw_pct: 0.75,
   true_shooting_pct: 0.571,
   plus_minus: -7,
+  mvp_game_score: 31.4,
 };
 
 describe("game flow page", () => {
@@ -79,7 +80,7 @@ describe("game flow page", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("No play-by-play data available.")).toBeInTheDocument();
+      expect(screen.getByText("No PBP data available.")).toBeInTheDocument();
     });
     expect(screen.getByText("There's no scoring timeline for this game.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "All recent final games →" })).toHaveAttribute(
@@ -270,6 +271,7 @@ describe("box score", () => {
     expect(within(row).getByText("6-8")).toBeInTheDocument();
     expect(within(row).getByText("57.1%")).toBeInTheDocument();
     expect(within(row).getByText("-7")).toBeInTheDocument();
+    expect(within(row).getByText("31.4")).toBeInTheDocument();
 
     // A player who never shot gets a blank rather than a 0.0% that reads as bad.
     const bench = screen.getByText("Bench Guy").closest("tr") as HTMLElement;
@@ -349,6 +351,7 @@ describe("box score", () => {
           free_throw_pct: null,
           true_shooting_pct: null,
           plus_minus: null,
+          mvp_game_score: null,
         },
       ],
       meta: { total: 2, limit: 2, offset: 0 },
@@ -375,6 +378,7 @@ describe("box score", () => {
       "FT%",
       "TS%",
       "+/−",
+      "MVP",
     ];
     for (const header of headers) {
       fireEvent.click(screen.getByRole("button", { name: header }));

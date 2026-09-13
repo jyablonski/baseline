@@ -58,7 +58,7 @@ describe("games index", () => {
       </Providers>
     );
     await waitFor(() => {
-      expect(screen.getAllByRole("link", { name: "Play-by-play →" }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("link", { name: "PBP →" }).length).toBeGreaterThan(0);
     });
     expect(screen.getByRole("heading", { name: "Game flow" })).toBeInTheDocument();
     expect(screen.getByText("Recent final games")).toBeInTheDocument();
@@ -67,7 +67,7 @@ describe("games index", () => {
     expect(recent.getByText("Margin")).toBeInTheDocument();
     expect(recent.getByText("NYK")).toBeInTheDocument();
     expect(recent.getByText("SAS")).toBeInTheDocument();
-    expect(recent.getByRole("link", { name: "Play-by-play →" })).toHaveAttribute(
+    expect(recent.getByRole("link", { name: "PBP →" })).toHaveAttribute(
       "href",
       "/games/0042500405"
     );

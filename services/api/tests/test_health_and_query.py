@@ -108,7 +108,8 @@ def test_query_compare_try_chip(client) -> None:
     assert response.status_code == 200
     body = response.json()
     assert "I can answer" not in body["answer"]
-    assert "more career games" in body["answer"]
+    assert "more games" in body["answer"]
+    assert "career" not in body["answer"]
     assert len(body["data"]) == 2
     assert [row["full_name"] for row in body["data"]] == [
         "LeBron James",

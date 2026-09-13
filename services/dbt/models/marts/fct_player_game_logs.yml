@@ -25,6 +25,20 @@ models:
       - name: is_back_to_back
         data_tests:
           - dbt_expectations.expect_column_values_to_not_be_null
+      - name: season_type
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["Regular Season", "PlayIn", "Playoffs", "Cup"]
+                quote_values: true
+                row_condition: "season_type is not null"
+      - name: mvp_box_score
+        description: Game-level MVP box score, rounded to one decimal. Null for a DNP.
+      - name: mvp_game_score
+        description: >
+          Game-level MVP score: mvp_box_score scaled up on a win and down on a
+          loss. Rounded to one decimal; season scores average the unrounded
+          value, so they will not always match an average of this column.
     data_tests:
       - dbt_expectations.expect_compound_columns_to_be_unique:
           arguments:

@@ -29,7 +29,13 @@ export type PlayerSummary = {
   career_ppg?: number | null;
   career_rpg?: number | null;
   career_apg?: number | null;
+  /** Regular Season MVP ladder for mvp_season (requested season, else the latest scored). */
+  mvp_season?: string | null;
+  mvp_score?: number | null;
+  mvp_rank?: number | null;
 };
+
+export type PlayerSort = "mvp" | "name";
 
 export type PlayerDetail = PlayerSummary & {
   first_name: string;
@@ -66,6 +72,8 @@ export type GameLogEntry = {
   blocks?: number | null;
   turnovers?: number | null;
   plus_minus?: number | null;
+  season_type?: string | null;
+  mvp_game_score?: number | null;
   is_back_to_back: boolean;
 };
 
@@ -93,6 +101,11 @@ export type PlayerComparison = {
   career_rpg: number | null;
   career_apg: number | null;
   career_avg_plus_minus?: number | null;
+  mvp_season?: string | null;
+  mvp_score?: number | null;
+  mvp_rank?: number | null;
+  playoff_mvp_score?: number | null;
+  playoff_mvp_rank?: number | null;
 };
 
 export type PlayerSeasonStats = {
@@ -302,6 +315,8 @@ export type SearchPlayersParams = {
   search?: string;
   active?: boolean;
   team_id?: string;
+  season?: string;
+  sort?: PlayerSort;
   limit?: number;
   offset?: number;
 };
@@ -554,6 +569,8 @@ export type SocialEntity = {
   entity_id: string;
   entity_name: string;
   entity_abbreviation: string | null;
+  /** Team nickname ("Lakers"); null for players. */
+  entity_nickname?: string | null;
   post_count: number;
   comment_count: number;
   total_post_score: number;
@@ -616,4 +633,6 @@ export type BoxScoreRow = {
   /** Null when the player attempted no shots, rather than a misleading zero. */
   true_shooting_pct: number | null;
   plus_minus: number | null;
+  /** Game-level MVP score: box score scaled up in a win, down in a loss. */
+  mvp_game_score?: number | null;
 };

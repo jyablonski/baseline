@@ -60,7 +60,7 @@ function GameFlowBody() {
       </div>
 
       {flowQuery.isLoading || pbpQuery.isLoading ? (
-        <LoadingState label="Loading play-by-play…" />
+        <LoadingState label="Loading PBP…" />
       ) : flowQuery.isError ? (
         <ErrorState message={queryErrorMessage(flowQuery.error)} />
       ) : pbpQuery.isError ? (
@@ -69,7 +69,7 @@ function GameFlowBody() {
         <EmptyState message="Game not found." />
       ) : !flow.has_play_by_play || events.length === 0 ? (
         <EmptyState
-          title="No play-by-play data available."
+          title="No PBP data available."
           message="There's no scoring timeline for this game."
         />
       ) : (

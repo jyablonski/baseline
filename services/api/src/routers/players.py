@@ -4,7 +4,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from dependencies import get_players_repository
-from queries.players import COMPARE_STAT_COLUMNS, GAME_LOG_SORT_COLUMNS, build_head_to_head
+from queries.players import (
+    COMPARE_STAT_COLUMNS,
+    GAME_LOG_SORT_COLUMNS,
+    PLAYER_SORT_ORDERS,
+    build_head_to_head,
+)
 from repositories.players import PlayersRepository
 from schemas import (
     BackToBackStats,
@@ -26,6 +31,9 @@ router = APIRouter()
 def compare_players(
     ids: Annotated[str, Query(description="Comma-separated player IDs")],
     stat: Annotated[str, Query()] = "games_played",
+    season: Annotated[
+        str | None, Query(description="MVP season; defaults to the latest scored")
+    ] = None,
     repo: PlayersRepository = Depends(get_players_repository),
 ) -> PaginatedResponse[PlayerComparison]:
     try:
@@ -46,7 +54,7 @@ def compare_players(
             detail=f"Unsupported stat '{stat}'. Allowed: {allowed}",
         )
 
-    rows = repo.compare_players(player_ids, column)
+    rows = repo.compare_players(player_ids, column, season)
     found_ids = {row["player_id"] for row in rows}
     missing = [pid for pid in player_ids if pid not in found_ids]
     if missing:
@@ -100,12 +108,28 @@ def list_players(
     search: Annotated[str | None, Query()] = None,
     active: Annotated[bool | None, Query()] = None,
     team_id: Annotated[UUID | None, Query()] = None,
+    season: Annotated[
+        str | None, Query(description="MVP season; defaults to the latest scored")
+    ] = None,
+    sort: Annotated[str, Query()] = "name",
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
     repo: PlayersRepository = Depends(get_players_repository),
 ) -> PaginatedResponse[PlayerSummary]:
+    if sort not in PLAYER_SORT_ORDERS:
+        allowed = ", ".join(sorted(PLAYER_SORT_ORDERS))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported sort '{sort}'. Allowed: {allowed}",
+        )
     total, rows = repo.list_players(
-        search=search, active=active, team_id=team_id, limit=limit, offset=offset
+        search=search,
+        active=active,
+        team_id=team_id,
+        season=season,
+        sort=sort,
+        limit=limit,
+        offset=offset,
     )
     data = [PlayerSummary.model_validate(row) for row in rows]
     return PaginatedResponse(

@@ -84,8 +84,8 @@ function SocialBody() {
         {/* No max-width: the strapline reads as one line at full width and still
             wraps on a narrow viewport. */}
         <p className="type-prose mt-1 text-ink-2">
-          What r/nba argued about. Posts and their ten highest-scoring comments, collected once a
-          day.
+          What r/nba is talking about. Posts and their ten highest-scoring comments, collected once
+          a day.
         </p>
       </header>
 
@@ -132,18 +132,6 @@ function SocialBody() {
 
           <aside className="space-y-[var(--ct-space-4)]">
             <Panel
-              title="Player mentions"
-              meta={range}
-              note="Full-name matches only, in titles, self text and captured comments. A post that says just “Jokic” is not counted."
-            >
-              <EntityBoard
-                rows={players.slice(0, 8)}
-                unit="Player"
-                emptyMessage="No full-name matches in this range."
-              />
-            </Panel>
-
-            <Panel
               title="Team mentions"
               meta={range}
               note="Nicknames, city names and common shorthand all count."
@@ -156,7 +144,7 @@ function SocialBody() {
             </Panel>
 
             <Panel
-              title="Fanbases"
+              title="Fanbase comments"
               meta={range}
               note="From r/nba user flair, across posts and comments."
             >

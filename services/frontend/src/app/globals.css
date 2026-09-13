@@ -422,7 +422,7 @@
   }
 
   .seg-btn-active {
-    background: var(--ct-ink);
+    background: var(--ct-accent);
     color: var(--ct-raised);
   }
 }

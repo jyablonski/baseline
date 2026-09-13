@@ -476,6 +476,8 @@ LIST_ENTITIES = text(
         rolled.comment_count,
         coalesce(scored.total_post_score, 0) AS total_post_score,
         scored.top_post_score,
+        -- Null for players. The rail shows "Lakers", matching the fanbase board.
+        dim_teams.nickname AS entity_nickname,
         dim_teams.primary_color,
         dim_teams.alternate_color
     FROM rolled

@@ -430,7 +430,7 @@ def test_compare_and_standings_empty_rows() -> None:
             return [{"player_id": PLAYER_CURRY, "full_name": "Wardell Stephen Curry"}]
 
     compare = NaturalLanguageQueryService(ThinCompare())
-    assert "Could not load career rows" in compare.answer("Compare LeBron vs Curry").answer
+    assert "Could not load stats" in compare.answer("Compare LeBron vs Curry").answer
 
     empty = NaturalLanguageQueryService(EmptyStandings())
     assert "standings rows found" in empty.answer("Who leads the West?").answer
@@ -497,7 +497,8 @@ def test_compare_try_chip_returns_difference(service: NaturalLanguageQueryServic
     question = "How many more career games has LeBron played than Stephen Curry?"
     assert service.classify(question) == "compare"
     response = service.answer(question)
-    assert "500 more career games" in response.answer
+    assert "500 more games" in response.answer
+    assert "career" not in response.answer
     assert "capability" not in response.answer.lower()
     assert "I can answer" not in response.answer
     assert len(response.data) == 2

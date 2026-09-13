@@ -25,8 +25,8 @@ export default function AboutPage() {
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>
             <SourceLink href={SOURCE_URL.bref}>Basketball-Reference</SourceLink>: teams, players,
-            the season slate, box scores, standings, play-by-play, remaining-year player salaries,
-            team payroll, and the current injury report.
+            the season slate, box scores, standings, PBP, remaining-year player salaries, team
+            payroll, and the current injury report.
           </li>
           <li>
             <SourceLink href={SOURCE_URL.odds}>The Odds API</SourceLink>: upcoming NBA game
