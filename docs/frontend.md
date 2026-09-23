@@ -16,12 +16,13 @@ The product name is **Baseline**. One header bar holds the lockup, tabs, and a l
 
 Tabs: **Home · Schedule · Players · Teams · Ask · Social · About** — the list in `src/lib/nav.ts`.
 
-`/games`, `/standings`, `/players/compare`, and `/admin` are reachable routes with no tab of their own.
+`/games`, `/standings`, `/predictions`, `/players/compare`, and `/admin` are reachable routes with no tab of their own.
 
 - `/` — coverage facts, latest completed games with PBP links, East/West standings snapshot
 - `/games` — completed-game picker for play-by-play
 - `/games/[id]` — scoring-differential chart, time-led %, max lead, lead changes, biggest scoring run. Team brand colors come from the API; not live win probability
-- `/schedule` — upcoming slate (not Final, date ≥ today). No scores, odds, or WP
+- `/schedule` — upcoming slate (not Final, date ≥ today). No scores. Adds the champion model's pregame win % (away / home) and a sportsbook consensus moneyline and home spread. Copy labels them as a model estimate and market odds, not betting advice. Any missing side renders `—`. Links to `/predictions`
+- `/predictions` — model scorecard: per season, each model's log loss, Brier, accuracy, and calibration error beside the sportsbook-market and always-pick-home baselines. The champion is marked "On schedule". Reached from `/schedule`, not the nav
 - `/players`, `/players/[id]` — directory ranked by Regular Season MVP score by default (name sort available), with search and filters; profile with career bar and season MVP rank, game log with per-game MVP score, contract snapshot, B2B splits, PPG-by-season
 - `/players/compare` — up to N players, sortable, difference row, Regular Season and Playoff MVP score for the season. With exactly two, a head-to-head toggle shows games they played on opposite teams. Reached by selecting players on `/players`, not from the nav
 - `/teams`, `/teams/[id]` — conference/division tables, scoring scatter, team profile with cap position and filterable game log
@@ -56,6 +57,6 @@ make test-frontend-e2e                              # Playwright
 
 ## Not built
 
-Injuries, odds, and transactions have gold marts and REST or Cube exposure, but no page of their own.
+Injuries and transactions have gold marts and REST or Cube exposure, but no page of their own. Odds appear only as `/schedule` columns.
 
 Also not built: betting features, streaming Ask, live in-game win probability, a season-leaders API.

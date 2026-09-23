@@ -59,7 +59,7 @@ class GamesRepository:
         }
         total = self.db.execute(LIST_SCHEDULE_COUNT, params).scalar_one()
         rows = self.db.execute(LIST_SCHEDULE, params)
-        return int(total), [dict(row._mapping) for row in rows]
+        return int(total), [_with_moneylines(dict(row._mapping)) for row in rows]
 
     def list_biggest_collapses(
         self, *, season: str | None, blown_lead_team: str | None, limit: int
@@ -93,3 +93,21 @@ class GamesRepository:
         payload = dict(row._mapping)
         payload["has_play_by_play"] = payload.get("scoring_play_count") is not None
         return payload
+
+
+def american_moneyline(implied_wp: float | None) -> int | None:
+    """Convert a (vigged) implied win probability back to an American price."""
+    if implied_wp is None:
+        return None
+    probability = float(implied_wp)
+    if not 0 < probability < 1:
+        return None
+    if probability >= 0.5:
+        return -round(100 * probability / (1 - probability))
+    return round(100 * (1 - probability) / probability)
+
+
+def _with_moneylines(row: dict) -> dict:
+    row["home_moneyline"] = american_moneyline(row.pop("home_implied_wp", None))
+    row["away_moneyline"] = american_moneyline(row.pop("away_implied_wp", None))
+    return row

@@ -381,6 +381,37 @@ export type ScheduledGame = {
   arena?: string | null;
   arena_city?: string | null;
   arena_state?: string | null;
+  prediction_model_version?: string | null;
+  home_win_probability?: number | null;
+  away_win_probability?: number | null;
+  prediction_as_of?: string | null;
+  market_home_wp?: number | null;
+  home_moneyline?: number | null;
+  away_moneyline?: number | null;
+  home_spread?: number | null;
+  odds_bookmaker_count?: number | null;
+  odds_updated_at?: string | null;
+};
+
+export type ScorecardRow = {
+  season: string;
+  model_name: string;
+  model_version: string;
+  is_champion: boolean;
+  n: number;
+  logloss?: number | null;
+  brier?: number | null;
+  accuracy?: number | null;
+  home_always_accuracy?: number | null;
+  calibration_error?: number | null;
+  market_n?: number | null;
+  market_logloss?: number | null;
+  market_brier?: number | null;
+};
+
+export type PredictionScorecard = {
+  champion_model_version?: string | null;
+  rows: ScorecardRow[];
 };
 
 export type ListScheduleParams = {

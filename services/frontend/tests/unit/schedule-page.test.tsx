@@ -25,9 +25,26 @@ vi.mock("@/lib/api", () => ({
           home_team_abbreviation: "GSW",
           away_team_abbreviation: "LAL",
           arena: "Chase Center",
+          prediction_model_version: "elo-v0",
+          home_win_probability: 0.62,
+          away_win_probability: 0.38,
+          home_moneyline: -150,
+          away_moneyline: 130,
+          home_spread: -3.5,
+        },
+        {
+          game_id: "0022600101",
+          season: "2026-27",
+          game_date: "2026-10-23",
+          status: "Scheduled",
+          home_team_id: 1610612738,
+          away_team_id: 1610612752,
+          home_team_abbreviation: "BOS",
+          away_team_abbreviation: "NYK",
+          arena: "TD Garden",
         },
       ],
-      meta: { total: 1, limit: 50, offset: 0 },
+      meta: { total: 2, limit: 50, offset: 0 },
     }),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
@@ -49,14 +66,37 @@ describe("schedule page", () => {
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Schedule" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "LAL" })).toBeInTheDocument();
-    expect(screen.getByText("@")).toBeInTheDocument();
+    expect(screen.getAllByText("@")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "GSW" })).toBeInTheDocument();
-    expect(screen.getByText("Scheduled")).toBeInTheDocument();
+    expect(screen.getAllByText("Scheduled")).toHaveLength(2);
     expect(screen.getByText("Chase Center")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "GSW" })).toHaveAttribute(
       "href",
       "/teams/1610612744?season=2026-27"
     );
     expect(screen.queryByText("PBP →")).not.toBeInTheDocument();
+  });
+
+  it("shows model win % and consensus odds, and dashes games without them", async () => {
+    render(
+      <Providers>
+        <SchedulePage />
+      </Providers>
+    );
+    await waitFor(() => {
+      expect(screen.getAllByTestId("win-probability")).toHaveLength(2);
+    });
+    // Row 0 is priced; row 1 has neither a prediction nor odds.
+    expect(screen.getAllByTestId("win-probability")[0]).toHaveTextContent("38% / 62%");
+    expect(screen.getAllByTestId("moneyline")[0]).toHaveTextContent("+130 / -150");
+    expect(screen.getAllByTestId("spread")[0]).toHaveTextContent("GSW -3.5");
+    expect(screen.getAllByTestId("win-probability")[1]).toHaveTextContent("—");
+    expect(screen.getAllByTestId("moneyline")[1]).toHaveTextContent("—");
+    expect(screen.getAllByTestId("spread")[1]).toHaveTextContent("—");
+    expect(screen.getByText(/not betting advice/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "How accurate is the model?" })).toHaveAttribute(
+      "href",
+      "/predictions"
+    );
   });
 });

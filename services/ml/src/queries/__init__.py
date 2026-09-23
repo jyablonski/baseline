@@ -1,6 +1,7 @@
 """SQL for gold reads and source prediction writes."""
 
 from queries.artifacts import (
+    REGISTER_MODEL,
     SELECT_MODEL_ARTIFACT,
     SET_MODEL_CHAMPION,
     UPDATE_MODEL_CHAMPION,
@@ -10,12 +11,14 @@ from queries.evaluations import UPSERT_MODEL_EVALUATION
 from queries.features import SELECT_GAME_FEATURES
 from queries.games import SELECT_REGULAR_SEASON_FINALS, SELECT_UPCOMING_GAMES
 from queries.odds import SELECT_MARKET_WP_BY_GAME
-from queries.predictions import INSERT_GAME_PREDICTION
+from queries.predictions import INSERT_GAME_PREDICTION, SELECT_LIVE_PREDICTED_GAMES
 
 __all__ = [
     "INSERT_GAME_PREDICTION",
     "SELECT_MARKET_WP_BY_GAME",
     "SELECT_GAME_FEATURES",
+    "SELECT_LIVE_PREDICTED_GAMES",
+    "REGISTER_MODEL",
     "SELECT_MODEL_ARTIFACT",
     "SELECT_REGULAR_SEASON_FINALS",
     "SELECT_UPCOMING_GAMES",

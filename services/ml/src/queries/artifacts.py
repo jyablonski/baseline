@@ -47,3 +47,22 @@ UPSERT_MODEL_ARTIFACT = text(
         trained_at = EXCLUDED.trained_at
     """
 )
+
+# Leaves an existing row (and its champion flag) untouched.
+REGISTER_MODEL = text(
+    """
+    INSERT INTO source.model_artifacts (
+        model_version,
+        model_name,
+        artifact,
+        trained_at
+    )
+    VALUES (
+        :model_version,
+        :model_name,
+        CAST(:artifact AS jsonb),
+        :trained_at
+    )
+    ON CONFLICT (model_version) DO NOTHING
+    """
+)

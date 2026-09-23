@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,6 +21,19 @@ class ScheduledGame(BaseModel):
     away_team_id: UUID
     away_team_abbreviation: str | None = None
     away_team_name: str | None = None
+    # Champion pregame model estimate; null until the ML job has scored the game.
+    prediction_model_version: str | None = None
+    home_win_probability: float | None = None
+    away_win_probability: float | None = None
+    prediction_as_of: datetime | None = None
+    # Market consensus across bookmakers from The Odds API snapshot; null when
+    # unkeyed or the event did not match. market_home_wp is vig-free.
+    market_home_wp: float | None = None
+    home_moneyline: int | None = None
+    away_moneyline: int | None = None
+    home_spread: float | None = None
+    odds_bookmaker_count: int | None = None
+    odds_updated_at: datetime | None = None
 
 
 class GameResult(BaseModel):

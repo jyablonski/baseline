@@ -39,7 +39,9 @@ class SourceHealth(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     last_success_at: datetime | None = None
-    runs_since_success: int = 0
+    # Most recent attempted runs in a row that failed or came back below
+    # expectation. Skipped runs neither extend nor break it.
+    unhealthy_streak: int = 0
 
 
 class TableFreshness(BaseModel):
@@ -89,6 +91,7 @@ class PipelineRun(BaseModel):
     reddit_ran: bool | None = None
     reddit_exit: int | None = None
     dbt_exit: int | None = None
+    ml_exit: int | None = None
     detail: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None

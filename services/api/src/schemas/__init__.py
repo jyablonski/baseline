@@ -33,6 +33,7 @@ from schemas.player import (
     PlayerSeasonStats,
     PlayerSummary,
 )
+from schemas.prediction import PredictionScorecard, ScorecardRow
 from schemas.social import (
     SocialComment,
     SocialEntity,
@@ -104,9 +105,11 @@ __all__ = [
     "PlayerDetail",
     "PlayerSeasonStats",
     "PlayerSummary",
+    "PredictionScorecard",
     "QueryRequest",
     "QueryResponse",
     "ScheduledGame",
+    "ScorecardRow",
     "SeasonListResponse",
     "SourceHealth",
     "Transaction",

@@ -181,16 +181,17 @@ LIST_SCHEDULE_COUNT = text(
     """
     SELECT count(*) AS total
     FROM gold.fct_games_schedule
-    WHERE fct_games_schedule.game_date >= :from_date
-      AND (:season IS NULL OR fct_games_schedule.season = :season)
-      AND (
-          :status IS NULL
-          OR (
-              lower(:status) = 'scheduled'
-              AND lower(fct_games_schedule.status) NOT IN ('final', '3')
-          )
-          OR fct_games_schedule.status = :status
-      )
+    WHERE
+        fct_games_schedule.game_date >= :from_date
+        AND (:season IS NULL OR fct_games_schedule.season = :season)
+        AND (
+            :status IS NULL
+            OR (
+                lower(:status) = 'scheduled'
+                AND lower(fct_games_schedule.status) NOT IN ('final', '3')
+            )
+            OR fct_games_schedule.status = :status
+        )
     """
 )
 
@@ -202,7 +203,40 @@ LIST_SCHEDULE = text(
             arena_name,
             city
         FROM gold.dim_teams
+    ),
+
+    -- fct_game_odds is one row per event x bookmaker x market. Collapse books
+    -- into a consensus: vig-free home WP for the market line, and the average
+    -- vigged implied WP per side, which the repository turns back into a
+    -- moneyline. Averaging American prices directly breaks across the +/-100
+    -- boundary (-110 and +100 would average to -5).
+    moneyline_odds AS (
+        SELECT
+            fct_game_odds.game_id,
+            avg(fct_game_odds.home_market_wp) AS market_home_wp,
+            avg(fct_game_odds.home_implied_wp) AS home_implied_wp,
+            avg(fct_game_odds.away_implied_wp) AS away_implied_wp,
+            count(DISTINCT fct_game_odds.bookmaker) AS odds_bookmaker_count,
+            max(fct_game_odds.scraped_at) AS odds_updated_at
+        FROM gold.fct_game_odds
+        WHERE
+            fct_game_odds.market = 'h2h'
+            AND fct_game_odds.game_id IS NOT NULL
+        GROUP BY fct_game_odds.game_id
+    ),
+
+    spread_odds AS (
+        SELECT
+            fct_game_odds.game_id,
+            percentile_cont(0.5) WITHIN GROUP (ORDER BY fct_game_odds.spread_home) AS home_spread
+        FROM gold.fct_game_odds
+        WHERE
+            fct_game_odds.market = 'spreads'
+            AND fct_game_odds.game_id IS NOT NULL
+            AND fct_game_odds.spread_home IS NOT NULL
+        GROUP BY fct_game_odds.game_id
     )
+
     SELECT
         fct_games_schedule.game_id,
         fct_games_schedule.season,
@@ -226,20 +260,38 @@ LIST_SCHEDULE = text(
         fct_games_schedule.home_team_name,
         fct_games_schedule.away_team_id,
         fct_games_schedule.away_team_abbreviation,
-        fct_games_schedule.away_team_name
+        fct_games_schedule.away_team_name,
+        fct_game_predictions.model_version AS prediction_model_version,
+        fct_game_predictions.model_wp AS home_win_probability,
+        fct_game_predictions.away_wp AS away_win_probability,
+        fct_game_predictions.as_of AS prediction_as_of,
+        moneyline_odds.market_home_wp,
+        moneyline_odds.home_implied_wp,
+        moneyline_odds.away_implied_wp,
+        moneyline_odds.odds_bookmaker_count,
+        moneyline_odds.odds_updated_at,
+        spread_odds.home_spread
     FROM gold.fct_games_schedule
     LEFT JOIN home_teams
         ON home_teams.team_id = fct_games_schedule.home_team_id
-    WHERE fct_games_schedule.game_date >= :from_date
-      AND (:season IS NULL OR fct_games_schedule.season = :season)
-      AND (
-          :status IS NULL
-          OR (
-              lower(:status) = 'scheduled'
-              AND lower(fct_games_schedule.status) NOT IN ('final', '3')
-          )
-          OR fct_games_schedule.status = :status
-      )
+    -- One row per game: the mart keeps only the champion model's latest as_of.
+    LEFT JOIN gold.fct_game_predictions
+        ON fct_game_predictions.game_id = fct_games_schedule.game_id
+    LEFT JOIN moneyline_odds
+        ON moneyline_odds.game_id = fct_games_schedule.game_id
+    LEFT JOIN spread_odds
+        ON spread_odds.game_id = fct_games_schedule.game_id
+    WHERE
+        fct_games_schedule.game_date >= :from_date
+        AND (:season IS NULL OR fct_games_schedule.season = :season)
+        AND (
+            :status IS NULL
+            OR (
+                lower(:status) = 'scheduled'
+                AND lower(fct_games_schedule.status) NOT IN ('final', '3')
+            )
+            OR fct_games_schedule.status = :status
+        )
     ORDER BY
         fct_games_schedule.game_date ASC,
         fct_games_schedule.game_id ASC

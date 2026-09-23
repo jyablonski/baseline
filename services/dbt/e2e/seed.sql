@@ -127,7 +127,19 @@ INSERT INTO source.game_odds (
     home_market_wp, away_market_wp, spread_home, scraped_at
 ) VALUES
     ('evt-gsw-chi', '2024-10-27 19:00:00', 'Golden State Warriors', 'Chicago Bulls',
-     'dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'draftkings', 'h2h', -150, 130, 0.6, 0.4348, 0.58, 0.42, NULL, NOW());
+     'dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'draftkings', 'h2h', -150, 130, 0.6, 0.4348, 0.58, 0.42, NULL, NOW()),
+    -- Pregame lines retained for Final games (fct_game_upsets). GSW won as a
+    -- two-book favorite; LAC won 10/23 and 10/25 as the underdog.
+    ('evt-gsw-lac', '2024-10-22 23:30:00', 'Golden State Warriors', 'Los Angeles Clippers',
+     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'draftkings', 'h2h', -200, 170, 0.6667, 0.3704, 0.6429, 0.3571, NULL, NOW()),
+    ('evt-gsw-lac', '2024-10-22 23:30:00', 'Golden State Warriors', 'Los Angeles Clippers',
+     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'fanduel', 'h2h', -190, 160, 0.6552, 0.3846, 0.6301, 0.3699, NULL, NOW()),
+    ('evt-chi-lac', '2024-10-24 00:00:00', 'Chicago Bulls', 'Los Angeles Clippers',
+     'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'draftkings', 'h2h', -150, 130, 0.6, 0.4348, 0.5798, 0.4202, NULL, NOW()),
+    ('evt-lac-gsw', '2024-10-26 02:30:00', 'Los Angeles Clippers', 'Golden State Warriors',
+     'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'draftkings', 'h2h', 160, -190, 0.3846, 0.6552, 0.3699, 0.6301, NULL, NOW()),
+    ('evt-lac-gsw', '2024-10-26 02:30:00', 'Los Angeles Clippers', 'Golden State Warriors',
+     'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'draftkings', 'spreads', -110, -110, 0.5238, 0.5238, 0.5, 0.5, 4.5, NOW());
 
 INSERT INTO source.play_by_play (
     game_id, season, action_number, action_id, period, clock,

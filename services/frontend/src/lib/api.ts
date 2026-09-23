@@ -29,6 +29,7 @@ import type {
   PlayerDetail,
   PlayerSeasonStats,
   PlayerSummary,
+  PredictionScorecard,
   SearchPlayersParams,
   SeasonInfo,
   StandingRow,
@@ -348,6 +349,11 @@ export const api = {
           offset: params.offset,
         })}`
       )
+    ),
+
+  getPredictionScorecard: async (params: { season?: string } = {}) =>
+    asData<PredictionScorecard>(
+      await fetchApi(`/api/v1/predictions/scorecard${buildQuery({ season: params.season })}`)
     ),
 
   listBiggestCollapses: async (

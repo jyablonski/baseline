@@ -4,7 +4,7 @@ models:
   - name: fct_reddit_posts
     description: >
       Thin gold copy of PRAW submissions. Unique on reddit_id.
-      Queryable via Cube / MCP; no Courtline page.
+      Queryable via Cube / MCP.
     columns:
       - name: reddit_id
         data_tests:

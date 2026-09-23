@@ -185,6 +185,11 @@ describe("api client", () => {
           data: [{ player_id: PLAYER_A, season: "2024-25", games_played: 3, ppg: 27.3 }],
         });
       }
+      if (url.includes("/predictions/scorecard")) {
+        return jsonResponse({
+          data: { champion_model_version: "elo-v0", rows: [{ model_version: "elo-v0" }] },
+        });
+      }
       if (url.includes("/status")) {
         return jsonResponse({
           data: {
@@ -291,6 +296,14 @@ describe("api client", () => {
       last_scraped_at: "2026-09-04T04:12:00Z",
       player_count: 2,
     });
+    await expect(api.getPredictionScorecard({ season: "2025-26" })).resolves.toMatchObject({
+      champion_model_version: "elo-v0",
+    });
+    expect(
+      fetchMock.mock.calls.some((call) =>
+        String(call[0]).includes("/api/v1/predictions/scorecard?season=2025-26")
+      )
+    ).toBe(true);
   });
 
   it("handles 204, error bodies, and timeouts", async () => {

@@ -10,15 +10,21 @@ from elo import MODEL_VERSION, GameRow
 from main import cli, main
 from queries import (
     INSERT_GAME_PREDICTION,
+    REGISTER_MODEL,
+    SELECT_LIVE_PREDICTED_GAMES,
     SELECT_MARKET_WP_BY_GAME,
     SELECT_REGULAR_SEASON_FINALS,
     SELECT_UPCOMING_GAMES,
 )
 from scoring import (
+    backfill_and_persist,
+    build_backfill_rows,
+    build_graded_rows,
     build_prediction_rows,
     evaluate,
     evaluate_holdout,
     holdout_season,
+    load_live_predicted_games,
     load_market_wp,
     load_regular_season_finals,
     load_upcoming_games,
@@ -149,6 +155,110 @@ def test_score_and_persist_and_evaluate(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 @pytest.mark.unit
+def test_build_graded_rows_filters_season_and_unfinished_games() -> None:
+    scored = [
+        (_game("2023-24", True, "a"), 0.7),
+        (_game("2024-25", True, "b"), 0.6),
+        (_game("2024-25", None, "c"), 0.5),
+    ]
+    scraped_at = datetime(2026, 9, 23, 9, 0, 0)
+    rows = build_graded_rows(
+        scored,
+        {_id("b"): 0.55},
+        season="2024-25",
+        scraped_at=scraped_at,
+        model_name="elo",
+        model_version="elo-v0",
+    )
+    # Only the 2024-25 Final: "a" is the wrong season, "c" has no result.
+    assert [row["game_id"] for row in rows] == [_id("b")]
+    assert rows[0]["as_of"] == datetime(2024, 10, 22)
+    assert rows[0]["model_wp"] == 0.6
+    assert rows[0]["market_wp"] == 0.55
+    assert rows[0]["scraped_at"] == scraped_at
+
+
+@pytest.mark.unit
+def test_build_backfill_rows_logit_is_opt_in_and_live_rows_are_kept(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    history = [_game("2023-24", True, "a"), _game("2024-25", True, "b")]
+    scraped_at = datetime(2026, 9, 23, 9, 0, 0)
+    seasons: list[str | None] = []
+
+    def _logit(rows, **kwargs):
+        seasons.append(kwargs["season"])
+        return [(history[1], 0.7)]
+
+    monkeypatch.setattr("scoring._evaluate_logit_predictions", _logit)
+    elo_only = build_backfill_rows(history, [], {}, season="2024-25", scraped_at=scraped_at)
+    assert sorted(row["model_version"] for row in elo_only) == ["elo-v0", "elo-v1"]
+    assert seasons == []
+
+    rows = build_backfill_rows(
+        history,
+        [],
+        {},
+        season="2024-25",
+        scraped_at=scraped_at,
+        live={(_id("b"), "elo-v0")},
+        with_logit=True,
+    )
+    by_version = {row["model_version"]: row for row in rows}
+    # elo-v0 already has a live prediction for "b", so the replay stays out.
+    assert sorted(by_version) == ["elo-v1", "logit-v1"]
+    assert by_version["logit-v1"]["model_wp"] == 0.7
+    assert seasons == ["2024-25"]
+
+    # "a" was a home win, so the (regressed) home rating is above neutral.
+    v0 = next(row for row in elo_only if row["model_version"] == "elo-v0")
+    neutral = build_backfill_rows(history[1:], [], {}, season=None, scraped_at=scraped_at)
+    neutral_v0 = next(row for row in neutral if row["model_version"] == "elo-v0")
+    assert v0["model_wp"] > neutral_v0["model_wp"]
+
+
+@pytest.mark.unit
+def test_load_live_predicted_games() -> None:
+    session = MagicMock()
+    session.execute.return_value.mappings.return_value.all.return_value = [
+        {"game_id": str(_id("a")), "model_version": "elo-v0"},
+    ]
+    assert load_live_predicted_games(session) == {(_id("a"), "elo-v0")}
+    assert session.execute.call_args.args[0] is SELECT_LIVE_PREDICTED_GAMES
+
+
+@pytest.mark.unit
+def test_backfill_and_persist_batches_upserts(monkeypatch: pytest.MonkeyPatch) -> None:
+    history = [_game("2024-25", True, str(index)) for index in range(3)]
+    batches: list[int] = []
+    feature_loads: list[bool] = []
+    session = MagicMock()
+    monkeypatch.setattr("scoring.get_session", lambda: _session(session))
+    monkeypatch.setattr("scoring.load_regular_season_finals", lambda sess: history)
+    monkeypatch.setattr("scoring.load_feature_rows", lambda sess: feature_loads.append(True) or [])
+    monkeypatch.setattr("scoring.load_market_wp", lambda sess: {})
+    monkeypatch.setattr("scoring.load_live_predicted_games", lambda sess: {(_id("0"), "elo-v1")})
+    monkeypatch.setattr("scoring.BACKFILL_BATCH_SIZE", 4)
+
+    def _upsert(session, model, rows, conflict_columns):
+        batches.append(len(rows))
+        return len(rows)
+
+    monkeypatch.setattr("scoring.upsert_rows", _upsert)
+    result = backfill_and_persist(season="2024-25")
+    # 3 games x 2 Elo versions, minus the one live elo-v1 prediction.
+    assert batches == [4, 1]
+    assert result["written"] == 5
+    assert result["model_versions"] == ["elo-v0", "elo-v1"]
+    assert result["season"] == "2024-25"
+    assert session.execute.call_args.args[0] is REGISTER_MODEL
+    # Features are only loaded (and logit only replayed) when asked for.
+    assert feature_loads == []
+    assert backfill_and_persist(with_logit=True)["season"] == "all"
+    assert feature_loads == [True]
+
+
+@pytest.mark.unit
 def test_cli_eval_and_score(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "main.evaluate",
@@ -209,6 +319,28 @@ def test_cli_eval_and_score(monkeypatch: pytest.MonkeyPatch) -> None:
     train = runner.invoke(cli, ["train"])
     assert train.exit_code == 0
     assert "training_rows=12" in train.output
+
+    seasons: list[str | None] = []
+    logit_flags: list[bool] = []
+
+    def _backfill(season=None, with_logit=False):
+        seasons.append(season)
+        logit_flags.append(with_logit)
+        return {
+            "model_versions": ["elo-v0", "elo-v1"],
+            "season": season or "all",
+            "history_games": 10,
+            "written": 8,
+        }
+
+    monkeypatch.setattr("main.backfill_and_persist", _backfill)
+    backfill = runner.invoke(cli, ["backfill", "--season", "2025-26"])
+    assert backfill.exit_code == 0
+    assert "written=8" in backfill.output
+    assert "model_versions=elo-v0,elo-v1" in backfill.output
+    assert seasons == ["2025-26"]
+    assert runner.invoke(cli, ["backfill", "--with-logit"]).exit_code == 0
+    assert logit_flags == [False, True]
 
 
 @pytest.mark.unit

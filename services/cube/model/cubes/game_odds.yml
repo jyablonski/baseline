@@ -1,7 +1,7 @@
 cubes:
   - name: game_odds
     sql_table: gold.fct_game_odds
-    description: Current The Odds API upcoming-slate snapshot (h2h / spreads). Market snapshot, not a book and not a historical ledger.
+    description: The Odds API h2h / spreads lines. Upcoming games plus the last pregame line of each game already tipped; filter commence_time for the upcoming slate. Market snapshot, not a book; history starts in 2026-27.
 
     dimensions:
       - name: id

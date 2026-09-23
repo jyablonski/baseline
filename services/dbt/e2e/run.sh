@@ -76,6 +76,7 @@ DECLARE
   mvp_excluded integer;
   cup_log_type text;
   position_check text;
+  upset_check text;
 BEGIN
   SELECT count(*) INTO team_count FROM gold.dim_teams;
   SELECT count(*) INTO player_count FROM gold.dim_players;
@@ -349,6 +350,25 @@ BEGIN
   FROM gold.dim_players;
   IF position_check IS DISTINCT FROM 'Kawhi Leonard=Forward, Stephen Curry=Point Guard' THEN
     RAISE EXCEPTION 'unexpected player positions: %', position_check;
+  END IF;
+
+  -- 10/25 LAC (36.99%) is a bigger upset than 10/23 LAC (42.02%); the spreads
+  -- row on 10/25 and the unplayed 10/27 line stay out.
+  SELECT string_agg(
+           game_date || ' ' || away_team_abbreviation || '@' || home_team_abbreviation ||
+           ' books=' || bookmaker_count || ' dog=' || underdog_team_abbreviation ||
+           ' +' || underdog_fair_moneyline || ' upset=' || is_upset ||
+           ' rank=' || coalesce(upset_rank::text, '-') ||
+           ' model=' || coalesce(model_called_upset::text, '-'),
+           ' | ' ORDER BY game_date)
+  INTO upset_check
+  FROM gold.fct_game_upsets;
+  IF upset_check IS DISTINCT FROM
+       '2024-10-22 LAC@GSW books=2 dog=LAC +175 upset=false rank=- model=false'
+       ' | 2024-10-23 LAC@CHI books=1 dog=LAC +138 upset=true rank=2 model=-'
+       ' | 2024-10-25 GSW@LAC books=1 dog=LAC +170 upset=true rank=1 model=false'
+  THEN
+    RAISE EXCEPTION 'unexpected game upsets: %', upset_check;
   END IF;
 
   RAISE NOTICE 'dbt e2e assertions passed (teams=%, players=%, games=%, logs=%, b2b=%, standings=%, schedule=%, predictions=%, scoring=%, flow=%, reddit_posts=%, reddit_comments=%, reddit_documents=%)',

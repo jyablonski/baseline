@@ -3,7 +3,7 @@ version: 2
 models:
   - name: fct_play_by_play_scoring
     description: >
-      Gold scoring-play series for the Courtline game-flow chart. One row per
+      Gold scoring-play series for the game-flow chart. One row per
       score change (game_id x action_number). Differential is home minus away.
       Not live win probability.
     columns:

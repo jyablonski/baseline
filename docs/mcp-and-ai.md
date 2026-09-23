@@ -45,7 +45,9 @@ Games and feeds:
 - `get_games_schedule` — all-status slate, upcoming scores null
 - `get_game_predictions` — Elo pregame WP, not a betting line
 - `get_play_by_play` — actions for one game
-- `get_player_injuries`, `get_game_odds` — current snapshots
+- `get_player_injuries` — current snapshot
+- `get_game_odds` — lines for games that have not tipped; with `game_id`, that game's last pregame line even after it is played
+- `get_biggest_upsets` — games the moneyline underdog won, most surprising first, with the model's view alongside. Empty until 2026-27 games with captured lines are Final; see [data.md](data.md#upsets)
 - `get_reddit_posts` — r/nba posts; comments are reachable via `query_cube`
 
 Escape hatch:

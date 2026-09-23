@@ -1,7 +1,7 @@
 cubes:
   - name: reddit_comments
     sql_table: gold.fct_reddit_comments
-    description: PRAW comment ingest. Associated to reddit_posts via post_reddit_id. Queryable via Cube / MCP; no Courtline page.
+    description: PRAW comment ingest. Associated to reddit_posts via post_reddit_id. Queryable via Cube / MCP.
 
     dimensions:
       - name: reddit_id

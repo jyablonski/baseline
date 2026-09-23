@@ -14,6 +14,7 @@ from db import get_session, upsert_rows
 from models import (
     Game,
     GameExternalId,
+    GameOdds,
     PlayByPlay,
     Player,
     PlayerContract,
@@ -375,8 +376,8 @@ def test_record_source_runs_persists_a_row_per_source(db_session_factory) -> Non
     assert rows["standings"].status == "success"
     assert rows["standings"].rows_written == 30
     assert rows["standings"].error_type is None
-    # Phase 1 records outcomes only; expectations are Phase 2.
-    assert rows["standings"].expectation == "not_checked"
+    assert rows["standings"].expectation == "met"
+    assert rows["odds"].expectation == "not_checked"
     assert rows["odds"].status == "failed"
     assert rows["odds"].error_type == "HTTPError"
     assert rows["odds"].rows_written is None
@@ -540,3 +541,106 @@ def test_transactions_upsert_is_idempotent(db_session_factory) -> None:
         player_row = next(row for row in rows if row.participant_type == "player")
         assert player_row.player_id == PLAYER_ONE
         assert player_row.direction == "none"
+
+
+@pytest.mark.integration
+def test_odds_prune_keeps_started_games_as_history(db_session_factory) -> None:
+    from queries import DELETE_STALE_GAME_ODDS
+
+    earlier = datetime(2026, 10, 21, 8, 0)
+    scrape = datetime(2026, 10, 22, 8, 0)
+
+    def odds_row(event_id: str, commence: datetime) -> dict:
+        return {
+            "odds_event_id": event_id,
+            "commence_time": commence,
+            "home_team_name": "Test Home",
+            "away_team_name": "Test Away",
+            "game_id": None,
+            "bookmaker": "draftkings",
+            "market": "h2h",
+            "home_price": -150,
+            "away_price": 130,
+            "scraped_at": earlier,
+        }
+
+    with db_session_factory() as session:
+        session.execute(text("DELETE FROM source.game_odds"))
+        session.commit()
+        upsert_rows(
+            session,
+            GameOdds,
+            [
+                # tipped last night: its last pregame line is history
+                odds_row("evt-played", datetime(2026, 10, 21, 23, 30)),
+                # still upcoming but gone from today's feed: postponed or pulled
+                odds_row("evt-pulled", datetime(2026, 10, 23, 23, 30)),
+            ],
+            ["odds_event_id", "bookmaker", "market"],
+        )
+        session.execute(DELETE_STALE_GAME_ODDS, {"scraped_at": scrape, "now_utc": scrape})
+        session.commit()
+        remaining = session.execute(
+            text("SELECT odds_event_id FROM source.game_odds ORDER BY odds_event_id")
+        ).scalars()
+        assert list(remaining) == ["evt-played"]
+
+
+@pytest.mark.integration
+def test_unhealthy_streaks_ignore_skips_and_stop_at_a_healthy_run(db_session_factory) -> None:
+    """The streak SQL against a real schema: what alerts and what stays quiet."""
+    from pipeline import find_unhealthy_streaks
+
+    def step(name: str, status: str, day: int, rows: int | None = None) -> StepOutcome:
+        at = datetime(2026, 10, day, 8, 15, 0)
+        return StepOutcome(step=name, status=status, started_at=at, finished_at=at, rows=rows)
+
+    nights = [
+        # injuries: healthy, then empty three nights running with an off-day
+        # skip in the middle. Skips neither extend nor break the streak.
+        [
+            step("injuries", "success", 20, 40),
+            step("standings", "failed", 20),
+            step("teams", "failed", 20),
+        ],
+        [step("injuries", "success", 21, 0), step("standings", "success", 21, 30)],
+        [step("injuries", "skipped", 22), step("standings", "failed", 22)],
+        [step("injuries", "success", 23, 0), step("standings", "failed", 23)],
+        [step("injuries", "success", 24, 0), step("standings", "success", 24, 30)],
+    ]
+    run_ids = []
+    for steps in nights:
+        with get_session() as session:
+            run_id = start_run(session, triggered_by="cron", scrape_action="daily")
+            record_source_runs(session, run_id, steps)
+        run_ids.append(run_id)
+
+    with db_session_factory() as session:
+        streaks = find_unhealthy_streaks(session, run_ids[-1], threshold=3)
+        # standings recovered on the latest night; teams failed but was not
+        # attempted in this run, so stale history does not re-alert.
+        assert [item.source_name for item in streaks] == ["injuries"]
+        assert streaks[0].streak == 3
+        assert streaks[0].below_runs == 3
+        assert streaks[0].failed_runs == 0
+
+        assert find_unhealthy_streaks(session, run_ids[-1], threshold=4) == []
+
+
+@pytest.mark.integration
+def test_ml_exit_is_recorded_and_fails_the_run(db_session_factory) -> None:
+    from pipeline import update_run_ml_exit
+
+    with get_session() as session:
+        run_id = start_run(session, triggered_by="cron", scrape_action="daily")
+        finish_run(session, run_id, status="success", scrape_exit=0, detail="scraped")
+    update_run_ml_exit(run_id, 1, detail="ml score finished with exit 1")
+
+    with db_session_factory() as session:
+        row = session.execute(
+            text("SELECT status, ml_exit, detail FROM source.pipeline_runs WHERE run_id = :run_id"),
+            {"run_id": run_id},
+        ).one()
+    assert row.status == "failed"
+    assert row.ml_exit == 1
+    assert row.detail == "scraped | ml score finished with exit 1"

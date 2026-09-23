@@ -73,7 +73,10 @@ These questions use named Cube tools or query_cube (Cube query JSON only):
 12. **Player MVP history**: "Where has Jokic ranked in MVP score each season?"
    → Use get_player_mvp_scores(player_uuid)
 
-13. **Schedule / Elo WP / injuries / odds / PBP / reddit**: named tools or query_cube
+13. **Upsets**: "Biggest upsets this season?" / "Did the model see any upsets coming?"
+   → Use get_biggest_upsets(season, season_type, limit)
+
+14. **Schedule / Elo WP / injuries / odds / PBP / reddit**: named tools or query_cube
 """
 
 
@@ -347,8 +350,28 @@ def get_player_injuries(
 
 @mcp.tool()
 def get_game_odds(game_id: UUID | None = None) -> list[dict]:
-    """Current Odds API upcoming-slate snapshot. Market snapshot, not a book."""
+    """Odds API moneylines and spreads for games that have not tipped yet.
+    With game_id, that game's lines, including the last pregame line of a
+    game already played. Market snapshot, not a book."""
     return get_analytics().get_game_odds(game_id=game_id)
+
+
+@mcp.tool()
+def get_biggest_upsets(
+    season: str | None = None,
+    season_type: str | None = None,
+    limit: int | None = None,
+) -> dict:
+    """Biggest upsets by pregame moneyline: games the market underdog won, most
+    surprising first (default 10, max 50). Omitting season uses the latest season
+    with an upset; season_type ('Regular Season', 'Playoffs', ...) is optional.
+
+    underdog_market_wp is the bookmaker-average de-vigged win probability from the
+    last odds scrape before tip-off (a morning line, not a true close);
+    upset_magnitude is -ln(winner's market WP). model_called_upset is true when the
+    champion Elo/logit model had the underdog above 50%. Odds history starts with
+    2026-27; there is no backfill, so earlier seasons return no upsets."""
+    return get_analytics().get_biggest_upsets(season=season, season_type=season_type, limit=limit)
 
 
 @mcp.tool()
@@ -395,7 +418,7 @@ def get_reddit_posts(
     search: str | None = None,
     limit: int | None = None,
 ) -> list[dict]:
-    """Reddit submissions. Optional title search. No Courtline page."""
+    """Reddit submissions. Optional title search."""
     return get_analytics().get_reddit_posts(search=search, limit=limit)
 
 

@@ -3,7 +3,8 @@ version: 2
 models:
   - name: stg_game_odds
     description: >
-      Current The Odds API upcoming-slate snapshot. Grain is odds_event_id x
+      The Odds API lines: the current upcoming slate, plus the last pregame
+      line of every game that has since tipped. Grain is odds_event_id x
       bookmaker x market. home_market_wp is de-vigged home implied probability
       and is null when a side is missing.
     columns:

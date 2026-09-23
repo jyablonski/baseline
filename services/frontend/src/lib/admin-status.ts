@@ -12,9 +12,10 @@ export const LEVEL_BADGE: Record<Level, "default" | "secondary" | "destructive" 
 
 /** A source is only "bad" once it has missed more than once; one miss is noise. */
 export function sourceLevel(source: SourceHealth): Level {
-  if (source.status === "failed") return source.runs_since_success > 1 ? "bad" : "warn";
   if (source.status === "skipped") return "idle";
-  if (source.expectation === "below") return "warn";
+  if (source.status === "failed" || source.expectation === "below") {
+    return source.unhealthy_streak > 1 ? "bad" : "warn";
+  }
   return "ok";
 }
 

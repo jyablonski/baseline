@@ -5,6 +5,7 @@ from routers import (
     admin,
     games,
     players,
+    predictions,
     query,
     schedule,
     social,
@@ -29,6 +30,7 @@ def create_app() -> FastAPI:
     app.include_router(teams.router, prefix="/api/v1/teams", tags=["teams"])
     app.include_router(games.router, prefix="/api/v1/games", tags=["games"])
     app.include_router(schedule.router, prefix="/api/v1/schedule", tags=["schedule"])
+    app.include_router(predictions.router, prefix="/api/v1/predictions", tags=["predictions"])
     app.include_router(games.seasons_router, prefix="/api/v1", tags=["games"])
     app.include_router(query.router, prefix="/api/v1", tags=["query"])
     app.include_router(social.router, prefix="/api/v1/social", tags=["social"])

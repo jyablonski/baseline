@@ -299,3 +299,120 @@ def test_scrape_daily_webhook_500_still_exits_nonzero(monkeypatch: pytest.Monkey
     result = CliRunner().invoke(cli, ["scrape-daily"])
     assert result.exit_code == 1
     assert len(posted) == 1
+
+
+@pytest.mark.unit
+def test_post_webhook_text_swallows_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    from notify import post_webhook_text
+
+    monkeypatch.setattr("notify.requests.post", lambda *args, **kwargs: _response(500))
+    post_webhook_text("hello", webhook_url="https://hooks.slack.test/x")
+
+    def boom(*args, **kwargs):
+        raise OSError("network down")
+
+    monkeypatch.setattr("notify.requests.post", boom)
+    post_webhook_text("hello", webhook_url="https://hooks.slack.test/x")
+
+
+@pytest.mark.unit
+def test_failure_alert_appends_extra_lines(monkeypatch: pytest.MonkeyPatch) -> None:
+    posted: list[dict] = []
+    monkeypatch.setattr(
+        "notify.requests.post",
+        lambda url, json, timeout: posted.append(json) or _response(),
+    )
+    notify_sync_failures(
+        [_failure()],
+        sync_name="pipeline",
+        webhook_url="https://hooks.slack.test/x",
+        extra_lines=["- odds: unhealthy 3 runs in a row; latest HTTPError"],
+    )
+    assert len(posted) == 1
+    assert posted[0]["text"].endswith("- odds: unhealthy 3 runs in a row; latest HTTPError")
+
+
+@pytest.mark.unit
+def test_streak_lines_separate_empty_from_erroring() -> None:
+    from notify import SourceStreak, format_degraded_text, format_streak_lines
+
+    empty = SourceStreak(source_name="injuries", streak=3, failed_runs=0, below_runs=3)
+    erroring = SourceStreak(
+        source_name="odds",
+        streak=4,
+        failed_runs=3,
+        below_runs=1,
+        latest_error_type="HTTPError",
+        latest_error_detail="401 Unauthorized",
+    )
+    bare = SourceStreak(source_name="standings", streak=3, failed_runs=3, below_runs=0)
+    lines = format_streak_lines([empty, erroring, bare])
+    assert "returned no rows" in lines[0]
+    assert "check the parser" in lines[0]
+    assert lines[1] == "- odds: unhealthy 4 runs in a row; latest HTTPError: 401 Unauthorized"
+    assert lines[2] == "- standings: unhealthy 3 runs in a row; latest error"
+
+    text = format_degraded_text("pipeline", [empty])
+    assert text.splitlines()[0] == (
+        "NBA scrape degraded: pipeline succeeded but 1 source(s) keep failing"
+    )
+
+
+@pytest.mark.unit
+def test_stage_failure_text() -> None:
+    from notify import format_stage_failure_text
+
+    assert format_stage_failure_text("ml", 2) == "NBA refresh failed: ml exited 2"
+    assert format_stage_failure_text("dbt build", 1, run_id=9, detail="dbt finished") == (
+        "NBA refresh failed: dbt build exited 1 (run_id=9)\n- dbt finished"
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("command", "exit_flag", "recorder"),
+    [
+        ("mark-dbt", "--dbt-exit", "main.update_run_dbt_exit"),
+        ("mark-ml", "--ml-exit", "main.update_run_ml_exit"),
+    ],
+)
+def test_mark_stage_notifies_only_on_failure_with_flag(
+    monkeypatch: pytest.MonkeyPatch, command: str, exit_flag: str, recorder: str
+) -> None:
+    recorded: list[tuple] = []
+    texts: list[str] = []
+    monkeypatch.setattr(recorder, lambda run_id, code, detail=None: recorded.append((run_id, code)))
+    monkeypatch.setattr("main.post_webhook_text", lambda text: texts.append(text))
+    runner = CliRunner()
+
+    ok = runner.invoke(cli, ["pipeline", command, "--run-id", "5", exit_flag, "0", "--notify"])
+    assert ok.exit_code == 0, ok.output
+    assert texts == []
+
+    quiet = runner.invoke(cli, ["pipeline", command, "--run-id", "5", exit_flag, "1"])
+    assert quiet.exit_code == 0, quiet.output
+    assert texts == [], "without --notify a failure is recorded but not posted"
+
+    loud = runner.invoke(
+        cli, ["pipeline", command, "--run-id", "5", exit_flag, "1", "--notify", "--detail", "x"]
+    )
+    assert loud.exit_code == 0, loud.output
+    assert len(texts) == 1
+    assert "(run_id=5)" in texts[0]
+    assert recorded == [(5, 0), (5, 1), (5, 1)]
+
+
+@pytest.mark.unit
+def test_mark_stage_alerts_even_when_recording_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    texts: list[str] = []
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("postgres down")
+
+    monkeypatch.setattr("main.update_run_ml_exit", broken)
+    monkeypatch.setattr("main.post_webhook_text", lambda text: texts.append(text))
+    result = CliRunner().invoke(
+        cli, ["pipeline", "mark-ml", "--run-id", "5", "--ml-exit", "1", "--notify"]
+    )
+    assert result.exit_code != 0
+    assert len(texts) == 1

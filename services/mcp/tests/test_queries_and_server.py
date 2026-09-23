@@ -73,6 +73,13 @@ class FakeAnalytics:
     def get_game_odds(self, **kwargs) -> list[dict]:
         return [{"game_id": kwargs.get("game_id"), "market": "h2h"}]
 
+    def get_biggest_upsets(self, **kwargs) -> dict:
+        return {
+            "season": kwargs.get("season") or "2026-27",
+            "season_type": kwargs.get("season_type"),
+            "upsets": [{"underdog_team_abbreviation": "LAC", "upset_rank": 1}],
+        }
+
     def get_play_by_play(self, game_id: str, limit: int | None = None) -> list[dict]:
         return [{"game_id": game_id, "action_number": 1, "limit": limit}]
 
@@ -200,6 +207,9 @@ def test_server_tools(monkeypatch: pytest.MonkeyPatch) -> None:
     assert server.get_game_predictions(upcoming=True)[0]["model_wp"] == 0.58
     assert server.get_player_injuries(team_abbreviation="LAC")[0]["description"] == "knee"
     assert server.get_game_odds()[0]["market"] == "h2h"
+    upsets = server.get_biggest_upsets(season_type="Playoffs", limit=3)
+    assert upsets["season"] == "2026-27"
+    assert upsets["upsets"][0]["upset_rank"] == 1
     assert server.get_play_by_play("0022400001")[0]["game_id"] == "0022400001"
     assert server.get_reddit_posts(search="thread")[0]["title"] == "thread"
     assert server.get_transactions(season="2025-26")[0]["season"] == "2025-26"
@@ -255,6 +265,7 @@ def test_examples_resource() -> None:
     assert "who leads the west" in result.lower()
     assert "get_mvp_ladder" in result
     assert "get_player_mvp_scores" in result
+    assert "get_biggest_upsets" in result
 
 
 @pytest.mark.unit

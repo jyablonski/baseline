@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     postgres_password: str = "nba_pass"
     database_url: str = ""
     slack_webhook_url: str | None = None
+    # Consecutive unhealthy runs (failed, or zero rows from a source that should
+    # always have some) before a source alerts. One miss is usually "not
+    # published yet"; three in a row is a parser break or an upstream change.
+    source_alert_streak: int = Field(default=3, ge=1)
     odds_api_key: str | None = None
 
     reddit_client_id: str = ""

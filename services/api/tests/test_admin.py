@@ -49,7 +49,7 @@ class FakeAdminRepository:
                     "started_at": None,
                     "finished_at": None,
                     "last_success_at": None,
-                    "runs_since_success": 0,
+                    "unhealthy_streak": 0,
                 }
             ],
             "freshness": [{"table_name": "games", "scraped_at": None, "row_count": 5}],

@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock
 from uuid import UUID
@@ -141,8 +142,9 @@ def test_score_writes_elo_and_logit_when_artifact_exists(monkeypatch: pytest.Mon
         lambda _session, _model, rows, _conflict: captured.extend(rows) or len(rows),
     )
     result = scoring.score_and_persist(as_of=datetime(2024, 10, 20, 12, 0, 0))
-    assert result["written"] == 2
-    assert {row["model_version"] for row in captured} == {"elo-v0", "logit-v1"}
+    assert result["written"] == 3
+    assert {row["model_version"] for row in captured} == {"elo-v0", "elo-v1", "logit-v1"}
+    assert result["model_versions"] == ["elo-v0", "elo-v1", "logit-v1"]
 
 
 @pytest.mark.unit
@@ -151,6 +153,27 @@ def test_evaluate_logit_rows_expands_and_handles_empty() -> None:
     result = scoring.evaluate_logit_rows(rows, block_size=5, cold_start_games=0)
     assert result["n"] == 7
     assert scoring.evaluate_logit_rows([])["n"] == 0
+
+
+@pytest.mark.unit
+def test_evaluate_logit_predictions_only_refits_blocks_in_season(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = [_feature(index, index % 2 == 0, before=20) for index in range(12)]
+    rows = [
+        replace(row, season="2025-26") if index >= 10 else row for index, row in enumerate(rows)
+    ]
+    fits: list[int] = []
+    real_fit = scoring.fit_artifact
+    monkeypatch.setattr(
+        scoring, "fit_artifact", lambda training: fits.append(len(training)) or real_fit(training)
+    )
+    scored = scoring._evaluate_logit_predictions(
+        rows, block_size=5, cold_start_games=0, season="2025-26"
+    )
+    # Blocks are games 0-4 (no training data), 5-9 (all 2024-25: skipped), 10-11.
+    assert fits == [10]
+    assert [row.season for row, _probability in scored] == ["2025-26", "2025-26"]
 
 
 @pytest.mark.unit

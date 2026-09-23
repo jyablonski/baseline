@@ -5,6 +5,7 @@ from queries.pipeline_runs import (
     INSERT_PIPELINE_RUN,
     UPDATE_PIPELINE_RUN,
     UPDATE_PIPELINE_RUN_DBT_EXIT,
+    UPDATE_PIPELINE_RUN_ML_EXIT,
 )
 from queries.scrape_pipeline import (
     SELECT_PIPELINE_CONFIG,
@@ -14,6 +15,7 @@ from queries.scrape_pipeline import (
 from queries.scrape_source_runs import (
     INSERT_SOURCE_RUN,
     SELECT_SOURCE_RUNS_FOR_RUN,
+    SELECT_UNHEALTHY_SOURCE_STREAKS,
 )
 from queries.snapshots import DELETE_STALE_GAME_ODDS, DELETE_STALE_PLAYER_INJURIES
 
@@ -25,8 +27,10 @@ __all__ = [
     "INSERT_SOURCE_RUN",
     "SELECT_PIPELINE_CONFIG",
     "SELECT_SOURCE_RUNS_FOR_RUN",
+    "SELECT_UNHEALTHY_SOURCE_STREAKS",
     "UPDATE_PIPELINE_ENABLED",
     "UPDATE_PIPELINE_RUN",
     "UPDATE_PIPELINE_RUN_DBT_EXIT",
+    "UPDATE_PIPELINE_RUN_ML_EXIT",
     "UPDATE_PIPELINE_SUCCESS",
 ]

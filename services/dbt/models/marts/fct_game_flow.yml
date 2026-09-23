@@ -6,7 +6,7 @@ models:
       One row per game that has ingested scoring play-by-play. Time-led shares,
       max lead, lead changes, ties, and the biggest lopsided scoring run: consecutive
       scoring-play windows with team_pts + opp_pts under 25, ranked by net then
-      net/scored (e.g. 21-2 over 31-15 or a 79-59 marathon). Either team. Courtline
+      net/scored (e.g. 21-2 over 31-15 or a 79-59 marathon). Either team. The frontend
       recomputes the highlight from the same PBP series it plots. Not live win probability.
       Also carries the comeback story: largest_lead_blown is the biggest lead the losing
       team ever held (0 when the winner never trailed), with the period and elapsed second

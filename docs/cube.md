@@ -15,6 +15,8 @@ Two endpoints matter:
 
 Clients send query JSON, never SQL. They validate member names against meta first, so `Unknown Cube member(s)` means the member is missing from the **running instance's model** — the Postgres column may well exist.
 
+`game_odds` holds both the upcoming slate and the last pregame line of every played game, so filter `commence_time` when you want only upcoming games. `game_upsets` sits on `gold.fct_game_upsets` and stays empty until Final games with captured lines exist (see [data.md](data.md#upsets)).
+
 Cube is not a second warehouse. Results reflect the current gold tables _and_ the model baked into the running image. Refreshing data does not update the model.
 
 ## Local vs production

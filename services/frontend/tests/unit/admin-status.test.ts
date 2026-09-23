@@ -24,7 +24,7 @@ function source(overrides: Partial<SourceHealth> = {}): SourceHealth {
     started_at: new Date().toISOString(),
     finished_at: new Date().toISOString(),
     last_success_at: new Date().toISOString(),
-    runs_since_success: 0,
+    unhealthy_streak: 0,
     ...overrides,
   };
 }
@@ -66,8 +66,8 @@ function health(overrides: Partial<AdminHealth> = {}): AdminHealth {
 describe("sourceLevel", () => {
   it("treats a single failure as a warning and a streak as bad", () => {
     // One miss is usually "not published yet"; a streak is a parse break.
-    expect(sourceLevel(source({ status: "failed", runs_since_success: 1 }))).toBe("warn");
-    expect(sourceLevel(source({ status: "failed", runs_since_success: 2 }))).toBe("bad");
+    expect(sourceLevel(source({ status: "failed", unhealthy_streak: 1 }))).toBe("warn");
+    expect(sourceLevel(source({ status: "failed", unhealthy_streak: 2 }))).toBe("bad");
   });
 
   it("shows skipped as idle, not as a failure", () => {
@@ -75,8 +75,17 @@ describe("sourceLevel", () => {
   });
 
   it("flags a success that missed its expectation", () => {
-    expect(sourceLevel(source({ status: "success", expectation: "below" }))).toBe("warn");
+    expect(
+      sourceLevel(source({ status: "success", expectation: "below", unhealthy_streak: 1 }))
+    ).toBe("warn");
     expect(sourceLevel(source({ status: "success", expectation: "met" }))).toBe("ok");
+  });
+
+  it("escalates repeated empty runs like repeated failures", () => {
+    // Zero rows every night is how a parser that stopped matching looks.
+    expect(
+      sourceLevel(source({ status: "success", expectation: "below", unhealthy_streak: 3 }))
+    ).toBe("bad");
   });
 });
 
@@ -96,7 +105,7 @@ describe("pipelineLevel", () => {
   it("takes the worst source level", () => {
     expect(
       pipelineLevel(
-        health({ sources: [source(), source({ status: "failed", runs_since_success: 3 })] })
+        health({ sources: [source(), source({ status: "failed", unhealthy_streak: 3 })] })
       )
     ).toBe("bad");
   });
