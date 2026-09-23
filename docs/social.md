@@ -1,8 +1,8 @@
-# Social (Social)
+# Social
 
-r/nba posts and their top comments, modelled into discourse metrics. Supersedes the API and enrichment sections of [plans/social-tab.md](plans/social-tab.md): the route is `/api/v1/social`, not `/api/v1/social`, and entity links live in their own fact rather than widening `fct_reddit_posts`.
+r/nba posts and their top comments, modelled into discourse metrics. Supersedes [plans/social-tab.md](plans/social-tab.md): entity links live in their own fact rather than widening `fct_reddit_posts`.
 
-**Current:** ingest, dbt models, Cube, REST. **Not built:** the frontend page, and any score history.
+**Current:** ingest, dbt models, Cube, REST, and the `/social` page. **Not built:** any score history.
 
 ## Ingest
 

@@ -61,7 +61,7 @@ Local `compose run` bind-mounts models and SQL, so YAML and SQL edits need no re
 
 **Staging** views mirror source tables one-to-one. **Intermediate** models do the real work — enriched game logs, contract and injury name matching, transaction participant resolution, play-by-play parsing and scoring.
 
-**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_player_mvp_scores`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`, `fct_reddit_entity_mentions`, `fct_reddit_flair`, `fct_transactions`, `fct_transaction_participants`, and `fct_prediction_scorecard` (per-model evaluation metrics; see [ml.md](ml.md)).
+**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_player_mvp_scores`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`, `fct_reddit_entity_mentions`, `fct_reddit_flair`, `fct_transactions`, `fct_transaction_participants`, `fct_prediction_scorecard` (per-model evaluation metrics; see [ml.md](ml.md)), and `fct_game_upsets` (see below).
 
 Materialization is a real decision here — see `services/dbt/AGENTS.md` for the policy. Two things to know:
 
@@ -77,15 +77,25 @@ A house metric, not an official award model. Knobs are the `mvp_*` vars in `serv
 - **Availability** compares games played to the games the player's latest team has played so far. The first 10% missed are free; past that the penalty ramps quadratically until 50% missed, where it caps at a quarter of the score.
 - **Served** by REST (players directory, profile, compare, game log), Cube (`player_mvp_scores`, plus `season_type` / `mvp_box_score` / `mvp_game_score` on `player_game_logs`), and MCP (`get_mvp_ladder`, `get_player_mvp_scores`).
 
+### Upsets
+
+`fct_game_upsets` has one row per Final game with a captured pregame moneyline. The line is the bookmaker-average de-vigged win probability from the last odds scrape before tip-off. `is_upset` means the market underdog won. `upset_magnitude` is `-ln(winner_market_wp)` and ranks upsets within season and season type (`upset_rank`). The champion model's pregame WP rides along, so `model_called_upset` shows when the model had the underdog and the market did not.
+
+**It is empty until the season produces Final games with captured lines.** There is no historical odds backfill. Odds history starts accruing with 2026-27, and only while `ODDS_API_KEY` is set.
+
+How the history is kept: `scrape-odds` never writes an event that has already tipped, because the feed carries in-play prices that would overwrite the pregame line. Its prune only deletes _unstarted_ events that left the feed. So a played game keeps its last pregame row in `source.game_odds`. With one morning scrape a day, that row is a morning line, not a true close.
+
+Served by Cube (`game_upsets`) and MCP (`get_biggest_upsets`). There is no REST route or page yet.
+
 ## Serving
 
-**REST reads gold directly over SQL.** Games, players, teams, standings, schedule, and game flow all work whether or not Cube is up.
+**REST reads gold directly over SQL.** Games, players, teams, standings, schedule, game flow, and the predictions scorecard all work whether or not Cube is up.
 
 `GET /api/v1/status` is the only endpoint that reads `source` — it reports scrape watermarks and coverage counts.
 
 **Only `POST /api/v1/query` goes through Cube**, and only Ask and MCP depend on it. There is no gold-SQL fallback for those, by design.
 
-Contracts and payroll have no route of their own: they arrive as columns on `dim_players` and `dim_teams`. Reddit is served by `/api/v1/social` and transactions by `/api/v1/transactions`. Injuries and odds have gold marts but no REST route — they are reachable through Ask and MCP only.
+Contracts and payroll have no route of their own: they arrive as columns on `dim_players` and `dim_teams`. Reddit is served by `/api/v1/social` and transactions by `/api/v1/transactions`. Odds and predictions ride on `GET /api/v1/schedule`: the champion row from `fct_game_predictions`, plus a per-game consensus from `fct_game_odds` (average vig-free home WP, a moneyline converted back from the average implied WP per side, and the median home spread). Only rows with a matched `game_id` count. `GET /api/v1/predictions/scorecard` serves `fct_prediction_scorecard`. Injuries have a gold mart but no REST route; they are reachable through Ask and MCP only.
 
 ## Gotchas
 

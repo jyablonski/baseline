@@ -1,0 +1,74 @@
+version: 2
+
+models:
+  - name: fct_game_upsets
+    description: >
+      One row per Final game with a captured pregame h2h line. The line is the
+      bookmaker-average de-vigged market WP from the last odds scrape before
+      tip-off (source.game_odds keeps it once the game drops off the feed).
+      A daily morning scrape makes this an opening-to-midday line, not a true
+      close. is_upset is true when the market underdog won; upset_rank orders
+      upsets within season x season_type by upset_magnitude (surprisal of the
+      winner, -ln(winner_market_wp)). Pick'em games (exactly 0.5) have no
+      favorite and are never upsets. Empty until Final games with lines exist:
+      odds history starts accruing in 2026-27, with no historical backfill.
+    columns:
+      - name: game_id
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('fct_team_game_results')
+                field: game_id
+      - name: season
+        data_tests:
+          - not_null
+      - name: home_market_wp
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                strictly: true
+      - name: underdog_market_wp
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 0.5
+      - name: underdog_fair_moneyline
+        description: No-vig American price implied by underdog_market_wp; >= +100.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 100
+      - name: underdog_best_moneyline
+        description: Best (highest) underdog price offered across bookmakers.
+      - name: bookmaker_count
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+      - name: is_upset
+        data_tests:
+          - not_null
+      - name: upset_magnitude
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: true
+      - name: upset_rank
+        description: Null unless is_upset.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_null:
+              arguments:
+                row_condition: "not is_upset"
+          - not_null:
+              config:
+                where: "is_upset"
+      - name: model_winner_wp
+        description: Champion model pregame WP for the eventual winner, from fct_game_predictions. Null when no prediction exists.

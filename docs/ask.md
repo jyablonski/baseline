@@ -25,7 +25,7 @@ Ask needs Cube (`CUBE_API_URL`, `http://cube:4000` in Compose). If Cube is down 
 
 ## What rules can answer
 
-Six families: back-to-backs, season averages, career compare, arena-city records, salary/payroll, and standings.
+Eight families: back-to-backs, season averages, player compare, team head-to-head (two teams named), blown leads, arena-city records, salary/payroll, and standings.
 
 Anything else returns a capability message with HTTP 200 — never a 501.
 

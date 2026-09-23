@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -695,10 +695,22 @@ def player_injuries_query(
     }
 
 
-def game_odds_query(game_id: UUID | None = None, limit: int = 100) -> dict[str, Any]:
+def game_odds_query(
+    game_id: UUID | None = None,
+    limit: int = 100,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     filters: list[dict[str, Any]] = []
     if game_id:
         filters.append(equals("game_odds.game_id", game_id))
+    else:
+        # game_odds keeps each played game's last pregame line as history, so
+        # the unfiltered slate has to be bounded to games that have not tipped.
+        # commence_time is naive UTC.
+        cutoff = (now or datetime.now(UTC)).strftime("%Y-%m-%dT%H:%M:%S")
+        filters.append(
+            {"member": "game_odds.commence_time", "operator": "afterDate", "values": [cutoff]}
+        )
     return {
         "dimensions": list(GAME_ODDS_DIMENSIONS),
         "filters": filters,
@@ -856,4 +868,58 @@ def transaction_participants_query(
         "filters": filters,
         "order": {"transaction_participants.transaction_date": "desc"},
         "limit": clamp_limit(limit, TRANSACTIONS_DEFAULT_LIMIT, TRANSACTIONS_MAX_LIMIT),
+    }
+
+
+GAME_UPSETS_DIMENSIONS = [
+    "game_upsets.game_id",
+    "game_upsets.season",
+    "game_upsets.season_type",
+    "game_upsets.game_date",
+    "game_upsets.away_team_abbreviation",
+    "game_upsets.home_team_abbreviation",
+    "game_upsets.away_score",
+    "game_upsets.home_score",
+    "game_upsets.underdog_team_abbreviation",
+    "game_upsets.underdog_market_wp",
+    "game_upsets.underdog_fair_moneyline",
+    "game_upsets.underdog_best_moneyline",
+    "game_upsets.bookmaker_count",
+    "game_upsets.upset_magnitude",
+    "game_upsets.upset_rank",
+    "game_upsets.model_winner_wp",
+    "game_upsets.model_called_upset",
+]
+
+UPSETS_DEFAULT_LIMIT = 10
+UPSETS_MAX_LIMIT = 50
+
+
+def upset_seasons_query() -> dict[str, Any]:
+    return {
+        "dimensions": ["game_upsets.season"],
+        "measures": ["game_upsets.upsets"],
+        "filters": [equals("game_upsets.is_upset", "true")],
+        "order": {"game_upsets.season": "desc"},
+        "limit": 1,
+    }
+
+
+def biggest_upsets_query(
+    season: str,
+    season_type: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    filters = [
+        equals("game_upsets.season", season),
+        equals("game_upsets.is_upset", "true"),
+    ]
+    if season_type and season_type.strip():
+        filters.append(equals("game_upsets.season_type", season_type.strip()))
+    return {
+        "dimensions": list(GAME_UPSETS_DIMENSIONS),
+        "filters": filters,
+        # upset_rank restarts per season_type; magnitude orders across them.
+        "order": {"game_upsets.upset_magnitude": "desc"},
+        "limit": clamp_limit(limit, UPSETS_DEFAULT_LIMIT, UPSETS_MAX_LIMIT),
     }

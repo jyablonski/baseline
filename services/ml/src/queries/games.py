@@ -12,6 +12,8 @@ SELECT_REGULAR_SEASON_FINALS = text(
         season,
         home_team_id,
         away_team_id,
+        home_score,
+        away_score,
         winner_location
     FROM gold.fct_team_game_results
     WHERE season_type = 'Regular Season'

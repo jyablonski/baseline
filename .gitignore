@@ -45,4 +45,5 @@ services/dbt/.user.yml
 .tilt/
 .cubestore/
 pgdata/
+backups/
 docs/plans/

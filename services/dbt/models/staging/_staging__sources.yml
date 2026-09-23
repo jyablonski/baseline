@@ -34,9 +34,11 @@ sources:
           (player_id, team_id, snapshot_date).
       - name: game_odds
         description: >
-          Current The Odds API upcoming-slate snapshot (h2h / spreads).
-          Unique on (odds_event_id, bookmaker, market). Historical odds
-          backfill is out of scope. ODDS_API_KEY required to ingest.
+          The Odds API h2h / spreads lines. Upcoming events are refreshed each
+          scrape and pruned if they leave the feed; a started event keeps its
+          last pregame row as history (accruing from 2026-27). Unique on
+          (odds_event_id, bookmaker, market). Historical odds backfill is out
+          of scope. ODDS_API_KEY required to ingest.
       - name: game_predictions
         description: >
           Pregame home win probabilities written by services/ml. Grain is
@@ -62,8 +64,8 @@ sources:
           a team sending and receiving in one trade is two rows.
       - name: reddit_posts
         description: >
-          PRAW submission ingest. Unique on reddit_id. No Courtline page.
+          PRAW submission ingest. Unique on reddit_id.
       - name: reddit_comments
         description: >
           PRAW comment ingest. Unique on reddit_id. post_reddit_id
-          associates the comment to reddit_posts. No Courtline page.
+          associates the comment to reddit_posts.

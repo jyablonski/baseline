@@ -188,3 +188,56 @@ CREATE TABLE IF NOT EXISTS gold.fct_games_schedule (
     away_team_name          VARCHAR(100),
     away_score              INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS gold.fct_game_predictions (
+    game_id         UUID NOT NULL,
+    as_of           TIMESTAMP NOT NULL,
+    model_name      VARCHAR(50) NOT NULL,
+    model_version   VARCHAR(50) NOT NULL,
+    home_team_id    UUID NOT NULL,
+    away_team_id    UUID NOT NULL,
+    model_wp        DOUBLE PRECISION NOT NULL,
+    away_wp         DOUBLE PRECISION NOT NULL,
+    market_wp       DOUBLE PRECISION,
+    game_date       DATE,
+    season          VARCHAR(10),
+    season_type     VARCHAR(20),
+    game_status     VARCHAR(20),
+    scraped_at      TIMESTAMP,
+    PRIMARY KEY (game_id, model_version)
+);
+
+CREATE TABLE IF NOT EXISTS gold.fct_game_odds (
+    odds_event_id   VARCHAR(64) NOT NULL,
+    commence_time   TIMESTAMP,
+    home_team_name  VARCHAR(100),
+    away_team_name  VARCHAR(100),
+    game_id         UUID,
+    bookmaker       VARCHAR(64) NOT NULL,
+    market          VARCHAR(16) NOT NULL,
+    home_price      INTEGER,
+    away_price      INTEGER,
+    home_implied_wp DOUBLE PRECISION,
+    away_implied_wp DOUBLE PRECISION,
+    home_market_wp  DOUBLE PRECISION,
+    away_market_wp  DOUBLE PRECISION,
+    spread_home     DOUBLE PRECISION,
+    scraped_at      TIMESTAMP,
+    PRIMARY KEY (odds_event_id, bookmaker, market)
+);
+
+CREATE TABLE IF NOT EXISTS gold.fct_prediction_scorecard (
+    season                  VARCHAR(10) NOT NULL,
+    model_name              VARCHAR(50) NOT NULL,
+    model_version           VARCHAR(50) NOT NULL,
+    n                       INTEGER NOT NULL,
+    logloss                 DOUBLE PRECISION,
+    brier                   DOUBLE PRECISION,
+    accuracy                DOUBLE PRECISION,
+    home_always_accuracy    DOUBLE PRECISION,
+    calibration_error       DOUBLE PRECISION,
+    market_n                INTEGER,
+    market_logloss          DOUBLE PRECISION,
+    market_brier            DOUBLE PRECISION,
+    PRIMARY KEY (season, model_version)
+);

@@ -6,6 +6,7 @@ import pytest
 from ids import (
     GAME_ONE,
     GAME_SCHEDULE,
+    GAME_SCHEDULE_TWO,
     GAME_THREE,
     PLAYER_CURRY,
     PLAYER_KAWHI,
@@ -109,10 +110,59 @@ def test_games_and_seasons(integration_client) -> None:
     schedule = integration_client.get("/api/v1/schedule", params={"season": "2024-25"})
     assert schedule.status_code == 200
     body = schedule.json()
-    assert body["meta"]["total"] == 1
+    assert body["meta"]["total"] == 2
     assert body["data"][0]["game_id"] == GAME_SCHEDULE
     assert body["data"][0]["status"] == "Scheduled"
     assert body["data"][0]["home_team_abbreviation"] == "GSW"
+
+
+@pytest.mark.integration
+def test_schedule_carries_predictions_and_consensus_odds(integration_client) -> None:
+    response = integration_client.get("/api/v1/schedule", params={"season": "2024-25"})
+    assert response.status_code == 200
+    by_id = {row["game_id"]: row for row in response.json()["data"]}
+
+    priced = by_id[GAME_SCHEDULE]
+    assert priced["prediction_model_version"] == "elo-v0"
+    assert priced["home_win_probability"] == pytest.approx(0.6)
+    assert priced["away_win_probability"] == pytest.approx(0.4)
+    assert priced["market_home_wp"] == pytest.approx(0.58)
+    assert priced["home_moneyline"] == -150
+    assert priced["away_moneyline"] == 130
+    # Median of the two books' lines, and books are counted once per h2h market.
+    assert priced["home_spread"] == pytest.approx(-4.0)
+    assert priced["odds_bookmaker_count"] == 2
+
+    bare = by_id[GAME_SCHEDULE_TWO]
+    for key in (
+        "prediction_model_version",
+        "home_win_probability",
+        "away_win_probability",
+        "market_home_wp",
+        "home_moneyline",
+        "away_moneyline",
+        "home_spread",
+        "odds_bookmaker_count",
+    ):
+        assert bare[key] is None
+
+
+@pytest.mark.integration
+def test_prediction_scorecard(integration_client) -> None:
+    response = integration_client.get("/api/v1/predictions/scorecard")
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["champion_model_version"] == "elo-v0"
+    assert [(row["season"], row["model_version"]) for row in body["rows"]] == [
+        ("2024-25", "elo-v0"),
+        ("2024-25", "logit-v1"),
+        ("2023-24", "elo-v0"),
+    ]
+    assert [row["is_champion"] for row in body["rows"]] == [True, False, True]
+    assert body["rows"][2]["market_logloss"] is None
+
+    filtered = integration_client.get("/api/v1/predictions/scorecard", params={"season": "2023-24"})
+    assert len(filtered.json()["data"]["rows"]) == 1
 
 
 @pytest.mark.integration
@@ -323,25 +373,44 @@ def test_admin_health_against_real_schema(integration_client, postgres_engine) -
                 """
             )
         ).scalar_one()
-        # injuries fails twice then recovers; odds is skipped and has never
-        # succeeded, which is the case runs_since_success has to get right.
+        previous_run_id = conn.execute(
+            text(
+                """
+                INSERT INTO source.pipeline_runs
+                    (triggered_by, status, scrape_action, scrape_exit, started_at, finished_at)
+                VALUES ('cron', 'failed', 'daily', 1, now() - interval '1 day',
+                        now() - interval '1 day')
+                RETURNING run_id
+                """
+            )
+        ).scalar_one()
+        # injuries failed yesterday and twice (two attempts) today: two runs,
+        # so a streak of 2 — attempts within one run count once. reddit came
+        # back empty yesterday and today, which counts like a failure. odds is
+        # skipped and has never succeeded, which must not accrue a streak.
         conn.execute(
             text(
                 """
                 INSERT INTO source.scrape_source_runs
                     (run_id, source_name, status, expectation, rows_written, attempt, started_at)
                 VALUES
-                    (:run_id, 'standings', 'success', 'not_checked', 30, 1,
+                    (:previous_run_id, 'injuries', 'failed', 'not_checked', NULL, 1,
+                     now() - interval '1 day'),
+                    (:previous_run_id, 'reddit', 'success', 'below', 0, 1,
+                     now() - interval '1 day'),
+                    (:run_id, 'standings', 'success', 'met', 30, 1,
                      now() - interval '90 minutes'),
                     (:run_id, 'injuries', 'failed', 'not_checked', NULL, 1,
                      now() - interval '80 minutes'),
                     (:run_id, 'injuries', 'failed', 'not_checked', NULL, 2,
                      now() - interval '70 minutes'),
                     (:run_id, 'odds', 'skipped', 'not_checked', NULL, 1,
-                     now() - interval '60 minutes')
+                     now() - interval '60 minutes'),
+                    (:run_id, 'reddit', 'success', 'below', 0, 1,
+                     now() - interval '50 minutes')
                 """
             ),
-            {"run_id": run_id},
+            {"run_id": run_id, "previous_run_id": previous_run_id},
         )
 
     response = integration_client.get(
@@ -361,16 +430,20 @@ def test_admin_health_against_real_schema(integration_client, postgres_engine) -
 
     sources = {row["source_name"]: row for row in body["sources"]}
     assert sources["standings"]["status"] == "success"
-    assert sources["standings"]["runs_since_success"] == 0
-    # Latest attempt wins, and both failures count against the streak.
+    assert sources["standings"]["unhealthy_streak"] == 0
+    # Latest attempt wins, and each failed run counts once against the streak.
     assert sources["injuries"]["status"] == "failed"
     assert sources["injuries"]["attempt"] == 2
-    assert sources["injuries"]["runs_since_success"] == 2
+    assert sources["injuries"]["unhealthy_streak"] == 2
+    # Empty every night is a parser that stopped matching, not a success.
+    assert sources["reddit"]["status"] == "success"
+    assert sources["reddit"]["expectation"] == "below"
+    assert sources["reddit"]["unhealthy_streak"] == 2
     # A skipped source is deliberate, not a failure: it must NOT accrue a
     # streak, or every NBA source looks broken all off-season.
     assert sources["odds"]["status"] == "skipped"
     assert sources["odds"]["last_success_at"] is None
-    assert sources["odds"]["runs_since_success"] == 0
+    assert sources["odds"]["unhealthy_streak"] == 0
 
     tables = {row["table_name"] for row in body["freshness"]}
     assert {"games", "play_by_play", "player_injuries", "reddit_posts"} <= tables
@@ -381,7 +454,9 @@ def test_admin_health_against_real_schema(integration_client, postgres_engine) -
     assert isinstance(body["dbt"]["gold_tables"], list)
     assert body["dbt"]["gold_table_count"] == len(body["dbt"]["gold_tables"])
     assert isinstance(body["ml"], list)
-    assert any(run["run_id"] == run_id for run in body["recent_runs"])
+    latest_run = next(run for run in body["recent_runs"] if run["run_id"] == run_id)
+    # Stays null until refresh-daily's ml stage records onto the row.
+    assert latest_run["ml_exit"] is None
 
 
 @pytest.mark.integration

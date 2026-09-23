@@ -205,7 +205,7 @@ export default async function AdminPage() {
                   <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Rows</TableHead>
-                  <TableHead className="text-right">Since success</TableHead>
+                  <TableHead className="text-right">Streak</TableHead>
                   <TableHead>Last run</TableHead>
                   <TableHead>Detail</TableHead>
                 </TableRow>
@@ -215,13 +215,17 @@ export default async function AdminPage() {
                   <TableRow key={source.source_name}>
                     <TableCell className="font-medium">{source.source_name}</TableCell>
                     <TableCell>
-                      <Badge variant={LEVEL_BADGE[sourceLevel(source)]}>{source.status}</Badge>
+                      <Badge variant={LEVEL_BADGE[sourceLevel(source)]}>
+                        {source.status === "success" && source.expectation === "below"
+                          ? "no rows"
+                          : source.status}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatCount(source.rows_written)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {source.runs_since_success > 0 ? source.runs_since_success : "—"}
+                      {source.unhealthy_streak > 0 ? source.unhealthy_streak : "—"}
                     </TableCell>
                     <TableCell>{formatAge(source.started_at)}</TableCell>
                     <TableCell className="max-w-[24rem] truncate text-muted-foreground">
@@ -354,6 +358,7 @@ export default async function AdminPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Action</TableHead>
                   <TableHead className="text-right">dbt</TableHead>
+                  <TableHead className="text-right">ml</TableHead>
                   <TableHead>Started</TableHead>
                   <TableHead className="text-right">Duration</TableHead>
                 </TableRow>
@@ -379,6 +384,9 @@ export default async function AdminPage() {
                     <TableCell>{run.scrape_action ?? "—"}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {run.dbt_exit === null ? "—" : run.dbt_exit}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {run.ml_exit === null ? "—" : run.ml_exit}
                     </TableCell>
                     <TableCell>{formatAge(run.started_at)}</TableCell>
                     <TableCell className="text-right tabular-nums">

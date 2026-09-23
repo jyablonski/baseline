@@ -1,6 +1,8 @@
 """Optional Slack Incoming Webhook alerts for scrape sync failures.
 
 One POST per sync (pipeline / scrape-daily / scrape-all), never per step.
+refresh-daily.sh adds one more per failed dbt or ml stage; a scrape failure
+stops the refresh before either runs, so the two never stack.
 Unset or empty ``SLACK_WEBHOOK_URL`` skips HTTP and never fails the scrape.
 
 ``SyncAlert`` also collects a per-step outcome for every source it wraps, so
@@ -127,19 +129,15 @@ def format_sync_failure_text(sync_name: str, failures: Sequence[StepFailure]) ->
     return "\n".join(lines)
 
 
-def notify_sync_failures(
-    failures: Sequence[StepFailure],
-    *,
-    sync_name: str,
-    webhook_url: str | None = None,
-) -> None:
-    """POST one Incoming Webhook summary. No-op when URL is unset or no failures."""
-    if not failures:
-        return
+def post_webhook_text(text: str, *, webhook_url: str | None = None) -> None:
+    """POST one Incoming Webhook message. No-op when the URL is unset.
+
+    Never raises: an alert that cannot be delivered must not change the exit
+    status of the job it is reporting on.
+    """
     url = _resolve_webhook_url(webhook_url)
     if not url:
         return
-    text = format_sync_failure_text(sync_name, failures)
     try:
         response = requests.post(
             url,
@@ -148,14 +146,85 @@ def notify_sync_failures(
         )
         if response.status_code >= 400:
             logger.warning(
-                "Slack webhook returned HTTP %s; scrape failures still stand",
+                "Slack webhook returned HTTP %s; the reported failure still stands",
                 response.status_code,
             )
     except Exception:
         logger.warning(
-            "Slack webhook POST failed; scrape failures still stand",
+            "Slack webhook POST failed; the reported failure still stands",
             exc_info=True,
         )
+
+
+def notify_sync_failures(
+    failures: Sequence[StepFailure],
+    *,
+    sync_name: str,
+    webhook_url: str | None = None,
+    extra_lines: Sequence[str] = (),
+) -> None:
+    """POST one Incoming Webhook summary. No-op when URL is unset or no failures."""
+    if not failures:
+        return
+    text = format_sync_failure_text(sync_name, failures)
+    if extra_lines:
+        text = "\n".join([text, *extra_lines])
+    post_webhook_text(text, webhook_url=webhook_url)
+
+
+@dataclass(frozen=True)
+class SourceStreak:
+    """A source whose latest attempted runs have all been unhealthy."""
+
+    source_name: str
+    streak: int
+    failed_runs: int
+    below_runs: int
+    latest_error_type: str | None = None
+    latest_error_detail: str | None = None
+
+
+def format_streak_lines(streaks: Sequence[SourceStreak]) -> list[str]:
+    """One line per source. Wording separates "erroring" from "empty".
+
+    A single empty run is usually "not published yet"; by the time a streak
+    reaches the alert threshold the likelier cause is a parser that silently
+    stopped matching, so that is what the line says.
+    """
+    lines: list[str] = []
+    for item in streaks:
+        if item.below_runs and not item.failed_runs:
+            lines.append(
+                f"- {item.source_name}: {item.streak} runs in a row returned no rows "
+                "(past the not-yet-published window; check the parser)"
+            )
+            continue
+        detail = item.latest_error_type or "error"
+        if item.latest_error_detail:
+            detail = f"{detail}: {item.latest_error_detail}"
+        lines.append(
+            f"- {item.source_name}: unhealthy {item.streak} runs in a row; latest {detail}"
+        )
+    return lines
+
+
+def format_degraded_text(sync_name: str, streaks: Sequence[SourceStreak]) -> str:
+    header = f"NBA scrape degraded: {sync_name} succeeded but {len(streaks)} source(s) keep failing"
+    return "\n".join([header, *format_streak_lines(streaks)])
+
+
+def format_stage_failure_text(
+    stage: str,
+    exit_code: int,
+    *,
+    run_id: int | None = None,
+    detail: str | None = None,
+) -> str:
+    where = f" (run_id={run_id})" if run_id is not None else ""
+    text = f"NBA refresh failed: {stage} exited {exit_code}{where}"
+    if detail:
+        text = f"{text}\n- {detail}"
+    return text
 
 
 @dataclass
@@ -240,9 +309,15 @@ class SyncAlert:
         if self.failures:
             raise SyncFailedError(self.failures)
 
-    def notify(self, *, webhook_url: str | None = None) -> None:
+    def notify(
+        self,
+        *,
+        webhook_url: str | None = None,
+        extra_lines: Sequence[str] = (),
+    ) -> None:
         notify_sync_failures(
             self.failures,
             sync_name=self.sync_name,
             webhook_url=webhook_url,
+            extra_lines=extra_lines,
         )

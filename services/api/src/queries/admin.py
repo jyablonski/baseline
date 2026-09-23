@@ -52,6 +52,7 @@ ADMIN_RECENT_RUNS = text(
         pipeline_runs.reddit_ran,
         pipeline_runs.reddit_exit,
         pipeline_runs.dbt_exit,
+        pipeline_runs.ml_exit,
         pipeline_runs.detail,
         pipeline_runs.started_at,
         pipeline_runs.finished_at,
@@ -62,8 +63,10 @@ ADMIN_RECENT_RUNS = text(
     """
 )
 
-# Latest attempt per source, plus how many non-success runs have happened since
-# that source last succeeded. One bad night is noise; a streak is a parse break.
+# Latest attempt per source, plus its unhealthy streak: how many of its most
+# recent attempted runs in a row failed or came back below expectation. One bad
+# night is noise; a streak is a parse break. Same rule as the scraper's
+# SELECT_UNHEALTHY_SOURCE_STREAKS, which decides when Slack is told.
 ADMIN_SOURCE_HEALTH = text(
     """
     WITH latest AS (
@@ -80,9 +83,9 @@ ADMIN_SOURCE_HEALTH = text(
             scrape_source_runs.finished_at
         FROM source.scrape_source_runs
         ORDER BY
-        scrape_source_runs.source_name,
-        scrape_source_runs.started_at DESC,
-        scrape_source_runs.id DESC
+            scrape_source_runs.source_name,
+            scrape_source_runs.started_at DESC,
+            scrape_source_runs.id DESC
     ),
     last_success AS (
         SELECT
@@ -92,21 +95,47 @@ ADMIN_SOURCE_HEALTH = text(
         WHERE scrape_source_runs.status = 'success'
         GROUP BY scrape_source_runs.source_name
     ),
-    since_success AS (
-        SELECT
+    -- Latest attempt per (run, source), skipped runs dropped. A 'skipped' run
+    -- is deliberate (off-day, off-season, no API key), so counting it would
+    -- make every NBA source look like a growing streak through the off-season.
+    attempted AS (
+        SELECT DISTINCT ON (scrape_source_runs.run_id, scrape_source_runs.source_name)
+            scrape_source_runs.id,
             scrape_source_runs.source_name,
-            count(*) AS runs_since_success
+            scrape_source_runs.started_at,
+            (
+                scrape_source_runs.status = 'failed'
+                OR scrape_source_runs.expectation = 'below'
+            ) AS unhealthy
         FROM source.scrape_source_runs
-        LEFT JOIN last_success ON last_success.source_name = scrape_source_runs.source_name
-        -- Only 'failed' counts. A 'skipped' run is deliberate (off-day, no API
-        -- key), so counting it would make every NBA source look like a growing
-        -- failure streak through the off-season.
-        WHERE scrape_source_runs.status = 'failed'
-          AND (
-              last_success.succeeded_at IS NULL
-              OR scrape_source_runs.started_at > last_success.succeeded_at
-          )
-        GROUP BY scrape_source_runs.source_name
+        WHERE scrape_source_runs.status <> 'skipped'
+        ORDER BY
+            scrape_source_runs.run_id,
+            scrape_source_runs.source_name,
+            scrape_source_runs.attempt DESC,
+            scrape_source_runs.id DESC
+    ),
+    last_healthy AS (
+        SELECT
+            attempted.source_name,
+            max(attempted.started_at) AS healthy_at
+        FROM attempted
+        WHERE NOT attempted.unhealthy
+        GROUP BY attempted.source_name
+    ),
+    streaks AS (
+        SELECT
+            attempted.source_name,
+            count(*) AS unhealthy_streak
+        FROM attempted
+        LEFT JOIN last_healthy ON last_healthy.source_name = attempted.source_name
+        WHERE
+            attempted.unhealthy
+            AND (
+                last_healthy.healthy_at IS NULL
+                OR attempted.started_at > last_healthy.healthy_at
+            )
+        GROUP BY attempted.source_name
     )
     SELECT
         latest.source_name,
@@ -120,10 +149,10 @@ ADMIN_SOURCE_HEALTH = text(
         latest.started_at,
         latest.finished_at,
         last_success.succeeded_at AS last_success_at,
-        coalesce(since_success.runs_since_success, 0) AS runs_since_success
+        coalesce(streaks.unhealthy_streak, 0) AS unhealthy_streak
     FROM latest
     LEFT JOIN last_success ON last_success.source_name = latest.source_name
-    LEFT JOIN since_success ON since_success.source_name = latest.source_name
+    LEFT JOIN streaks ON streaks.source_name = latest.source_name
     ORDER BY latest.source_name
     """
 )

@@ -417,7 +417,7 @@ def test_record_source_runs_writes_one_row_per_step() -> None:
         "run_id": 42,
         "source_name": "standings",
         "status": "success",
-        "expectation": "not_checked",
+        "expectation": "met",
         "rows_written": 30,
         "season": "2025-26",
         "attempt": 1,
@@ -431,6 +431,34 @@ def test_record_source_runs_writes_one_row_per_step() -> None:
     assert second["status"] == "failed"
     assert second["error_type"] == "HTTPError"
     assert second["rows_written"] is None
+    assert second["expectation"] == "not_checked"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("step", "status", "rows", "expected"),
+    [
+        ("standings", "success", 30, "met"),
+        # Zero rows from a source that always has some: not published yet, or
+        # a parser that stopped matching. Only a streak tells which.
+        ("injuries", "success", 0, "below"),
+        # Zero is a legitimate answer for these, so it is never judged.
+        ("todays_games", "success", 0, "not_checked"),
+        ("transactions", "success", 0, "not_checked"),
+        ("odds", "success", None, "not_checked"),
+        ("odds", "failed", None, "not_checked"),
+        ("reddit", "skipped", None, "not_checked"),
+    ],
+)
+def test_expectation_for(step: str, status: str, rows: int | None, expected: str) -> None:
+    from datetime import datetime
+
+    from notify import StepOutcome
+    from pipeline import expectation_for
+
+    now = datetime(2026, 9, 9, 8, 15, 0)
+    outcome = StepOutcome(step=step, status=status, started_at=now, finished_at=now, rows=rows)
+    assert expectation_for(outcome) == expected
 
 
 @pytest.mark.unit
@@ -539,7 +567,7 @@ def test_run_pipeline_scrape_notifies_once_on_failure(monkeypatch: pytest.Monkey
     )
     posted: list[object] = []
 
-    def fake_notify(failures, *, sync_name, webhook_url=None):
+    def fake_notify(failures, *, sync_name, webhook_url=None, extra_lines=()):
         posted.append((list(failures), sync_name))
 
     monkeypatch.setattr("notify.notify_sync_failures", fake_notify)
@@ -813,3 +841,138 @@ def test_run_pipeline_nba_failure_still_runs_reddit(monkeypatch: pytest.MonkeyPa
     assert result["reddit_ran"] is True
     assert result["reddit_exit"] == 0
     assert len(posted) == 1
+
+
+def _streak_row(**overrides):
+    row = {
+        "source_name": "injuries",
+        "streak": 3,
+        "failed_runs": 0,
+        "below_runs": 3,
+        "latest_error_type": None,
+        "latest_error_detail": None,
+    }
+    row.update(overrides)
+    return row
+
+
+@pytest.mark.unit
+def test_find_unhealthy_streaks_maps_rows() -> None:
+    from pipeline import find_unhealthy_streaks
+
+    from queries import SELECT_UNHEALTHY_SOURCE_STREAKS
+
+    session = MagicMock()
+    session.execute.return_value.mappings.return_value = [
+        _streak_row(),
+        _streak_row(source_name="odds", failed_runs=2, below_runs=1, latest_error_type="HTTPError"),
+    ]
+    streaks = find_unhealthy_streaks(session, 7, threshold=3)
+    session.execute.assert_called_once_with(
+        SELECT_UNHEALTHY_SOURCE_STREAKS, {"run_id": 7, "threshold": 3}
+    )
+    assert [item.source_name for item in streaks] == ["injuries", "odds"]
+    assert streaks[1].failed_runs == 2
+    assert streaks[1].latest_error_type == "HTTPError"
+
+
+def _pipeline_session_with_streaks(streak_rows):
+    session = MagicMock()
+    session.execute.return_value.one.return_value = _row()
+    session.execute.return_value.scalar_one.return_value = 9
+    session.execute.return_value.mappings.return_value = streak_rows
+    return session
+
+
+@pytest.mark.unit
+def test_successful_scrape_with_a_streak_posts_one_degraded_alert(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _pipeline_session_with_streaks([_streak_row()])
+    monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.missing_reddit_env_names", lambda: ["REDDIT_CLIENT_ID"])
+    monkeypatch.setattr("pipeline.execute_scrape", lambda action, config, alert=None: (3, "ok"))
+    failure_posts: list[object] = []
+    monkeypatch.setattr("notify.notify_sync_failures", lambda *a, **k: failure_posts.append(1))
+    texts: list[str] = []
+    monkeypatch.setattr("pipeline.post_webhook_text", lambda text: texts.append(text))
+
+    result = run_pipeline_scrape(force=True, today=date(2026, 1, 15))
+
+    assert result["status"] == "success"
+    assert failure_posts == []
+    assert len(texts) == 1
+    assert texts[0].startswith("NBA scrape degraded: pipeline")
+    assert "injuries: 3 runs in a row returned no rows" in texts[0]
+
+
+@pytest.mark.unit
+def test_failed_scrape_folds_streaks_into_its_single_alert(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _pipeline_session_with_streaks(
+        [_streak_row(source_name="standings", failed_runs=3, below_runs=0)]
+    )
+    monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
+    monkeypatch.setattr(
+        "pipeline.execute_scrape",
+        lambda action, config, alert=None: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    posted: list[tuple] = []
+
+    def fake_notify(failures, *, sync_name, webhook_url=None, extra_lines=()):
+        posted.append((sync_name, list(extra_lines)))
+
+    monkeypatch.setattr("notify.notify_sync_failures", fake_notify)
+    texts: list[str] = []
+    monkeypatch.setattr("pipeline.post_webhook_text", lambda text: texts.append(text))
+
+    result = run_pipeline_scrape(force=True, today=date(2026, 1, 15))
+
+    assert result["status"] == "failed"
+    assert texts == [], "a failed sync must not also post a separate degraded alert"
+    assert len(posted) == 1
+    sync_name, extra = posted[0]
+    assert sync_name == "pipeline"
+    assert extra and extra[0].startswith("- standings: unhealthy 3 runs in a row")
+
+
+@pytest.mark.unit
+def test_streak_lookup_failure_does_not_fail_the_scrape(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = _pipeline_session_with_streaks([])
+    monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.missing_reddit_env_names", lambda: ["REDDIT_CLIENT_ID"])
+    monkeypatch.setattr("pipeline.execute_scrape", lambda action, config, alert=None: (3, "ok"))
+
+    def broken_lookup(*args, **kwargs):
+        raise RuntimeError("db went away")
+
+    monkeypatch.setattr("pipeline.find_unhealthy_streaks", broken_lookup)
+    texts: list[str] = []
+    monkeypatch.setattr("pipeline.post_webhook_text", lambda text: texts.append(text))
+
+    result = run_pipeline_scrape(force=True, today=date(2026, 1, 15))
+
+    assert result["status"] == "success"
+    assert texts == []
+
+
+@pytest.mark.unit
+def test_update_run_ml_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pipeline import update_run_ml_exit
+
+    from queries import UPDATE_PIPELINE_RUN_ML_EXIT
+
+    session = MagicMock()
+    monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    update_run_ml_exit(3, 1, detail="ml score finished with exit 1")
+    session.execute.assert_called_once_with(
+        UPDATE_PIPELINE_RUN_ML_EXIT,
+        {"run_id": 3, "ml_exit": 1, "detail": "ml score finished with exit 1"},
+    )

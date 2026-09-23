@@ -172,10 +172,32 @@ def test_scrape_odds_upserts_with_match(monkeypatch: pytest.MonkeyPatch) -> None
         return len(rows)
 
     monkeypatch.setattr("scrapers.odds.upsert_rows", fake_upsert)
-    count = scrape_odds(api_key="test-key", fetch_events=lambda key: SAMPLE_EVENTS)
+    pregame = datetime(2024, 10, 22, 12, 0)
+    count = scrape_odds(api_key="test-key", fetch_events=lambda key: SAMPLE_EVENTS, now=pregame)
     assert count == 2
     assert captured[0][0]["game_id"] == GAME_ONE
-    session.execute.assert_called()
+    # Pruning is bounded to unstarted events so past lines survive as history.
+    params = session.execute.call_args.args[1]
+    assert params["now_utc"] == pregame
+
+
+@pytest.mark.unit
+def test_scrape_odds_never_writes_started_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = MagicMock()
+    session.query.return_value.all.side_effect = [[], []]
+    monkeypatch.setattr("scrapers.odds.get_session", lambda: _session(session))
+    captured: list[list[dict]] = []
+
+    def fake_upsert(_session, _model, rows, _conflict):
+        captured.append(rows)
+        return len(rows)
+
+    monkeypatch.setattr("scrapers.odds.upsert_rows", fake_upsert)
+    # 2024-10-22T23:30Z has tipped: live prices must not overwrite the pregame line.
+    in_play = datetime(2024, 10, 23, 0, 15)
+    count = scrape_odds(api_key="test-key", fetch_events=lambda key: SAMPLE_EVENTS, now=in_play)
+    assert count == 0
+    assert captured == [[]]
 
 
 @pytest.mark.unit

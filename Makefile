@@ -2,12 +2,13 @@
 	test test-api test-scraper test-mcp test-cube test-ml test-frontend test-frontend-e2e test-dbt \
 	test-migrate \
 	build build-multiarch ensure-buildx-builder remove-buildx-builder sync db-migrate migrate \
-	pipeline-status pipeline-enable pipeline-disable scrape dbt ml ml-train ml-eval refresh \
-	refresh-daily refresh-daily-once \
+	pipeline-status pipeline-enable pipeline-disable scrape dbt ml ml-train ml-eval ml-backfill refresh \
+	refresh-daily refresh-daily-once seed-demo seed-demo-clean \
 	prod-config prod-up prod-migrate prod-dbt prod-deploy prod-release prod-build prod-pull prod-pull-tools prod-record-deploy \
 	prod-pipeline-status prod-pipeline-enable prod-pipeline-disable prod-refresh prod-refresh-daily prod-refresh-daily-once \
 	prod-health prod-prune prod-check-freshness check-freshness prod-caddy-reload \
-	prod-scrape prod-ml prod-ml-train admin-jobs prod-admin-jobs test-admin-jobs quality
+	prod-scrape prod-ml prod-ml-backfill prod-ml-train admin-jobs prod-admin-jobs test-admin-jobs quality \
+	db-backup prod-db-backup db-restore-test db-restore prod-db-restore test-backups
 
 COMPOSE ?= docker compose
 TILT ?= tilt
@@ -143,6 +144,13 @@ prod-ml: ## Production Elo/logit scoring then the gold predictions copy
 	$(MAKE) prod-pull-tools
 	COMPOSE="$(COMPOSE_PROD)" $(MAKE) ml
 
+# Safe on real history: games that already have a live pregame prediction for a
+# model version are skipped, so this only fills gaps (e.g. a new shadow model).
+prod-ml-backfill: ## Production walk-forward backfill for the scorecard (SEASON=, LOGIT=1 as for ml-backfill)
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-ml-backfill requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
+	$(MAKE) prod-pull-tools
+	COMPOSE="$(COMPOSE_PROD)" $(MAKE) ml-backfill
+
 prod-ml-train: ## Fit and persist the logit artifact in production; run deliberately, never on cron
 	@test -n "$(IMAGE_PREFIX)" || { echo "prod-ml-train requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
 	$(MAKE) prod-pull-tools
@@ -188,6 +196,26 @@ check-freshness: ## Alert if the daily refresh has not succeeded recently
 
 prod-check-freshness: ## Freshness check against the production stack
 	COMPOSE="$(COMPOSE_PROD)" ./scripts/check-freshness.sh
+
+# Local pg_dump backups (no object storage). Like check-freshness these need no
+# tools image, only the running postgres. See docs/operations.md.
+db-backup: ## pg_dump the warehouse to backups/ (verified, rotated)
+	./scripts/backup-postgres.sh
+
+prod-db-backup: ## pg_dump the production warehouse to backups/
+	COMPOSE="$(COMPOSE_PROD)" ./scripts/backup-postgres.sh
+
+db-restore-test: ## Restore a dump (DUMP=..., default newest) into a throwaway container and sanity-check it
+	./scripts/restore-postgres.sh $(DUMP)
+
+db-restore: ## Replace the live DB from DUMP=... (needs CONFIRM_RESTORE=RESTORE)
+	RESTORE_TARGET=live ./scripts/restore-postgres.sh $(DUMP)
+
+prod-db-restore: ## Replace the production DB from DUMP=... (needs CONFIRM_RESTORE=RESTORE)
+	COMPOSE="$(COMPOSE_PROD)" RESTORE_TARGET=live ./scripts/restore-postgres.sh $(DUMP)
+
+test-backups: ## E2E backup + restore against a throwaway compose project
+	./scripts/test-backups.sh
 
 # Probe from inside the compose network: a deploy must not depend on public DNS
 # or on Caddy already holding a cert. Caddy's alpine image ships busybox wget.
@@ -316,6 +344,14 @@ ml-train: ## Fit logit v1 from silver.int_game_features and persist its artifact
 ml-eval: ## Expanding-window logit v1 metrics against the Elo and always-home baselines
 	$(COMPOSE_RUN_TOOLS) ml python -m main eval-logit
 
+# fct_prediction_scorecard reads the source table directly, so `stg_game_predictions+`
+# (what `ml` rebuilds) would miss it; select everything downstream of the source.
+ml-backfill: ## Walk-forward pregame WP for past Finals so the scorecard grades them (SEASON=2025-26; LOGIT=1 adds logit, slow)
+	$(COMPOSE_RUN_TOOLS) ml python -m main backfill $(if $(SEASON),--season $(SEASON),) \
+		$(if $(filter 1,$(LOGIT)),--with-logit,)
+	$(COMPOSE_RUN_TOOLS) dbt sh -c \
+		'dbt deps --profiles-dir . && dbt run --profiles-dir . --select source:source.game_predictions+'
+
 refresh: ## scrape then dbt then ml; bind-mounts host files; does not recreate postgres
 	FORCE=0 ./scripts/refresh-daily.sh
 
@@ -323,6 +359,21 @@ refresh-daily: refresh ## alias for refresh
 
 refresh-daily-once: ## Force one scrape→dbt→ml cycle; bind-mounts host files; does not recreate postgres
 	FORCE=1 ./scripts/refresh-daily.sh
+
+# Local only: there is deliberately no prod- variant. The seed clears the old
+# demo rows first, so rerunning it rolls the fake schedule forward to today.
+DEMO_PSQL = $(COMPOSE) exec -T postgres \
+	sh -c 'psql -X -q -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1'
+
+seed-demo: ## Fake upcoming games and odds for /schedule, plus real Elo backfill for /predictions (local only)
+	cat scripts/demo/clean.sql scripts/demo/seed.sql | $(DEMO_PSQL)
+	$(MAKE) dbt
+	$(MAKE) ml
+	$(MAKE) ml-backfill
+
+seed-demo-clean: ## Delete everything seed-demo inserted, then rebuild gold
+	$(DEMO_PSQL) < scripts/demo/clean.sql
+	$(MAKE) dbt
 
 # Every suite runs its integration tests inline: the Testcontainers fixtures skip
 # themselves when Docker is not reachable, so there is nothing to deselect.

@@ -28,6 +28,8 @@ class GameRow:
     home_team_id: UUID
     away_team_id: UUID
     home_won: bool | None = None
+    # Home minus away points; only elo-v1 reads it (margin-of-victory updates).
+    home_margin: int | None = None
 
 
 def expected_home_win(home_rating: float, away_rating: float) -> float:
@@ -124,6 +126,11 @@ def game_row_from_mapping(row: Any) -> GameRow:
         home_won = None if winner is None else str(winner) == "home"
     else:
         home_won = bool(home_won_raw)
+    home_score = _get(row, "home_score")
+    away_score = _get(row, "away_score")
+    home_margin = (
+        None if home_score is None or away_score is None else int(home_score) - int(away_score)
+    )
     return GameRow(
         game_id=UUID(str(_get(row, "game_id"))),
         game_date=_get(row, "game_date"),
@@ -131,6 +138,7 @@ def game_row_from_mapping(row: Any) -> GameRow:
         home_team_id=UUID(str(_get(row, "home_team_id"))),
         away_team_id=UUID(str(_get(row, "away_team_id"))),
         home_won=home_won,
+        home_margin=home_margin,
     )
 
 

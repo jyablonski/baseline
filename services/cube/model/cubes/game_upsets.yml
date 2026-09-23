@@ -1,0 +1,118 @@
+cubes:
+  - name: game_upsets
+    sql_table: gold.fct_game_upsets
+    description: >
+      One row per Final game with a captured pregame moneyline. The market line is the
+      bookmaker-average de-vigged win probability from the last odds scrape before tip-off,
+      a morning line rather than a true close. is_upset means the market underdog won;
+      upset_magnitude is -ln(winner_market_wp), so higher is more surprising, and upset_rank
+      orders upsets within season and season_type. Empty until Final games with captured
+      lines exist; odds history starts in 2026-27 with no backfill.
+
+    dimensions:
+      - name: game_id
+        sql: game_id
+        type: string
+        primary_key: true
+        public: true
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: season_type
+        sql: season_type
+        type: string
+
+      - name: game_date
+        sql: game_date
+        type: time
+
+      - name: home_team_abbreviation
+        sql: home_team_abbreviation
+        type: string
+
+      - name: away_team_abbreviation
+        sql: away_team_abbreviation
+        type: string
+
+      - name: home_score
+        sql: home_score
+        type: number
+
+      - name: away_score
+        sql: away_score
+        type: number
+
+      - name: winner_location
+        sql: winner_location
+        type: string
+
+      - name: underdog_team_id
+        sql: underdog_team_id
+        type: string
+
+      - name: underdog_team_abbreviation
+        sql: underdog_team_abbreviation
+        type: string
+
+      - name: home_market_wp
+        sql: home_market_wp
+        type: number
+
+      - name: underdog_market_wp
+        sql: underdog_market_wp
+        type: number
+
+      - name: winner_market_wp
+        sql: winner_market_wp
+        type: number
+
+      - name: underdog_fair_moneyline
+        sql: underdog_fair_moneyline
+        type: number
+
+      - name: underdog_best_moneyline
+        sql: underdog_best_moneyline
+        type: number
+
+      - name: bookmaker_count
+        sql: bookmaker_count
+        type: number
+
+      - name: is_upset
+        sql: is_upset
+        type: boolean
+
+      - name: upset_magnitude
+        sql: upset_magnitude
+        type: number
+
+      - name: upset_rank
+        sql: upset_rank
+        type: number
+
+      - name: model_version
+        sql: model_version
+        type: string
+
+      - name: model_winner_wp
+        sql: model_winner_wp
+        type: number
+
+      - name: model_called_upset
+        sql: model_called_upset
+        type: boolean
+
+    measures:
+      - name: games
+        type: count
+
+      - name: upsets
+        type: count
+        filters:
+          - sql: "{CUBE}.is_upset = true"
+
+      - name: upset_rate
+        sql: "CASE WHEN {CUBE}.is_upset THEN 1.0 ELSE 0.0 END"
+        type: avg

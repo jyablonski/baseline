@@ -8,6 +8,7 @@ from uuid import UUID
 from cube.client import CubeClient
 from cube.errors import CubeError
 from cube.queries import (
+    biggest_upsets_query,
     game_odds_query,
     game_predictions_query,
     game_standings_query,
@@ -38,6 +39,7 @@ from cube.queries import (
     teams_played_query,
     transaction_participants_query,
     transactions_query,
+    upset_seasons_query,
 )
 from standings_rank import apply_derived_ranks
 
@@ -388,6 +390,26 @@ class CubeAnalytics:
     ) -> list[dict[str, Any]]:
         return self.client.load(game_odds_query(game_id=game_id, limit=limit))
 
+    def get_biggest_upsets(
+        self,
+        season: str | None = None,
+        season_type: str | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        resolved_season = season or self._latest_upset_season()
+        if resolved_season is None:
+            return {"season": None, "season_type": season_type, "upsets": []}
+        rows = self.client.load(biggest_upsets_query(resolved_season, season_type, limit))
+        return {
+            "season": resolved_season,
+            "season_type": season_type,
+            "upsets": [_upset_row(row) for row in rows],
+        }
+
+    def _latest_upset_season(self) -> str | None:
+        rows = self.client.load(upset_seasons_query())
+        return rows[0].get("season") if rows else None
+
     def get_transactions(
         self,
         season: str | None = None,
@@ -492,6 +514,30 @@ def _player_profile_row(row: dict[str, Any]) -> dict[str, Any]:
         "current_contract_season": row.get("current_contract_season"),
         "current_season_salary": _as_int(row.get("current_season_salary")),
         "current_remaining_guaranteed": _as_int(row.get("current_remaining_guaranteed")),
+    }
+
+
+def _upset_row(row: dict[str, Any]) -> dict[str, Any]:
+    called = row.get("model_called_upset")
+    return {
+        "game_id": row.get("game_id"),
+        "season": row.get("season"),
+        "season_type": row.get("season_type"),
+        "game_date": row.get("game_date"),
+        "away_team_abbreviation": row.get("away_team_abbreviation"),
+        "home_team_abbreviation": row.get("home_team_abbreviation"),
+        "away_score": _as_int(row.get("away_score")),
+        "home_score": _as_int(row.get("home_score")),
+        "underdog_team_abbreviation": row.get("underdog_team_abbreviation"),
+        "underdog_market_wp": _as_float(row.get("underdog_market_wp")),
+        "underdog_fair_moneyline": _as_int(row.get("underdog_fair_moneyline")),
+        "underdog_best_moneyline": _as_int(row.get("underdog_best_moneyline")),
+        "bookmaker_count": _as_int(row.get("bookmaker_count")),
+        "upset_magnitude": _as_float(row.get("upset_magnitude")),
+        "upset_rank": _as_int(row.get("upset_rank")),
+        "model_winner_wp": _as_float(row.get("model_winner_wp")),
+        # Cube returns booleans as true/false or "true"/"false" depending on driver.
+        "model_called_upset": None if called is None else str(called).lower() == "true",
     }
 
 

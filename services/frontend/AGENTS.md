@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-The public product name in the UI is **Baseline**. Do not write Courtline into user-facing copy, titles, or the header wordmark.
+The public product name in the UI is **Baseline**.
 
 ## User-facing copy
 

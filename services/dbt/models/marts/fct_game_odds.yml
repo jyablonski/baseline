@@ -3,8 +3,9 @@ version: 2
 models:
   - name: fct_game_odds
     description: >
-      Thin gold copy of the current The Odds API upcoming-slate snapshot.
-      Grain is odds_event_id x bookmaker x market. Market snapshot, not a book.
+      Thin gold copy of The Odds API lines: the upcoming slate plus the last
+      pregame line of each game already tipped (see fct_game_upsets). Filter on
+      commence_time for the upcoming slate. Grain is odds_event_id x bookmaker x market. Market snapshot, not a book.
       game_id is null when the event could not be matched to source.games.
     columns:
       - name: odds_event_id

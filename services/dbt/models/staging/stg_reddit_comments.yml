@@ -5,7 +5,7 @@ models:
     description: >
       PRAW comment ingest, lightly cleaned. Unique on reddit_id.
       Associated to the parent submission via post_reddit_id.
-      Queryable via gold / Cube; no Courtline page.
+      Queryable via gold / Cube.
     columns:
       - name: reddit_id
         data_tests:

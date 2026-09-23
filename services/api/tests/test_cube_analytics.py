@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 import pytest
@@ -251,6 +251,16 @@ def test_query_builders() -> None:
         == "player_injuries.player_id"
     )
     assert game_odds_query()["dimensions"][0] == "game_odds.odds_event_id"
+    upcoming = game_odds_query(now=datetime(2026, 10, 20, 23, 30, tzinfo=UTC))
+    assert upcoming["filters"] == [
+        {
+            "member": "game_odds.commence_time",
+            "operator": "afterDate",
+            "values": ["2026-10-20T23:30:00"],
+        }
+    ]
+    by_game = game_odds_query(game_id=UUID("00000000-0000-0000-0000-000000000001"))
+    assert [f["member"] for f in by_game["filters"]] == ["game_odds.game_id"]
     pbp = play_by_play_query(GAME_ONE, 999)
     assert pbp["limit"] == 500
     assert pbp["filters"][0]["values"] == [str(GAME_ONE)]

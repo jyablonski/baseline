@@ -258,6 +258,14 @@ def test_list_schedule(client, session, mapping_row, query_result) -> None:
                         "away_team_id": TEAM_LAL,
                         "away_team_abbreviation": "LAL",
                         "away_team_name": "Los Angeles Lakers",
+                        "prediction_model_version": "elo-v0",
+                        "home_win_probability": 0.62,
+                        "away_win_probability": 0.38,
+                        "market_home_wp": 0.6,
+                        "home_implied_wp": 0.6,
+                        "away_implied_wp": 0.4347826,
+                        "home_spread": -3.5,
+                        "odds_bookmaker_count": 4,
                     }
                 )
             ]
@@ -275,6 +283,29 @@ def test_list_schedule(client, session, mapping_row, query_result) -> None:
     assert row["home_team_abbreviation"] == "GSW"
     assert "score_margin" not in row
     assert "home_score" not in row
+    assert row["home_win_probability"] == 0.62
+    assert row["home_moneyline"] == -150
+    assert row["away_moneyline"] == 130
+    assert row["home_spread"] == -3.5
+    assert "home_implied_wp" not in row
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("implied_wp", "expected"),
+    [
+        (0.6, -150),
+        (0.5, -100),
+        (0.4, 150),
+        (None, None),
+        (0.0, None),
+        (1.0, None),
+    ],
+)
+def test_american_moneyline(implied_wp, expected) -> None:
+    from repositories.games import american_moneyline
+
+    assert american_moneyline(implied_wp) == expected
 
 
 @pytest.mark.unit
@@ -294,6 +325,9 @@ def test_list_schedule_sql_filters_upcoming() -> None:
     assert "gold.fct_games_schedule" in sql
     assert "fct_games_schedule.game_date >= :from_date" in sql
     assert "gold.fct_team_game_results" not in sql
+    assert "LEFT JOIN gold.fct_game_predictions" in sql
+    assert "fct_game_odds.market = 'h2h'" in sql
+    assert "fct_game_odds.market = 'spreads'" in sql
     assert "gold.fct_games_schedule" in str(LIST_SCHEDULE_COUNT)
     assert "gold.fct_games_schedule" in str(LIST_SEASONS)
 

@@ -67,3 +67,24 @@ UPDATE_PIPELINE_RUN_DBT_EXIT = text(
     WHERE run_id = :run_id
     """
 )
+
+# Same status rule as the dbt update: a failed stage fails the run, and a
+# success never un-fails a run that an earlier stage already failed.
+UPDATE_PIPELINE_RUN_ML_EXIT = text(
+    """
+    UPDATE source.pipeline_runs
+    SET
+        ml_exit = :ml_exit,
+        status = CASE
+            WHEN :ml_exit <> 0 THEN 'failed'
+            WHEN status = 'failed' THEN status
+            ELSE 'success'
+        END,
+        detail = CASE
+            WHEN :detail IS NULL THEN detail
+            ELSE concat_ws(' | ', detail, :detail)
+        END,
+        finished_at = NOW()
+    WHERE run_id = :run_id
+    """
+)

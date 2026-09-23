@@ -69,6 +69,7 @@ class AdminRepository:
                 "reddit_ran": row["reddit_ran"],
                 "reddit_exit": row["reddit_exit"],
                 "dbt_exit": row["dbt_exit"],
+                "ml_exit": row["ml_exit"],
                 "detail": row["detail"],
                 "started_at": as_utc(row["started_at"]),
                 "finished_at": as_utc(row["finished_at"]),
@@ -94,7 +95,7 @@ class AdminRepository:
                 "started_at": as_utc(row["started_at"]),
                 "finished_at": as_utc(row["finished_at"]),
                 "last_success_at": as_utc(row["last_success_at"]),
-                "runs_since_success": int(row["runs_since_success"] or 0),
+                "unhealthy_streak": int(row["unhealthy_streak"] or 0),
             }
             for row in rows
         ]

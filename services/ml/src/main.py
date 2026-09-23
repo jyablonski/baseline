@@ -6,7 +6,13 @@ import logging
 
 import click
 
-from scoring import evaluate, evaluate_logit, score_and_persist, train_model
+from scoring import (
+    backfill_and_persist,
+    evaluate,
+    evaluate_logit,
+    score_and_persist,
+    train_model,
+)
 
 
 def _configure_logging() -> None:
@@ -44,6 +50,22 @@ def score_cmd() -> None:
     click.echo(f"upcoming_games={result['upcoming_games']}")
     click.echo(f"written={result['written']}")
     click.echo(f"as_of={result['as_of']}")
+
+
+@cli.command("backfill")
+@click.option("--season", default=None, help="Only write this season (e.g. 2025-26); default all.")
+@click.option(
+    "--with-logit",
+    is_flag=True,
+    help="Also replay logit (refits every 50 games; minutes per season). Elo only by default.",
+)
+def backfill_cmd(season: str | None, with_logit: bool) -> None:
+    """Persist walk-forward pregame WP for past Finals so the scorecard can grade it."""
+    result = backfill_and_persist(season=season, with_logit=with_logit)
+    click.echo(f"model_versions={','.join(result['model_versions'])}")
+    click.echo(f"season={result['season']}")
+    click.echo(f"history_games={result['history_games']}")
+    click.echo(f"written={result['written']}")
 
 
 @cli.command("eval-logit")

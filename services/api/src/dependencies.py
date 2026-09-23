@@ -12,6 +12,7 @@ from db import SessionLocal
 from repositories.admin import AdminRepository
 from repositories.games import GamesRepository
 from repositories.players import PlayersRepository
+from repositories.predictions import PredictionsRepository
 from repositories.social import SocialRepository
 from repositories.standings import StandingsRepository
 from repositories.status import StatusRepository
@@ -29,6 +30,10 @@ def get_db() -> Generator[Session]:
 
 def get_players_repository(db: Session = Depends(get_db)) -> PlayersRepository:
     return PlayersRepository(db)
+
+
+def get_predictions_repository(db: Session = Depends(get_db)) -> PredictionsRepository:
+    return PredictionsRepository(db)
 
 
 def get_social_repository(db: Session = Depends(get_db)) -> SocialRepository:

@@ -1,6 +1,7 @@
 -- Seeded gold mart rows for API/MCP integration tests (no dbt required).
 
-TRUNCATE gold.fct_standings, gold.fct_player_mvp_scores, gold.fct_player_season_stats, gold.fct_player_game_logs,
+TRUNCATE gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
+         gold.fct_standings, gold.fct_player_mvp_scores, gold.fct_player_season_stats, gold.fct_player_game_logs,
          gold.fct_team_game_results, gold.fct_games_schedule, gold.dim_players, gold.dim_teams
          RESTART IDENTITY CASCADE;
 
@@ -106,7 +107,50 @@ INSERT INTO gold.fct_games_schedule (
     ('00000000-0000-4000-8000-000000000204', '2024-25', 'Regular Season', CURRENT_DATE + 14, 'Scheduled',
      'Chase Center', 'San Francisco', 'CA',
      '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Golden State Warriors', NULL,
-     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'LA Clippers', NULL);
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'LA Clippers', NULL),
+    ('00000000-0000-4000-8000-000000000205', '2024-25', 'Regular Season', CURRENT_DATE + 15, 'Scheduled',
+     'Intuit Dome', 'Inglewood', 'CA',
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'LA Clippers', NULL,
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Golden State Warriors', NULL);
+
+-- GAME_SCHEDULE carries a champion prediction and two books; the second
+-- scheduled game carries neither, so the schedule must render it with nulls.
+INSERT INTO gold.fct_game_predictions (
+    game_id, as_of, model_name, model_version, home_team_id, away_team_id,
+    model_wp, away_wp, market_wp, game_date, season, season_type, game_status, scraped_at
+) VALUES
+    ('00000000-0000-4000-8000-000000000204', CURRENT_DATE - 1, 'elo', 'elo-v0',
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958',
+     0.6, 0.4, 0.62, CURRENT_DATE + 14, '2024-25', 'Regular Season', 'Scheduled', CURRENT_DATE - 1);
+
+INSERT INTO gold.fct_game_odds (
+    odds_event_id, commence_time, home_team_name, away_team_name, game_id, bookmaker, market,
+    home_price, away_price, home_implied_wp, away_implied_wp, home_market_wp, away_market_wp,
+    spread_home, scraped_at
+) VALUES
+    ('evt-204', CURRENT_DATE + 14, 'Golden State Warriors', 'LA Clippers',
+     '00000000-0000-4000-8000-000000000204', 'draftkings', 'h2h',
+     -150, 130, 0.6, 0.4347826, 0.58, 0.42, NULL, CURRENT_DATE - 1),
+    ('evt-204', CURRENT_DATE + 14, 'Golden State Warriors', 'LA Clippers',
+     '00000000-0000-4000-8000-000000000204', 'fanduel', 'h2h',
+     -150, 130, 0.6, 0.4347826, 0.58, 0.42, NULL, CURRENT_DATE - 1),
+    ('evt-204', CURRENT_DATE + 14, 'Golden State Warriors', 'LA Clippers',
+     '00000000-0000-4000-8000-000000000204', 'draftkings', 'spreads',
+     -110, -110, 0.5238095, 0.5238095, 0.5, 0.5, -3.5, CURRENT_DATE - 1),
+    ('evt-204', CURRENT_DATE + 14, 'Golden State Warriors', 'LA Clippers',
+     '00000000-0000-4000-8000-000000000204', 'fanduel', 'spreads',
+     -110, -110, 0.5238095, 0.5238095, 0.5, 0.5, -4.5, CURRENT_DATE - 1),
+    ('evt-unmatched', CURRENT_DATE + 14, 'Nowhere Team', 'Other Team',
+     NULL, 'draftkings', 'h2h',
+     100, -120, 0.5, 0.5454545, 0.48, 0.52, NULL, CURRENT_DATE - 1);
+
+INSERT INTO gold.fct_prediction_scorecard (
+    season, model_name, model_version, n, logloss, brier, accuracy, home_always_accuracy,
+    calibration_error, market_n, market_logloss, market_brier
+) VALUES
+    ('2024-25', 'elo', 'elo-v0', 1200, 0.65, 0.23, 0.64, 0.55, 0.03, 900, 0.62, 0.21),
+    ('2024-25', 'logit', 'logit-v1', 1200, 0.64, 0.225, 0.655, 0.55, 0.025, 900, 0.62, 0.21),
+    ('2023-24', 'elo', 'elo-v0', 1230, 0.66, 0.235, 0.63, 0.54, 0.04, NULL, NULL, NULL);
 
 INSERT INTO gold.fct_standings (
     team_id, abbreviation, team_name, season, season_type, as_of_date,

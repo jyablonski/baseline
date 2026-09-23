@@ -37,3 +37,21 @@ INSERT_GAME_PREDICTION = text(
         scraped_at = EXCLUDED.scraped_at
     """
 )
+
+# Predictions the daily `score` run made before tip: the graded live record,
+# which `backfill` must not shadow. Backfill rows sit at exactly midnight of
+# game day, and anything stamped after game day is never graded, so neither
+# counts.
+SELECT_LIVE_PREDICTED_GAMES = text(
+    """
+    SELECT DISTINCT
+        game_predictions.game_id,
+        game_predictions.model_version
+    FROM source.game_predictions
+    INNER JOIN source.games
+        ON game_predictions.game_id = games.game_id
+    WHERE
+        game_predictions.as_of::date <= games.game_date
+        AND game_predictions.as_of <> games.game_date::timestamp
+    """
+)

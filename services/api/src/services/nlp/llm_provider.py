@@ -56,7 +56,7 @@ class LlmNlpProvider:
                 sql=None,
             )
         if season:
-            text = f"{text}\n[Courtline header season: {season}]"
+            text = f"{text}\n[Baseline header season: {season}]"
         try:
             client = self._resolve_client()
         except LlmNotConfiguredError:

@@ -15,6 +15,13 @@ EXTRA_CUBES = """
   - name: game_predictions
   - name: player_injuries
   - name: game_odds
+  - name: game_upsets
+    sql_table: gold.fct_game_upsets
+    dimensions:
+      - name: is_upset
+      - name: upset_magnitude
+      - name: upset_rank
+      - name: underdog_market_wp
   - name: play_by_play
   - name: reddit_posts
   - name: reddit_comments
@@ -411,4 +418,58 @@ cubes:
         "      - name: mvp_score\n"
     )
     with pytest.raises(ValueError, match="missing dimension mvp_rank"):
+        validate_schema(tmp_path)
+
+
+@pytest.mark.unit
+def test_validate_schema_rejects_incomplete_game_upsets(tmp_path: Path) -> None:
+    (tmp_path / "cube.js").write_text("module.exports = {}\n", encoding="utf-8")
+    cubes = tmp_path / "model" / "cubes"
+    views = tmp_path / "model" / "views"
+    cubes.mkdir(parents=True)
+    views.mkdir()
+    (views / "player_performance.yml").write_text(
+        "views:\n  - name: player_performance\n",
+        encoding="utf-8",
+    )
+    valid_upsets = EXTRA_CUBES[
+        EXTRA_CUBES.index("  - name: game_upsets") : EXTRA_CUBES.index("  - name: play_by_play")
+    ]
+
+    def write_model(upsets_cube: str) -> None:
+        (cubes / "all.yml").write_text(
+            f"""
+cubes:
+  - name: players
+{PLAYER_DIMS}
+  - name: games
+{_valid_player_game_logs()}
+  - name: team_game_results
+{STANDINGS}
+  - name: teams
+    sql_table: gold.dim_teams
+    dimensions:
+      - name: current_season_payroll
+  - name: team_games
+    sql: SELECT 1 FROM gold.fct_team_game_results
+    measures:
+      - name: games
+      - name: wins
+      - name: losses
+    dimensions:
+      - name: season_type
+  - name: player_season_stats
+  - name: player_contracts
+  - name: team_payroll
+{EXTRA_CUBES.replace(valid_upsets, upsets_cube)}
+""",
+            encoding="utf-8",
+        )
+
+    write_model("  - name: game_upsets\n    sql_table: gold.other\n")
+    with pytest.raises(ValueError, match="gold.fct_game_upsets"):
+        validate_schema(tmp_path)
+
+    write_model(valid_upsets.replace("      - name: upset_rank\n", ""))
+    with pytest.raises(ValueError, match="missing dimension upset_rank"):
         validate_schema(tmp_path)

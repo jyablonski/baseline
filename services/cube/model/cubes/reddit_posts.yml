@@ -1,7 +1,7 @@
 cubes:
   - name: reddit_posts
     sql_table: gold.fct_reddit_posts
-    description: PRAW submission ingest. Queryable via Cube / MCP; no Courtline page.
+    description: PRAW submission ingest. Queryable via Cube / MCP.
 
     dimensions:
       - name: reddit_id

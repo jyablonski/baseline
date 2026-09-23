@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 import pytest
@@ -11,6 +11,7 @@ from cube.errors import UnknownMemberError
 from cube.queries import (
     PLAYER_COMPARE_DIMENSIONS,
     PLAYER_SALARY_DIMENSIONS,
+    biggest_upsets_query,
     current_nba_season,
     game_odds_query,
     game_predictions_query,
@@ -254,6 +255,20 @@ def test_query_builders() -> None:
     assert game_predictions_query(upcoming=True)["filters"][0]["operator"] == "notEquals"
     assert player_injuries_query(player_id=1)["filters"][0]["member"] == "player_injuries.player_id"
     assert game_odds_query()["dimensions"][0] == "game_odds.odds_event_id"
+    # Unfiltered odds are bounded to untipped games; a game_id lookup is not,
+    # so a played game still returns its last pregame line.
+    upcoming_odds = game_odds_query(now=datetime(2026, 10, 22, 8, 15))
+    assert upcoming_odds["filters"] == [
+        {
+            "member": "game_odds.commence_time",
+            "operator": "afterDate",
+            "values": ["2026-10-22T08:15:00"],
+        }
+    ]
+    assert [
+        f["member"]
+        for f in game_odds_query(game_id=UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"))["filters"]
+    ] == ["game_odds.game_id"]
     pbp = play_by_play_query("0022400001", 999)
     assert pbp["limit"] == 500
     assert pbp["filters"][0]["values"] == ["0022400001"]
@@ -572,3 +587,57 @@ def test_mvp_ladder_resolves_latest_season() -> None:
     CubeAnalytics(explicit).get_mvp_ladder(season="2023-24", season_type="Playoffs")
     # An explicit season skips the latest-season lookup.
     assert len(explicit.queries) == 1
+
+
+@pytest.mark.unit
+def test_biggest_upsets_resolves_latest_season() -> None:
+    client = ScriptedCubeClient(
+        [
+            [{"season": "2026-27", "upsets": "12"}],
+            [
+                {
+                    "game_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                    "season": "2026-27",
+                    "season_type": "Regular Season",
+                    "game_date": "2026-10-25T00:00:00.000",
+                    "away_team_abbreviation": "GSW",
+                    "home_team_abbreviation": "LAC",
+                    "away_score": "115",
+                    "home_score": "118",
+                    "underdog_team_abbreviation": "LAC",
+                    "underdog_market_wp": "0.3699",
+                    "underdog_fair_moneyline": "170",
+                    "underdog_best_moneyline": "160",
+                    "bookmaker_count": "1",
+                    "upset_magnitude": "0.9945",
+                    "upset_rank": "1",
+                    "model_winner_wp": "0.47",
+                    "model_called_upset": False,
+                }
+            ],
+        ]
+    )
+    result = CubeAnalytics(client).get_biggest_upsets(limit=500)
+    assert result["season"] == "2026-27"
+    top = result["upsets"][0]
+    assert top["underdog_team_abbreviation"] == "LAC"
+    assert top["underdog_fair_moneyline"] == 170
+    assert top["upset_rank"] == 1
+    assert top["model_called_upset"] is False
+    assert client.queries[0]["filters"][0]["member"] == "game_upsets.is_upset"
+    ladder = client.queries[1]
+    assert ladder["limit"] == 50
+    assert ladder["order"] == {"game_upsets.upset_magnitude": "desc"}
+    assert {"member": "game_upsets.season", "operator": "equals", "values": ["2026-27"]} in ladder[
+        "filters"
+    ]
+
+    empty = CubeAnalytics(ScriptedCubeClient([]))
+    assert empty.get_biggest_upsets() == {"season": None, "season_type": None, "upsets": []}
+
+    explicit = ScriptedCubeClient([[{"model_called_upset": None}]])
+    rows = CubeAnalytics(explicit).get_biggest_upsets(season="2026-27", season_type=" Playoffs ")
+    assert rows["upsets"][0]["model_called_upset"] is None
+    assert len(explicit.queries) == 1
+    assert biggest_upsets_query("2026-27", "Playoffs")["filters"][-1]["values"] == ["Playoffs"]
+    assert biggest_upsets_query("2026-27")["limit"] == 10

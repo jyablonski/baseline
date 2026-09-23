@@ -27,23 +27,32 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Literal
 
-from notify import StepOutcome, SyncAlert, SyncFailedError
+from notify import (
+    SourceStreak,
+    StepOutcome,
+    SyncAlert,
+    SyncFailedError,
+    format_degraded_text,
+    format_streak_lines,
+    post_webhook_text,
+)
 from sqlalchemy.orm import Session
 
-from config import missing_odds_env_names, missing_reddit_env_names
+from config import missing_odds_env_names, missing_reddit_env_names, settings
 from db import get_session
 from queries.pipeline_runs import (
     INSERT_DBT_ONLY_RUN,
     INSERT_PIPELINE_RUN,
     UPDATE_PIPELINE_RUN,
     UPDATE_PIPELINE_RUN_DBT_EXIT,
+    UPDATE_PIPELINE_RUN_ML_EXIT,
 )
 from queries.scrape_pipeline import (
     SELECT_PIPELINE_CONFIG,
     UPDATE_PIPELINE_ENABLED,
     UPDATE_PIPELINE_SUCCESS,
 )
-from queries.scrape_source_runs import INSERT_SOURCE_RUN
+from queries.scrape_source_runs import INSERT_SOURCE_RUN, SELECT_UNHEALTHY_SOURCE_STREAKS
 from scrapers import current_season
 from scrapers.contracts import scrape_contracts
 from scrapers.games import scrape_games, scrape_todays_games
@@ -400,6 +409,32 @@ def mark_scrape_success(session: Session, *, scrape_date: date | None = None) ->
     )
 
 
+# Sources that always return rows whenever they run at all. Zero from one of
+# these is either "not published yet" or a parser silently matching nothing;
+# a single run cannot tell which, so it is recorded as 'below' and only a
+# streak of them alerts. Absent sources are 'not_checked' because zero is a
+# legitimate answer for them: todays_games on an off-day, transactions at the
+# start of a new season page, or a backfill step with nothing new.
+EXPECTS_ROWS = frozenset(
+    {
+        "contracts",
+        "injuries",
+        "odds",
+        "play_by_play",
+        "player_game_logs",
+        "reddit",
+        "standings",
+    }
+)
+
+
+def expectation_for(step: StepOutcome) -> str:
+    """'met' / 'below' for a successful step with a known row count, else 'not_checked'."""
+    if step.status != "success" or step.rows is None or step.step not in EXPECTS_ROWS:
+        return "not_checked"
+    return "met" if step.rows > 0 else "below"
+
+
 def record_source_runs(
     session: Session,
     run_id: int,
@@ -419,7 +454,7 @@ def record_source_runs(
                 "run_id": run_id,
                 "source_name": step.step,
                 "status": step.status,
-                "expectation": "not_checked",
+                "expectation": expectation_for(step),
                 "rows_written": step.rows,
                 "season": step.season,
                 "attempt": attempt,
@@ -429,6 +464,29 @@ def record_source_runs(
                 "finished_at": step.finished_at,
             },
         )
+
+
+def find_unhealthy_streaks(
+    session: Session,
+    run_id: int,
+    *,
+    threshold: int,
+) -> list[SourceStreak]:
+    rows = session.execute(
+        SELECT_UNHEALTHY_SOURCE_STREAKS,
+        {"run_id": run_id, "threshold": threshold},
+    ).mappings()
+    return [
+        SourceStreak(
+            source_name=row["source_name"],
+            streak=int(row["streak"]),
+            failed_runs=int(row["failed_runs"]),
+            below_runs=int(row["below_runs"]),
+            latest_error_type=row["latest_error_type"],
+            latest_error_detail=row["latest_error_detail"],
+        )
+        for row in rows
+    ]
 
 
 def run_pipeline_scrape(
@@ -473,6 +531,7 @@ def run_pipeline_scrape(
     scrape_exit = 0
     scrape_detail = detail
     status = "success"
+    streaks: list[SourceStreak] = []
     reddit_ran = False
     reddit_exit: int | None = None
     alert = SyncAlert("pipeline")
@@ -531,9 +590,20 @@ def run_pipeline_scrape(
                 record_source_runs(session, run_id, alert.steps)
         except Exception:
             logger.exception("Failed to record per-source run history for run_id=%s", run_id)
+        try:
+            with get_session() as session:
+                streaks = find_unhealthy_streaks(
+                    session, run_id, threshold=settings.source_alert_streak
+                )
+        except Exception:
+            logger.exception("Failed to read per-source streaks for run_id=%s", run_id)
     finally:
+        # Still one post per sync: a failed sync folds the streaks into its
+        # failure alert, and a successful one posts only when a streak exists.
         if status == "failed":
-            alert.notify()
+            alert.notify(extra_lines=format_streak_lines(streaks))
+        elif streaks:
+            post_webhook_text(format_degraded_text(alert.sync_name, streaks))
 
     return {
         "run_id": run_id,
@@ -570,4 +640,12 @@ def update_run_dbt_exit(run_id: int, dbt_exit: int, *, detail: str | None = None
         session.execute(
             UPDATE_PIPELINE_RUN_DBT_EXIT,
             {"run_id": run_id, "dbt_exit": dbt_exit, "detail": detail},
+        )
+
+
+def update_run_ml_exit(run_id: int, ml_exit: int, *, detail: str | None = None) -> None:
+    with get_session() as session:
+        session.execute(
+            UPDATE_PIPELINE_RUN_ML_EXIT,
+            {"run_id": run_id, "ml_exit": ml_exit, "detail": detail},
         )

@@ -1,13 +1,20 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamAbbrLink } from "@/components/team-logo";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
-import { formatDate, formatNumber } from "@/lib/format";
+import {
+  formatDate,
+  formatMoneyline,
+  formatNumber,
+  formatProbability,
+  formatSpread,
+} from "@/lib/format";
 import { withSeason } from "@/lib/nav";
 import type { ScheduledGame } from "@/lib/types";
 
@@ -47,8 +54,14 @@ function ScheduleBody() {
         <div>
           <h1 className="type-page">Schedule</h1>
           <p className="mt-1 text-sm text-ink-2">
-            Scheduled games from today onward. Scores stay empty until the game is Final. Not odds
-            or win probability.
+            Scheduled games from today onward. Scores stay empty until the game is Final.
+          </p>
+          <p className="mt-1 text-sm text-ink-2">
+            Win % is Baseline&apos;s pregame model estimate. Moneyline and spread are a consensus of
+            US sportsbook odds. Both are for context, not betting advice.{" "}
+            <Link href="/predictions" className="underline underline-offset-2">
+              How accurate is the model?
+            </Link>
           </p>
         </div>
       </div>
@@ -63,21 +76,26 @@ function ScheduleBody() {
           message={`No scheduled games for ${season || "this season"} yet.`}
         />
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Matchup</th>
-              <th>Status</th>
-              <th>Arena</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((game) => (
-              <ScheduleRow key={game.game_id} game={game} season={season} />
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Matchup</th>
+                <th title="Pregame model estimate, away / home">Win % (away / home)</th>
+                <th title="Consensus moneyline, away / home">Moneyline</th>
+                <th title="Consensus home spread">Spread</th>
+                <th>Status</th>
+                <th>Arena</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((game) => (
+                <ScheduleRow key={game.game_id} game={game} season={season} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {total > 0 ? (
@@ -139,8 +157,26 @@ function ScheduleRow({ game, season }: { game: ScheduledGame; season: string }) 
           )}
         </span>
       </td>
+      <td className="tabular whitespace-nowrap" data-testid="win-probability">
+        {pairOrDash(
+          formatProbability(game.away_win_probability),
+          formatProbability(game.home_win_probability)
+        )}
+      </td>
+      <td className="tabular whitespace-nowrap" data-testid="moneyline">
+        {pairOrDash(formatMoneyline(game.away_moneyline), formatMoneyline(game.home_moneyline))}
+      </td>
+      <td className="tabular whitespace-nowrap" data-testid="spread">
+        {game.home_spread == null ? "—" : `${home} ${formatSpread(game.home_spread)}`}
+      </td>
       <td>{game.status || "Scheduled"}</td>
       <td>{arena}</td>
     </tr>
   );
+}
+
+// One missing side means the pair is not trustworthy; render a single dash.
+function pairOrDash(away: string, home: string) {
+  if (away === "—" || home === "—") return "—";
+  return `${away} / ${home}`;
 }

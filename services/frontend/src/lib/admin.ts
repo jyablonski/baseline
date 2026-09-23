@@ -36,7 +36,8 @@ export type SourceHealth = {
   started_at: string | null;
   finished_at: string | null;
   last_success_at: string | null;
-  runs_since_success: number;
+  /** Most recent attempted runs in a row that failed or returned below expectation. */
+  unhealthy_streak: number;
 };
 
 export type TableFreshness = {
@@ -73,6 +74,7 @@ export type PipelineRun = {
   reddit_ran: boolean | null;
   reddit_exit: number | null;
   dbt_exit: number | null;
+  ml_exit: number | null;
   detail: string | null;
   started_at: string | null;
   finished_at: string | null;

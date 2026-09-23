@@ -6,7 +6,9 @@ import {
   formatBirthDate,
   formatDate,
   formatGamesBack,
+  formatMoneyline,
   formatNumber,
+  formatProbability,
   formatScrapedAt,
   formatSignedMargin,
   formatStat,
@@ -17,6 +19,7 @@ import {
   formatRecord,
   formatRecordWithWinPct,
   formatSeasonType,
+  formatSpread,
   formatWinPct,
   formatWinPctPlain,
   teamCentricMargin,
@@ -178,5 +181,22 @@ describe("format helpers", () => {
         over_second_apron: false,
       })
     ).toBe("Over tax · over 1st apron · under 2nd apron");
+  });
+});
+
+describe("odds and probability formatters", () => {
+  it("formats probabilities as whole percents and dashes nulls", () => {
+    expect(formatProbability(0.623)).toBe("62%");
+    expect(formatProbability(null)).toBe("—");
+  });
+
+  it("signs moneylines and spreads", () => {
+    expect(formatMoneyline(130)).toBe("+130");
+    expect(formatMoneyline(-150)).toBe("-150");
+    expect(formatMoneyline(null)).toBe("—");
+    expect(formatSpread(-3.5)).toBe("-3.5");
+    expect(formatSpread(4)).toBe("+4.0");
+    expect(formatSpread(0)).toBe("PK");
+    expect(formatSpread(undefined)).toBe("—");
   });
 });

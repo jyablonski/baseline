@@ -2,14 +2,15 @@
 
 Requires ``ODDS_API_KEY``. Unset or empty skips HTTP and returns 0 (same
 pattern as ``SLACK_WEBHOOK_URL``). Does not scrape bookmaker HTML.
-Historical odds backfill is out of scope.
+Historical odds backfill is out of scope, but history accrues from here on:
+each game keeps the last line captured before tip-off.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlencode
 from uuid import UUID
@@ -259,15 +260,24 @@ def scrape_odds(
     *,
     api_key: str | None = None,
     fetch_events: Callable[[str], Any] | None = None,
+    now: datetime | None = None,
 ) -> int:
-    """Upsert the current upcoming odds slate. Returns 0 and skips HTTP if no key."""
+    """Upsert the current upcoming odds slate. Returns 0 and skips HTTP if no key.
+
+    Rows already stored for started games are left alone: they hold the last
+    pregame line and are the history ``fct_game_upsets`` is built from.
+    """
     key = api_key if api_key is not None else settings.odds_api_key
     if not key:
         logger.info("ODDS_API_KEY unset; skipping odds scrape")
         return 0
 
     payload = fetch_events(key) if fetch_events is not None else odds_get(key)
-    rows = parse_odds_events(payload)
+    # commence_time is naive UTC (see parse_commence_time).
+    now_utc = now or datetime.now(UTC).replace(tzinfo=None)
+    # The feed also carries in-play events at live prices; upserting those
+    # would overwrite the pregame line on the same (event, book, market) key.
+    rows = [row for row in parse_odds_events(payload) if row["commence_time"] > now_utc]
     scraped_at = datetime.now()
     with get_session() as session:
         teams_by_name, games = _load_team_and_game_lookup(session)
@@ -280,9 +290,12 @@ def scrape_odds(
             rows,
             ["odds_event_id", "bookmaker", "market"],
         )
-        session.execute(DELETE_STALE_GAME_ODDS, {"scraped_at": scraped_at})
+        session.execute(
+            DELETE_STALE_GAME_ODDS,
+            {"scraped_at": scraped_at, "now_utc": now_utc},
+        )
         session.commit()
-    logger.info("Upserted %s current odds rows from The Odds API", written)
+    logger.info("Upserted %s pregame odds rows from The Odds API", written)
     return written
 
 

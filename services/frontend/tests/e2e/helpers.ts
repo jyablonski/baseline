@@ -598,9 +598,42 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                   away_team_abbreviation: "LAL",
                   arena: "Chase Center",
                   arena_city: "San Francisco",
+                  prediction_model_version: "elo-v0",
+                  home_win_probability: 0.62,
+                  away_win_probability: 0.38,
+                  home_moneyline: -150,
+                  away_moneyline: 130,
+                  home_spread: -3.5,
                 },
               ],
           meta: { total: empty ? 0 : 1, limit: 50, offset: 0 },
+        });
+      }
+
+      if (url.includes("/predictions/scorecard")) {
+        return json({
+          data: {
+            champion_model_version: empty ? null : "elo-v0",
+            rows: empty
+              ? []
+              : [
+                  {
+                    season: "2025-26",
+                    model_name: "elo",
+                    model_version: "elo-v0",
+                    is_champion: true,
+                    n: 1230,
+                    logloss: 0.651,
+                    brier: 0.228,
+                    accuracy: 0.641,
+                    home_always_accuracy: 0.552,
+                    calibration_error: 0.031,
+                    market_n: 900,
+                    market_logloss: 0.62,
+                    market_brier: 0.213,
+                  },
+                ],
+          },
         });
       }
 

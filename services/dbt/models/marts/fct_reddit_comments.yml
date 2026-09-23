@@ -5,7 +5,7 @@ models:
     description: >
       Thin gold copy of PRAW comments. Unique on reddit_id.
       post_reddit_id associates the comment to fct_reddit_posts.
-      Queryable via Cube / MCP; no Courtline page.
+      Queryable via Cube / MCP.
     columns:
       - name: reddit_id
         data_tests:

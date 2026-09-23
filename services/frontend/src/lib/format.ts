@@ -185,6 +185,20 @@ export function formatSignedMargin(value: number | null | undefined, digits?: nu
   return formatted;
 }
 
+export function formatProbability(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return "—";
+  return `${Math.round(value * 100)}%`;
+}
+
+export function formatMoneyline(value: number | null | undefined) {
+  return formatSignedMargin(value);
+}
+
+export function formatSpread(value: number | null | undefined) {
+  if (value === 0) return "PK";
+  return formatSignedMargin(value, 1);
+}
+
 export function formatBirthDate(value: string | null | undefined) {
   if (!value) return null;
   const date = new Date(value);

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import date
 
 import click
-from notify import SyncAlert
+from notify import SyncAlert, format_stage_failure_text, post_webhook_text
 from pipeline import (
     load_config,
     mark_scrape_success,
@@ -14,6 +15,7 @@ from pipeline import (
     run_pipeline_scrape,
     set_enabled,
     update_run_dbt_exit,
+    update_run_ml_exit,
 )
 
 from config import RedditConfigError
@@ -415,14 +417,49 @@ def pipeline_run_once_cmd(force: bool) -> None:
         raise SystemExit(int(result["scrape_exit"]))
 
 
+_NOTIFY_OPTION = click.option(
+    "--notify/--no-notify",
+    default=False,
+    help="Post one Slack alert (SLACK_WEBHOOK_URL) when the exit code is non-zero.",
+)
+
+
+def _record_stage(
+    stage: str,
+    run_id: int,
+    exit_code: int,
+    detail: str | None,
+    *,
+    notify: bool,
+    record: Callable[..., None],
+) -> None:
+    # Alert before recording: if the database is what broke the stage, the
+    # bookkeeping write fails too, and the alert is the part that must land.
+    if notify and exit_code != 0:
+        post_webhook_text(format_stage_failure_text(stage, exit_code, run_id=run_id, detail=detail))
+    record(run_id, exit_code, detail=detail)
+
+
 @pipeline_group.command("mark-dbt")
 @click.option("--run-id", required=True, type=int)
 @click.option("--dbt-exit", required=True, type=int)
 @click.option("--detail", default=None)
-def pipeline_mark_dbt_cmd(run_id: int, dbt_exit: int, detail: str | None) -> None:
+@_NOTIFY_OPTION
+def pipeline_mark_dbt_cmd(run_id: int, dbt_exit: int, detail: str | None, notify: bool) -> None:
     """Record dbt exit code onto an existing source.pipeline_runs row."""
-    update_run_dbt_exit(run_id, dbt_exit, detail=detail)
+    _record_stage("dbt build", run_id, dbt_exit, detail, notify=notify, record=update_run_dbt_exit)
     click.echo(f"Updated run_id={run_id} dbt_exit={dbt_exit}")
+
+
+@pipeline_group.command("mark-ml")
+@click.option("--run-id", required=True, type=int)
+@click.option("--ml-exit", required=True, type=int)
+@click.option("--detail", default=None)
+@_NOTIFY_OPTION
+def pipeline_mark_ml_cmd(run_id: int, ml_exit: int, detail: str | None, notify: bool) -> None:
+    """Record the ml stage (score + gold copy) exit code onto a source.pipeline_runs row."""
+    _record_stage("ml", run_id, ml_exit, detail, notify=notify, record=update_run_ml_exit)
+    click.echo(f"Updated run_id={run_id} ml_exit={ml_exit}")
 
 
 @pipeline_group.command("record-dbt")

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -671,10 +671,22 @@ def player_injuries_query(
     }
 
 
-def game_odds_query(game_id: UUID | None = None, limit: int = 100) -> dict[str, Any]:
+def game_odds_query(
+    game_id: UUID | None = None,
+    limit: int = 100,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     filters: list[dict[str, Any]] = []
     if game_id:
         filters.append(equals("game_odds.game_id", game_id))
+    else:
+        # game_odds keeps each played game's last pregame line as history, so
+        # the unfiltered slate has to be bounded to games that have not tipped.
+        # commence_time is naive UTC.
+        cutoff = (now or datetime.now(UTC)).strftime("%Y-%m-%dT%H:%M:%S")
+        filters.append(
+            {"member": "game_odds.commence_time", "operator": "afterDate", "values": [cutoff]}
+        )
     return {
         "dimensions": list(GAME_ODDS_DIMENSIONS),
         "filters": filters,

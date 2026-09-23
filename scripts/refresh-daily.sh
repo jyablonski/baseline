@@ -24,8 +24,11 @@
 # `cron` yourself after `make pipeline-enable`.
 #
 # Optional SLACK_WEBHOOK_URL is inherited from the host / compose `.env` (scraper env_file).
-# The scrape sync posts at most one failure alert; this script does not add its own HTTP.
-# ML failure fails the job (same as dbt): no extra Slack webhook.
+# At most one Slack post per failed refresh: the scrape sync posts its own, and
+# a failed scrape exits before dbt. A dbt or ml failure posts once through the
+# scraper's `pipeline mark-dbt|mark-ml --notify`, which also records the exit
+# code on the run row. dbt failing stops the refresh before ml, so those two
+# never stack either.
 
 set -euo pipefail
 
@@ -132,7 +135,7 @@ set -e
 
 if [[ -n "$RUN_ID" ]]; then
   DETAIL="dbt finished with exit ${DBT_EXIT}"
-  compose_run scraper python -m main pipeline mark-dbt \
+  compose_run scraper python -m main pipeline mark-dbt --notify \
     --run-id "$RUN_ID" --dbt-exit "$DBT_EXIT" --detail "$DETAIL" >/dev/null || true
 fi
 
@@ -141,11 +144,31 @@ if [[ "$DBT_EXIT" -ne 0 ]]; then
   exit "$DBT_EXIT"
 fi
 
+# The ml stage is scoring plus the gold copy, the same pair `make ml` runs.
+# ML_STEP names whichever half failed so the alert points at the right one.
+set +e
 echo "==> ml score (Elo + logit pregame)"
 compose_run ml python -m main score
+ML_EXIT=$?
+ML_STEP="ml score"
+if [[ "$ML_EXIT" -eq 0 ]]; then
+  echo "==> dbt copy source.game_predictions → gold.fct_game_predictions"
+  compose_run dbt sh -c \
+    'dbt deps --profiles-dir . && dbt run --profiles-dir . --select stg_game_predictions+'
+  ML_EXIT=$?
+  ML_STEP="dbt predictions copy"
+fi
+set -e
 
-echo "==> dbt copy source.game_predictions → gold.fct_game_predictions"
-compose_run dbt sh -c \
-  'dbt deps --profiles-dir . && dbt run --profiles-dir . --select stg_game_predictions+'
+if [[ -n "$RUN_ID" ]]; then
+  compose_run scraper python -m main pipeline mark-ml --notify \
+    --run-id "$RUN_ID" --ml-exit "$ML_EXIT" --detail "${ML_STEP} finished with exit ${ML_EXIT}" \
+    >/dev/null || true
+fi
+
+if [[ "$ML_EXIT" -ne 0 ]]; then
+  echo "==> ${ML_STEP} failed (exit ${ML_EXIT})"
+  exit "$ML_EXIT"
+fi
 
 echo "==> refresh-daily complete (run_id=${RUN_ID})"
