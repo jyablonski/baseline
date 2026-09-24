@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { allowedLogins, isAllowedLogin } from "@/lib/admin-access";
+import { adminJobsEnabled, allowedLogins, isAllowedLogin } from "@/lib/admin-access";
 
 describe("admin allowlist", () => {
   it("fails closed when ADMIN_GITHUB_LOGINS is unset or empty", () => {
@@ -35,5 +35,15 @@ describe("admin allowlist", () => {
   it("parses a comma separated list", () => {
     expect(allowedLogins("a, B ,,c")).toEqual(["a", "b", "c"]);
     expect(allowedLogins(undefined)).toEqual([]);
+  });
+});
+
+describe("adminJobsEnabled", () => {
+  it("is off unless explicitly set to true", () => {
+    expect(adminJobsEnabled(undefined)).toBe(false);
+    expect(adminJobsEnabled("")).toBe(false);
+    expect(adminJobsEnabled("1")).toBe(false);
+    expect(adminJobsEnabled("false")).toBe(false);
+    expect(adminJobsEnabled("true")).toBe(true);
   });
 });

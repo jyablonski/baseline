@@ -38,30 +38,44 @@ function JobButton({ type, label, disabled }: { type: JobType; label: string; di
   );
 }
 
-export function JobButtons({ hasPendingJob }: { hasPendingJob: boolean }) {
+export function JobButtons({
+  hasPendingJob,
+  enabled,
+}: {
+  hasPendingJob: boolean;
+  enabled: boolean;
+}) {
   const [state, formAction] = useActionState<JobActionState, FormData>(requestJobAction, null);
   const router = useRouter();
 
   // Jobs are picked up by a host runner up to a minute later and then take
   // minutes to finish. Without this the page would sit stale until a manual
-  // reload, which is the opposite of an at-a-glance view.
+  // reload, which is the opposite of an at-a-glance view. With jobs disabled
+  // there is no runner, so a pending job never moves and polling would spin.
   useEffect(() => {
-    if (!hasPendingJob) return;
+    if (!hasPendingJob || !enabled) return;
     const timer = setInterval(() => router.refresh(), POLL_MS);
     return () => clearInterval(timer);
-  }, [hasPendingJob, router]);
+  }, [hasPendingJob, enabled, router]);
 
   return (
     <div className="space-y-3">
       <form action={formAction} className="flex flex-wrap gap-2">
         {JOBS.map((job) => (
-          <JobButton key={job.type} type={job.type} label={job.label} disabled={hasPendingJob} />
+          <JobButton
+            key={job.type}
+            type={job.type}
+            label={job.label}
+            disabled={!enabled || hasPendingJob}
+          />
         ))}
       </form>
       <p className="text-xs text-muted-foreground">
-        {hasPendingJob
-          ? "A job is queued or running. This page refreshes itself until it finishes."
-          : "Jobs start within about a minute. Only one runs at a time, and a job never overlaps the daily refresh."}
+        {!enabled
+          ? "Jobs are disabled here: only production runs queued jobs. Run the equivalent make target locally instead."
+          : hasPendingJob
+            ? "A job is queued or running. This page refreshes itself until it finishes."
+            : "Jobs start within about a minute. Only one runs at a time, and a job never overlaps the daily refresh."}
       </p>
       {state ? (
         <p

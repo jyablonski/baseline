@@ -31,7 +31,7 @@ describe("JobButtons", () => {
   });
 
   it("offers one enabled button per job type when nothing is running", () => {
-    render(<JobButtons hasPendingJob={false} />);
+    render(<JobButtons hasPendingJob={false} enabled />);
     for (const label of JOB_LABELS) {
       expect(screen.getByRole("button", { name: label })).toBeEnabled();
     }
@@ -39,15 +39,26 @@ describe("JobButtons", () => {
   });
 
   it("disables every button while a job is queued or running", () => {
-    render(<JobButtons hasPendingJob />);
+    render(<JobButtons hasPendingJob enabled />);
     for (const label of JOB_LABELS) {
       expect(screen.getByRole("button", { name: label })).toBeDisabled();
     }
     expect(screen.getByText(/This page refreshes itself until it finishes/)).toBeInTheDocument();
   });
 
+  it("disables every button and skips polling when jobs are disabled", () => {
+    vi.useFakeTimers();
+    render(<JobButtons hasPendingJob enabled={false} />);
+    for (const label of JOB_LABELS) {
+      expect(screen.getByRole("button", { name: label })).toBeDisabled();
+    }
+    expect(screen.getByText(/only production runs queued jobs/)).toBeInTheDocument();
+    vi.advanceTimersByTime(30_000);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it("submits the job type as the button value", () => {
-    render(<JobButtons hasPendingJob={false} />);
+    render(<JobButtons hasPendingJob={false} enabled />);
     const button = screen.getByRole("button", { name: "Re-run dbt" });
     // The server action reads this field, so the name/value pair is the contract.
     expect(button).toHaveAttribute("name", "job_type");
@@ -56,7 +67,7 @@ describe("JobButtons", () => {
 
   it("polls for a fresh page only while a job is pending", () => {
     vi.useFakeTimers();
-    const { unmount, rerender } = render(<JobButtons hasPendingJob />);
+    const { unmount, rerender } = render(<JobButtons hasPendingJob enabled />);
     expect(refresh).not.toHaveBeenCalled();
     vi.advanceTimersByTime(10_000);
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -64,7 +75,7 @@ describe("JobButtons", () => {
     expect(refresh).toHaveBeenCalledTimes(3);
 
     // Once the job finishes the page must stop refreshing itself.
-    rerender(<JobButtons hasPendingJob={false} />);
+    rerender(<JobButtons hasPendingJob={false} enabled />);
     vi.advanceTimersByTime(30_000);
     expect(refresh).toHaveBeenCalledTimes(3);
     unmount();
@@ -72,7 +83,7 @@ describe("JobButtons", () => {
 
   it("clears its interval on unmount", () => {
     vi.useFakeTimers();
-    const { unmount } = render(<JobButtons hasPendingJob />);
+    const { unmount } = render(<JobButtons hasPendingJob enabled />);
     unmount();
     vi.advanceTimersByTime(30_000);
     expect(refresh).not.toHaveBeenCalled();
@@ -80,12 +91,12 @@ describe("JobButtons", () => {
 
   it("reports a queued job and flags a failure differently", () => {
     actionState.current = { ok: true, message: "Queued dbt as job #12." };
-    const { unmount } = render(<JobButtons hasPendingJob={false} />);
+    const { unmount } = render(<JobButtons hasPendingJob={false} enabled />);
     expect(screen.getByText("Queued dbt as job #12.")).not.toHaveClass("text-destructive");
     unmount();
 
     actionState.current = { ok: false, message: "A job is already running." };
-    render(<JobButtons hasPendingJob={false} />);
+    render(<JobButtons hasPendingJob={false} enabled />);
     expect(screen.getByText("A job is already running.")).toHaveClass("text-destructive");
   });
 });

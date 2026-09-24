@@ -35,6 +35,8 @@ services:
         NEXT_PUBLIC_GIT_SHA: ${GIT_SHA:-dev}
     environment:
       NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-https://baseline.jyablonski.dev}
+      # Only prod has a runner draining source.admin_jobs (cron -> prod-admin-jobs).
+      ADMIN_JOBS_ENABLED: "true"
 
   # Base compose bind-mounts host code for local `compose run`. Runtime
   # images must stay baked; `!reset` (not a bare `[]`) drops the merge.

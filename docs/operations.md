@@ -116,6 +116,8 @@ What the runner guarantees:
 - **Never overlaps the daily refresh** — it shares the same `flock`. A busy lock re-queues the job rather than failing it.
 - **Abandoned jobs are reaped.** A runner killed mid-job would otherwise leave its row `running` forever, wedging the queue. Before claiming, it fails any `running` row whose lock is free and older than `STALE_JOB_GRACE` (default 5 minutes).
 
+The buttons only work on the prod overlay, which sets `ADMIN_JOBS_ENABLED=true` on the frontend. Anywhere else (Tilt, `make up`) they are disabled and the server action refuses to queue: nothing drains the queue locally, and the runner only maps jobs to `prod-*` targets. Run `make scrape` / `make dbt` / `make ml` / `make refresh-daily-once` directly instead.
+
 `make test-admin-jobs` covers all of this against a real Postgres; CI runs it in its own Compose project.
 
 **Deploys are deliberately not a button.** CI runs `make prod-deploy` on push to `main` and `workflow_dispatch` is enabled, so a redeploy is one click in the Actions tab — no SSH, no extra code.
