@@ -18,7 +18,7 @@ import {
 import { SignOutButton } from "@/components/admin/sign-out-button";
 import { JobButtons } from "@/components/admin/job-buttons";
 import { auth } from "@/auth";
-import { isAllowedLogin } from "@/lib/admin-access";
+import { adminJobsEnabled, isAllowedLogin } from "@/lib/admin-access";
 import { redirect } from "next/navigation";
 
 // Operational data: never statically rendered, never cached.
@@ -123,7 +123,7 @@ export default async function AdminPage() {
           <CardTitle>Actions</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <JobButtons hasPendingJob={hasPendingJob} />
+          <JobButtons hasPendingJob={hasPendingJob} enabled={adminJobsEnabled()} />
           {jobs.length > 0 ? (
             <AdminTable>
               <TableHeader>

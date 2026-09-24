@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { AdminApiError, enqueueAdminJob, isJobType } from "@/lib/admin";
-import { isAllowedLogin } from "@/lib/admin-access";
+import { adminJobsEnabled, isAllowedLogin } from "@/lib/admin-access";
 
 export type JobActionState = { ok: boolean; message: string } | null;
 
@@ -25,6 +25,9 @@ export async function requestJobAction(
   const login = session?.user?.login;
   if (!isAllowedLogin(login)) {
     return { ok: false, message: "Not authorised." };
+  }
+  if (!adminJobsEnabled()) {
+    return { ok: false, message: "Jobs are disabled on this deployment." };
   }
 
   const jobType = formData.get("job_type");

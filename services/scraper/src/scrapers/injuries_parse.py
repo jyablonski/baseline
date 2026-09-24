@@ -230,7 +230,10 @@ def parse_injuries_html(html: str, *, source_url: str = INJURIES_URL) -> list[di
             update_raw = None
             if isinstance(update_cell, Tag):
                 update_raw = update_cell.get("csk") or update_cell.get_text(strip=True)
-            injury_cell = row.find(["th", "td"], attrs={"data-stat": "injury"})  # ty: ignore[unresolved-attribute]
+            # BRef renamed this column from "injury" to "note" (Sep 2026); keep both.
+            injury_cell = row.find(["th", "td"], attrs={"data-stat": "note"})  # ty: ignore[unresolved-attribute]
+            if not isinstance(injury_cell, Tag):
+                injury_cell = row.find(["th", "td"], attrs={"data-stat": "injury"})  # ty: ignore[unresolved-attribute]
             description = (
                 injury_cell.get_text(" ", strip=True) if isinstance(injury_cell, Tag) else ""
             )

@@ -33,6 +33,7 @@ describe("requestJobAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("ADMIN_GITHUB_LOGINS", "allowed-user");
+    vi.stubEnv("ADMIN_JOBS_ENABLED", "true");
     session.current = { user: { login: "allowed-user" } };
   });
 
@@ -48,6 +49,15 @@ describe("requestJobAction", () => {
   it("refuses a signed-in caller who is not on the allowlist", async () => {
     session.current = { user: { login: "stranger" } };
     await expect(requestJobAction(null, form("refresh"))).resolves.toMatchObject({ ok: false });
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("refuses to queue when jobs are disabled, since nothing would run them", async () => {
+    vi.stubEnv("ADMIN_JOBS_ENABLED", "");
+    await expect(requestJobAction(null, form("refresh"))).resolves.toEqual({
+      ok: false,
+      message: "Jobs are disabled on this deployment.",
+    });
     expect(enqueue).not.toHaveBeenCalled();
   });
 

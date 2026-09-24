@@ -24,3 +24,12 @@ export function isAllowedLogin(
   if (allowed.length === 0) return false;
   return allowed.includes(login.toLowerCase());
 }
+
+/**
+ * Whether the job buttons may queue work. Only the prod overlay sets this:
+ * elsewhere nothing drains source.admin_jobs, and the runner only knows prod
+ * targets, so a queued job would sit there and block the queue.
+ */
+export function adminJobsEnabled(raw = process.env.ADMIN_JOBS_ENABLED): boolean {
+  return raw === "true";
+}
