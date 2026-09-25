@@ -63,6 +63,8 @@ class DbtStatus(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     last_dbt_exit: int | None = None
+    # Null when the last build passed; empty when it failed before naming a node.
+    last_dbt_failed_nodes: list[str] | None = None
     last_dbt_run_at: datetime | None = None
     last_dbt_run_id: int | None = None
     gold_tables: list[GoldTable] = []
@@ -91,11 +93,90 @@ class PipelineRun(BaseModel):
     reddit_ran: bool | None = None
     reddit_exit: int | None = None
     dbt_exit: int | None = None
+    dbt_failed_nodes: list[str] | None = None
     ml_exit: int | None = None
     detail: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     duration_seconds: float | None = None
+
+
+# Host snapshot payload, as written by scripts/host-snapshot.py. Every field is
+# optional: the JSON comes from a script on the host that can be older or newer
+# than this API, and a missing key must degrade one cell, not 500 the page.
+class HostStats(BaseModel):
+    mem_total_bytes: int | None = None
+    mem_available_bytes: int | None = None
+    swap_total_bytes: int | None = None
+    swap_free_bytes: int | None = None
+    load_1m: float | None = None
+    load_5m: float | None = None
+    load_15m: float | None = None
+    cpu_count: int | None = None
+    uptime_seconds: int | None = None
+    disk_total_bytes: int | None = None
+    disk_used_bytes: int | None = None
+
+
+class ContainerStats(BaseModel):
+    name: str
+    service: str | None = None
+    oneoff: bool = False
+    status: str | None = None
+    health: str | None = None
+    exit_code: int | None = None
+    oom_killed: bool = False
+    restart_count: int = 0
+    started_at: datetime | None = None
+    mem_used_bytes: int | None = None
+    mem_limit_bytes: int | None = None
+    cpu_percent: float | None = None
+    pids: int | None = None
+
+
+class ConnectionPeer(BaseModel):
+    address: str
+    connections: int
+
+
+class ServiceConnections(BaseModel):
+    service: str
+    ports: list[int] = []
+    established: int = 0
+    distinct_peers: int = 0
+    top_peers: list[ConnectionPeer] = []
+
+
+class HostSnapshot(BaseModel):
+    captured_at: datetime
+    host: HostStats | None = None
+    containers: list[ContainerStats] = []
+    connections: list[ServiceConnections] = []
+    errors: list[str] = []
+
+
+class DbConnectionGroup(BaseModel):
+    user_name: str | None = None
+    application_name: str
+    client_addr: str | None = None
+    is_external: bool = False
+    state: str
+    connections: int
+    oldest_connected_at: datetime | None = None
+    longest_active_seconds: float | None = None
+
+
+class DatabaseDiagnostics(BaseModel):
+    max_connections: int
+    total_connections: int
+    database_size_bytes: int
+    connections: list[DbConnectionGroup] = []
+
+
+class Diagnostics(BaseModel):
+    # None until the host runner has recorded its first snapshot.
+    snapshot: HostSnapshot | None = None
+    database: DatabaseDiagnostics
 
 
 # Mirrors the admin_jobs_job_type_check constraint. Kept as a Literal so an
@@ -135,4 +216,6 @@ class AdminHealth(BaseModel):
     dbt: DbtStatus
     ml: list[ModelStatus]
     recent_runs: list[PipelineRun]
+    recent_runs_total: int = 0
     jobs: list[AdminJob] = []
+    diagnostics: Diagnostics

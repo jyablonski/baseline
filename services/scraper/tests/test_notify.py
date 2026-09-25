@@ -381,7 +381,9 @@ def test_mark_stage_notifies_only_on_failure_with_flag(
 ) -> None:
     recorded: list[tuple] = []
     texts: list[str] = []
-    monkeypatch.setattr(recorder, lambda run_id, code, detail=None: recorded.append((run_id, code)))
+    monkeypatch.setattr(
+        recorder, lambda run_id, code, detail=None, **_: recorded.append((run_id, code))
+    )
     monkeypatch.setattr("main.post_webhook_text", lambda text: texts.append(text))
     runner = CliRunner()
 
@@ -416,3 +418,35 @@ def test_mark_stage_alerts_even_when_recording_fails(monkeypatch: pytest.MonkeyP
     )
     assert result.exit_code != 0
     assert len(texts) == 1
+
+
+@pytest.mark.unit
+def test_dbt_failed_nodes_are_recorded_only_for_a_failed_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marked: list = []
+    logged: list = []
+    monkeypatch.setattr(
+        "main.update_run_dbt_exit",
+        lambda run_id, code, detail=None, failed_nodes=None: marked.append(failed_nodes),
+    )
+    monkeypatch.setattr(
+        "main.record_dbt_only_run",
+        lambda code, detail=None, failed_nodes=None: logged.append(failed_nodes) or 1,
+    )
+    runner = CliRunner()
+    nodes = ["--failed-node", "model fct_x", "--failed-node", "test not_null_x"]
+
+    for exit_code in ("1", "0"):
+        marked_result = runner.invoke(
+            cli, ["pipeline", "mark-dbt", "--run-id", "5", "--dbt-exit", exit_code, *nodes]
+        )
+        assert marked_result.exit_code == 0, marked_result.output
+        logged_result = runner.invoke(
+            cli, ["pipeline", "record-dbt", "--dbt-exit", exit_code, *nodes]
+        )
+        assert logged_result.exit_code == 0, logged_result.output
+
+    # A passing build must clear the list rather than carry a stale one.
+    assert marked == [["model fct_x", "test not_null_x"], None]
+    assert logged == [["model fct_x", "test not_null_x"], None]

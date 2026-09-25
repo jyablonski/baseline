@@ -644,3 +644,35 @@ def test_ml_exit_is_recorded_and_fails_the_run(db_session_factory) -> None:
     assert row.status == "failed"
     assert row.ml_exit == 1
     assert row.detail == "scraped | ml score finished with exit 1"
+
+
+@pytest.mark.integration
+def test_dbt_failed_nodes_round_trip_and_clear_on_success(db_session_factory) -> None:
+    from pipeline import record_dbt_only_run, update_run_dbt_exit
+
+    with get_session() as session:
+        run_id = start_run(session, triggered_by="cron", scrape_action="daily")
+        finish_run(session, run_id, status="success", scrape_exit=0, detail="scraped")
+    update_run_dbt_exit(run_id, 1, failed_nodes=["model fct_x", "test not_null_fct_x_id"])
+    standalone = record_dbt_only_run(0, detail="make dbt", failed_nodes=None)
+    # dbt died before reporting a node: failed, but nothing to name.
+    unparsed = record_dbt_only_run(2, detail="make dbt", failed_nodes=[])
+
+    with db_session_factory() as session:
+        nodes = dict(
+            session.execute(
+                text(
+                    """
+                    SELECT
+                        pipeline_runs.run_id,
+                        pipeline_runs.dbt_failed_nodes
+                    FROM source.pipeline_runs
+                    WHERE pipeline_runs.run_id IN (:a, :b, :c)
+                    """
+                ),
+                {"a": run_id, "b": standalone, "c": unparsed},
+            ).all()
+        )
+    assert nodes[run_id] == ["model fct_x", "test not_null_fct_x_id"]
+    assert nodes[standalone] is None
+    assert nodes[unparsed] == []

@@ -366,9 +366,11 @@ def test_admin_health_against_real_schema(integration_client, postgres_engine) -
             text(
                 """
                 INSERT INTO source.pipeline_runs
-                    (triggered_by, status, scrape_action, scrape_exit, dbt_exit, started_at,
-                     finished_at)
-                VALUES ('cron', 'success', 'daily+reddit', 0, 0, now() - interval '1 hour', now())
+                    (triggered_by, status, scrape_action, scrape_exit, dbt_exit, dbt_failed_nodes,
+                     started_at, finished_at)
+                VALUES ('cron', 'failed', 'daily+reddit', 0, 1,
+                        ARRAY['model fct_x', 'test not_null_fct_x_id'],
+                        now() - interval '1 hour', now())
                 RETURNING run_id
                 """
             )
@@ -412,6 +414,24 @@ def test_admin_health_against_real_schema(integration_client, postgres_engine) -
             ),
             {"run_id": run_id, "previous_run_id": previous_run_id},
         )
+        conn.execute(text("DELETE FROM source.host_snapshots"))
+        conn.execute(
+            text(
+                """
+                INSERT INTO source.host_snapshots (captured_at, payload)
+                VALUES
+                    (now() - interval '10 minutes', '{"host": {"mem_total_bytes": 1}}'),
+                    (now(), CAST(:payload AS jsonb))
+                """
+            ),
+            {
+                "payload": (
+                    '{"host": {"mem_total_bytes": 24000000000, "mem_available_bytes": 19000000000},'
+                    ' "containers": [{"name": "nba-postgres-1", "mem_used_bytes": 304000000}],'
+                    ' "connections": [], "errors": []}'
+                )
+            },
+        )
 
     response = integration_client.get(
         "/api/v1/admin/health", headers={"Authorization": f"Bearer {token}"}
@@ -448,7 +468,8 @@ def test_admin_health_against_real_schema(integration_client, postgres_engine) -
     tables = {row["table_name"] for row in body["freshness"]}
     assert {"games", "play_by_play", "player_injuries", "reddit_posts"} <= tables
 
-    assert body["dbt"]["last_dbt_exit"] == 0
+    assert body["dbt"]["last_dbt_exit"] == 1
+    assert body["dbt"]["last_dbt_failed_nodes"] == ["model fct_x", "test not_null_fct_x_id"]
     assert body["dbt"]["last_dbt_run_id"] == run_id
     # Catalog-driven, so this works whether or not dbt has ever run here.
     assert isinstance(body["dbt"]["gold_tables"], list)
@@ -457,6 +478,29 @@ def test_admin_health_against_real_schema(integration_client, postgres_engine) -
     latest_run = next(run for run in body["recent_runs"] if run["run_id"] == run_id)
     # Stays null until refresh-daily's ml stage records onto the row.
     assert latest_run["ml_exit"] is None
+    assert latest_run["dbt_failed_nodes"] == ["model fct_x", "test not_null_fct_x_id"]
+    assert body["recent_runs_total"] >= 2
+
+    # Newest-first paging: page two of size one is the older seeded run.
+    paged = integration_client.get(
+        "/api/v1/admin/health?run_limit=1&run_offset=1",
+        headers={"Authorization": f"Bearer {token}"},
+    ).json()["data"]
+    assert [run["run_id"] for run in paged["recent_runs"]] == [previous_run_id]
+    assert paged["recent_runs_total"] == body["recent_runs_total"]
+
+    snapshot = body["diagnostics"]["snapshot"]
+    # Newest row wins, and keys the payload lacks come back null.
+    assert snapshot["host"]["mem_available_bytes"] == 19_000_000_000
+    assert snapshot["host"]["swap_total_bytes"] is None
+    assert snapshot["containers"][0]["name"] == "nba-postgres-1"
+    database = body["diagnostics"]["database"]
+    assert database["max_connections"] > 0
+    assert database["database_size_bytes"] > 0
+    # At least this request's own backend, which the grouped list leaves out.
+    assert database["total_connections"] >= 1
+    # Testcontainers connects over the Docker bridge, which is private.
+    assert all(not group["is_external"] for group in database["connections"])
 
 
 @pytest.mark.integration

@@ -50,6 +50,8 @@ export type GoldTable = { table_name: string; row_count: number };
 
 export type DbtStatus = {
   last_dbt_exit: number | null;
+  /** Null when the last build passed; empty when it failed before naming a node. */
+  last_dbt_failed_nodes: string[] | null;
   last_dbt_run_at: string | null;
   last_dbt_run_id: number | null;
   gold_tables: GoldTable[];
@@ -74,6 +76,7 @@ export type PipelineRun = {
   reddit_ran: boolean | null;
   reddit_exit: number | null;
   dbt_exit: number | null;
+  dbt_failed_nodes: string[] | null;
   ml_exit: number | null;
   detail: string | null;
   started_at: string | null;
@@ -101,6 +104,79 @@ export type AdminJob = {
   finished_at: string | null;
 };
 
+/** Host-wide numbers from the VM itself, not any one container. */
+export type HostStats = {
+  mem_total_bytes: number | null;
+  mem_available_bytes: number | null;
+  swap_total_bytes: number | null;
+  swap_free_bytes: number | null;
+  load_1m: number | null;
+  load_5m: number | null;
+  load_15m: number | null;
+  cpu_count: number | null;
+  uptime_seconds: number | null;
+  disk_total_bytes: number | null;
+  disk_used_bytes: number | null;
+};
+
+export type ContainerStats = {
+  name: string;
+  service: string | null;
+  /** A `compose run` container (scraper/dbt/ml mid-refresh), not a long-lived service. */
+  oneoff: boolean;
+  status: string | null;
+  health: string | null;
+  exit_code: number | null;
+  oom_killed: boolean;
+  restart_count: number;
+  started_at: string | null;
+  mem_used_bytes: number | null;
+  mem_limit_bytes: number | null;
+  cpu_percent: number | null;
+  pids: number | null;
+};
+
+export type ServiceConnections = {
+  service: string;
+  ports: number[];
+  established: number;
+  distinct_peers: number;
+  top_peers: { address: string; connections: number }[];
+};
+
+export type HostSnapshot = {
+  captured_at: string;
+  host: HostStats | null;
+  containers: ContainerStats[];
+  connections: ServiceConnections[];
+  errors: string[];
+};
+
+export type DbConnectionGroup = {
+  user_name: string | null;
+  application_name: string;
+  client_addr: string | null;
+  /** Outside loopback / private ranges, i.e. not another container. */
+  is_external: boolean;
+  state: string;
+  connections: number;
+  oldest_connected_at: string | null;
+  longest_active_seconds: number | null;
+};
+
+export type DatabaseDiagnostics = {
+  max_connections: number;
+  total_connections: number;
+  database_size_bytes: number;
+  connections: DbConnectionGroup[];
+};
+
+export type Diagnostics = {
+  /** Null until the host runner has recorded its first snapshot. */
+  snapshot: HostSnapshot | null;
+  database: DatabaseDiagnostics;
+};
+
 export type AdminHealth = {
   pipeline: PipelineGate;
   sources: SourceHealth[];
@@ -108,7 +184,9 @@ export type AdminHealth = {
   dbt: DbtStatus;
   ml: ModelStatus[];
   recent_runs: PipelineRun[];
+  recent_runs_total: number;
   jobs: AdminJob[];
+  diagnostics: Diagnostics;
 };
 
 export class AdminApiError extends Error {
@@ -135,13 +213,18 @@ function adminApiBase(): string {
   );
 }
 
-export async function fetchAdminHealth(): Promise<AdminHealth> {
+export async function fetchAdminHealth(
+  runs: { limit: number; offset: number } | null = null
+): Promise<AdminHealth> {
   const token = process.env.ADMIN_API_TOKEN;
   if (!token) {
     throw new AdminApiError("ADMIN_API_TOKEN is not set, so the admin API cannot be reached.", 503);
   }
 
-  const response = await fetch(`${adminApiBase()}/api/v1/admin/health`, {
+  const query = runs
+    ? `?${new URLSearchParams({ run_limit: String(runs.limit), run_offset: String(runs.offset) })}`
+    : "";
+  const response = await fetch(`${adminApiBase()}/api/v1/admin/health${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     // Operational data is worthless cached; always read through.
     cache: "no-store",

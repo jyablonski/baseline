@@ -7,16 +7,25 @@ import { AdminTable } from "@/components/admin/admin-table";
 import { AdminApiError, fetchAdminHealth } from "@/lib/admin";
 import {
   LEVEL_BADGE,
+  LEVEL_LABEL,
+  RUNS_PAGE_SIZE,
   dbtLevel,
   formatAge,
+  formatBytes,
   formatCount,
+  formatPercent,
   mlLevel,
   overallLevel,
+  parseRunsPage,
   pipelineLevel,
   sourceLevel,
+  vmLevel,
 } from "@/lib/admin-status";
 import { SignOutButton } from "@/components/admin/sign-out-button";
 import { JobButtons } from "@/components/admin/job-buttons";
+import { DbtBuildStatus } from "@/components/admin/dbt-build-status";
+import { RunsPager } from "@/components/admin/runs-pager";
+import { VmDiagnostics } from "@/components/admin/vm-diagnostics";
 import { auth } from "@/auth";
 import { adminJobsEnabled, isAllowedLogin } from "@/lib/admin-access";
 import { redirect } from "next/navigation";
@@ -27,14 +36,11 @@ export const revalidate = 0;
 
 export const metadata: Metadata = { title: "Admin" };
 
-const LEVEL_LABEL = {
-  ok: "Healthy",
-  warn: "Degraded",
-  bad: "Needs attention",
-  idle: "Idle",
-} as const;
-
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ runs?: string | string[] }>;
+}) {
   // Defence in depth: middleware already gates this route, but a page that
   // renders operational data should not depend on one matcher regex being
   // right. Cheap to re-check, expensive to get wrong.
@@ -43,9 +49,14 @@ export default async function AdminPage() {
     redirect("/admin/signin");
   }
 
+  const runsPage = parseRunsPage((await searchParams).runs);
+
   let health;
   try {
-    health = await fetchAdminHealth();
+    health = await fetchAdminHealth({
+      limit: RUNS_PAGE_SIZE,
+      offset: (runsPage - 1) * RUNS_PAGE_SIZE,
+    });
   } catch (error) {
     const message =
       error instanceof AdminApiError ? error.message : "Could not reach the admin API.";
@@ -69,7 +80,22 @@ export default async function AdminPage() {
   }
 
   const overall = overallLevel(health);
-  const { pipeline, dbt, ml, sources, freshness, recent_runs: runs, jobs } = health;
+  const {
+    pipeline,
+    dbt,
+    ml,
+    sources,
+    freshness,
+    recent_runs: runs,
+    recent_runs_total: runsTotal,
+    jobs,
+    diagnostics,
+  } = health;
+  const host = diagnostics.snapshot?.host ?? null;
+  const memUsed =
+    host?.mem_total_bytes != null && host.mem_available_bytes != null
+      ? host.mem_total_bytes - host.mem_available_bytes
+      : null;
   const hasPendingJob = jobs.some((job) => job.status === "queued" || job.status === "running");
 
   return (
@@ -81,7 +107,7 @@ export default async function AdminPage() {
           <CardTitle>System status</CardTitle>
           <Badge variant={LEVEL_BADGE[overall]}>{LEVEL_LABEL[overall]}</Badge>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-3">
+        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Metric
             label="Ingestion"
             level={pipelineLevel(health)}
@@ -115,8 +141,22 @@ export default async function AdminPage() {
                   )}`
             }
           />
+          <Metric
+            label="VM"
+            level={vmLevel(diagnostics)}
+            value={
+              host
+                ? `${formatPercent(memUsed, host.mem_total_bytes)} memory used`
+                : "no host snapshot"
+            }
+            hint={`${diagnostics.database.total_connections} db connections${
+              diagnostics.snapshot ? ` · ${formatAge(diagnostics.snapshot.captured_at)}` : ""
+            }${host ? ` · ${formatBytes(memUsed)} of ${formatBytes(host.mem_total_bytes)}` : ""}`}
+          />
         </CardContent>
       </Card>
+
+      <VmDiagnostics diagnostics={diagnostics} />
 
       <Card>
         <CardHeader>
@@ -270,36 +310,10 @@ export default async function AdminPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>dbt marts</CardTitle>
+            <CardTitle>dbt build</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              The exit code above comes from the last <em>pipeline</em> run. A standalone{" "}
-              <code>make dbt</code> does not record one, so it will not clear a stale failure — the
-              mart row counts below are the live signal.
-            </p>
-            {dbt.gold_tables.length === 0 ? (
-              <Empty>No gold tables yet — dbt has not built successfully here.</Empty>
-            ) : (
-              <AdminTable>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Mart</TableHead>
-                    <TableHead className="text-right">Rows (approx)</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {dbt.gold_tables.map((table) => (
-                    <TableRow key={table.table_name}>
-                      <TableCell className="font-medium">{table.table_name}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatCount(table.row_count)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </AdminTable>
-            )}
+          <CardContent>
+            <DbtBuildStatus dbt={dbt} />
           </CardContent>
         </Card>
       </div>
@@ -346,9 +360,11 @@ export default async function AdminPage() {
         <CardHeader>
           <CardTitle>Recent runs</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {runs.length === 0 ? (
-            <Empty>No pipeline runs recorded.</Empty>
+            <Empty>
+              {runsTotal === 0 ? "No pipeline runs recorded." : "No runs on this page."}
+            </Empty>
           ) : (
             <AdminTable>
               <TableHeader>
@@ -397,6 +413,9 @@ export default async function AdminPage() {
               </TableBody>
             </AdminTable>
           )}
+          {runsTotal > RUNS_PAGE_SIZE ? (
+            <RunsPager page={runsPage} pageSize={RUNS_PAGE_SIZE} total={runsTotal} />
+          ) : null}
         </CardContent>
       </Card>
     </article>

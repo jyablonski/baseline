@@ -18,10 +18,11 @@ router = APIRouter(dependencies=[Depends(require_admin_token)])
 @router.get("/health", response_model=ItemResponse[AdminHealth])
 def get_admin_health(
     run_limit: int = Query(20, ge=1, le=100),
+    run_offset: int = Query(0, ge=0),
     repo: AdminRepository = Depends(get_admin_repository),
 ) -> ItemResponse[AdminHealth]:
     """Everything the dashboard needs in one round trip."""
-    return ItemResponse(data=AdminHealth.model_validate(repo.get_health(run_limit)))
+    return ItemResponse(data=AdminHealth.model_validate(repo.get_health(run_limit, run_offset)))
 
 
 @router.get("/runs", response_model=list[PipelineRun])

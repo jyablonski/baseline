@@ -57,7 +57,7 @@ Training is deliberately not on this path. `make ml-train` fits the logit artifa
 Each stage posts to Slack at most once, and a failed stage stops the ones after it, so a broken refresh produces one post. The single exception is a degraded-source post followed by a dbt or ml failure, since the scrape itself succeeded.
 
 - **Scrape failed** — one post listing the failed steps. The refresh stops there, so dbt and ml never run and cannot add a second post.
-- **dbt failed** — one post, and ml does not run. The exit code lands on the run's `pipeline_runs.dbt_exit`.
+- **dbt failed** — one post naming the first failed model or test, and ml does not run. The exit code lands on the run's `pipeline_runs.dbt_exit` and the failed nodes on `dbt_failed_nodes` (first 25, parsed from dbt's output by `scripts/dbt-build.sh`, which `make dbt` / `prod-dbt` also use).
 - **ml failed** — one post naming which half broke, `ml score` or the gold predictions copy. The exit code lands on `pipeline_runs.ml_exit`.
 - **Scrape succeeded but a source is degraded** — one post when any source attempted this run has been unhealthy `SOURCE_ALERT_STREAK` runs in a row. When the scrape also failed, these lines ride along in its failure post instead.
 
@@ -99,7 +99,7 @@ To replace the live database: `make prod-db-restore DUMP=<path> CONFIRM_RESTORE=
 
 ## Admin console
 
-`/admin` shows ingestion, dbt, and ML health, and can re-run jobs. Two independent gates, both **fail closed**:
+`/admin` shows ingestion, dbt, ML, and VM health, and can re-run jobs. Two independent gates, both **fail closed**:
 
 - **The page** uses GitHub OAuth with an `ADMIN_GITHUB_LOGINS` allowlist. Unset means nobody gets in, including you.
 - **The API** (`/api/v1/admin/*`) needs `Authorization: Bearer $ADMIN_API_TOKEN`. Unset returns 503 — never open.
@@ -119,6 +119,15 @@ What the runner guarantees:
 The buttons only work on the prod overlay, which sets `ADMIN_JOBS_ENABLED=true` on the frontend. Anywhere else (Tilt, `make up`) they are disabled and the server action refuses to queue: nothing drains the queue locally, and the runner only maps jobs to `prod-*` targets. Run `make scrape` / `make dbt` / `make ml` / `make refresh-daily-once` directly instead.
 
 `make test-admin-jobs` covers all of this against a real Postgres; CI runs it in its own Compose project.
+
+## VM health
+
+The **VM health** panel on `/admin` combines two sources:
+
+- **Host snapshot.** Each admin-jobs cron tick first runs `scripts/host-snapshot.py` (host `python3`, stdlib only) and stores its JSON in `source.host_snapshots`, pruning rows older than `HOST_SNAPSHOT_RETENTION` (default 7 days). It records host memory (`MemAvailable`, so page cache is not counted as used), swap, disk, load, per-container memory/CPU/restarts/OOM kills from `docker stats` and `docker inspect`, and open TCP connections into Caddy (`:80`/`:443`, with the busiest client IPs) and MCP (`:8000`). Connections are read from `/proc/net/tcp` inside each container because published ports are DNAT'd past the host's own socket table. HTTP/3 (UDP) is not counted. Collection is best effort and never blocks the job queue; a snapshot older than 5 minutes shows as stale.
+- **Postgres connections**, read live from `pg_stat_activity` and grouped by application, user, client, and state. Clients outside loopback/private ranges are tagged **external** — Postgres is published on the public IP for DBeaver, so that is where an unexpected client would appear. External connections are shown but do not change the status.
+
+Rules of thumb for "normal": Postgres near its `shared_buffers` (256 MB) plus a few tens of MB, MCP and API around 75 MB each, a handful of idle API/Cube connections, and no restarts or OOM kills.
 
 **Deploys are deliberately not a button.** CI runs `make prod-deploy` on push to `main` and `workflow_dispatch` is enabled, so a redeploy is one click in the Actions tab — no SSH, no extra code.
 

@@ -376,7 +376,7 @@ def test_record_dbt_only_run_logs_a_standalone_build(
     assert record_dbt_only_run(dbt_exit, detail="make dbt") == expected
     session.execute.assert_called_once_with(
         INSERT_DBT_ONLY_RUN,
-        {"triggered_by": "dbt", "dbt_exit": dbt_exit, "detail": "make dbt"},
+        {"triggered_by": "dbt", "dbt_exit": dbt_exit, "detail": "make dbt", "failed_nodes": None},
     )
     session.commit.assert_called_once()
 
@@ -610,10 +610,10 @@ def test_update_run_dbt_exit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
     monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
     monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
-    update_run_dbt_exit(3, 0, detail="dbt ok")
+    update_run_dbt_exit(3, 1, detail="dbt failed", failed_nodes=["model fct_x"])
     session.execute.assert_called_once_with(
         UPDATE_PIPELINE_RUN_DBT_EXIT,
-        {"run_id": 3, "dbt_exit": 0, "detail": "dbt ok"},
+        {"run_id": 3, "dbt_exit": 1, "detail": "dbt failed", "failed_nodes": ["model fct_x"]},
     )
 
 
@@ -631,7 +631,7 @@ def test_execute_reddit_uses_r_nba_day_limit(monkeypatch: pytest.MonkeyPatch) ->
     assert seen["subreddit"] == DAILY_REDDIT_SUBREDDIT == "nba"
     assert seen["limit"] == DAILY_REDDIT_LIMIT
     assert seen["time_filter"] == DAILY_REDDIT_TIME_FILTER
-    assert seen["comments_per_post"] == DAILY_REDDIT_COMMENTS_PER_POST == 10
+    assert seen["comments_per_post"] == DAILY_REDDIT_COMMENTS_PER_POST == 250
 
 
 @pytest.mark.unit

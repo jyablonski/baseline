@@ -80,6 +80,18 @@ describe("fetchAdminHealth", () => {
     expect(init?.cache).toBe("no-store");
   });
 
+  it("pages recent runs through the query string", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "s3cret");
+    vi.stubEnv("ADMIN_API_URL", "http://api:8000");
+    const fetchMock = vi.fn<FetchMock>(async () => jsonResponse({ data: {} }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchAdminHealth({ limit: 5, offset: 10 });
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      "http://api:8000/api/v1/admin/health?run_limit=5&run_offset=10"
+    );
+  });
+
   it("raises the upstream status when the admin API rejects the call", async () => {
     vi.stubEnv("ADMIN_API_TOKEN", "s3cret");
     vi.stubGlobal("fetch", async () => jsonResponse({}, 401, "Unauthorized"));

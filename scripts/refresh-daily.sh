@@ -127,17 +127,12 @@ DBT_BUILD_ARGS=""
 if [[ "$RUN_DBT_TEST" != "1" ]]; then
   DBT_BUILD_ARGS=" --exclude-resource-type test"
 fi
+# dbt-build.sh records the exit code and failed node names on the run row.
 set +e
-compose_run dbt sh -c \
-  "dbt deps --profiles-dir . && dbt build --profiles-dir .${DBT_BUILD_ARGS}"
+COMPOSE="$COMPOSE" DBT_BUILD_ARGS="$DBT_BUILD_ARGS" RUN_ID="$RUN_ID" NOTIFY=1 LABEL="refresh-daily" \
+  ./scripts/dbt-build.sh
 DBT_EXIT=$?
 set -e
-
-if [[ -n "$RUN_ID" ]]; then
-  DETAIL="dbt finished with exit ${DBT_EXIT}"
-  compose_run scraper python -m main pipeline mark-dbt --notify \
-    --run-id "$RUN_ID" --dbt-exit "$DBT_EXIT" --detail "$DETAIL" >/dev/null || true
-fi
 
 if [[ "$DBT_EXIT" -ne 0 ]]; then
   echo "==> dbt failed (exit ${DBT_EXIT})"

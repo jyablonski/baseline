@@ -6,7 +6,7 @@ r/nba posts and their top comments, modelled into discourse metrics. Supersedes 
 
 ## Ingest
 
-`services/scraper/src/scrapers/reddit.py` — hot + top of day from r/nba, plus the **top 10 comments per post**. Runs whenever the pipeline is enabled, not behind `season_active`. Upserts on `reddit_id` and overwrites every other column, so **score and `num_comments` are the latest snapshot, not a series** — velocity and "trending" are not derivable. Roughly 40 posts and 400 comments a day.
+`services/scraper/src/scrapers/reddit.py` — hot + top of day from r/nba, plus the **top 250 comments per post**. Runs whenever the pipeline is enabled, not behind `season_active`. Upserts on `reddit_id` and overwrites every other column, so **score and `num_comments` are the latest snapshot, not a series** — velocity and "trending" are not derivable. At the old 50-post / 10-comment limits that was roughly 40 new posts and 400 comments a day; at 100 / 250 expect roughly double the posts and up to 25× the comments per post, capped by how many comments a post actually has (estimate, not yet measured).
 
 ## Warehouse
 

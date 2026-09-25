@@ -172,14 +172,8 @@ prod-admin-jobs: ## Claim and run one queued /admin job against the prod stack
 
 prod-dbt: ## Rebuild gold on the server without scraping (needed after new/changed dbt models)
 	@test -n "$(IMAGE_PREFIX)" || { echo "prod-dbt requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
-	@set +e; \
-	DOCKER_TARGET=runtime $(COMPOSE_PROD) --profile tools run --rm --no-deps dbt sh -c \
-		'dbt deps --profiles-dir . && dbt build --profiles-dir . --full-refresh'; \
-	dbt_exit=$$?; \
-	DOCKER_TARGET=runtime $(COMPOSE_PROD) --profile tools run --rm --no-deps scraper \
-		python -m main pipeline record-dbt --dbt-exit $$dbt_exit --detail "make prod-dbt" \
-		>/dev/null || true; \
-	exit $$dbt_exit
+	DOCKER_TARGET=runtime COMPOSE="$(COMPOSE_PROD)" DBT_BUILD_ARGS=" --full-refresh" \
+		LABEL="make prod-dbt" ./scripts/dbt-build.sh
 
 prod-refresh-daily: prod-refresh ## Alias for prod-refresh
 
@@ -322,13 +316,7 @@ scrape: ## pipeline scrape honoring source.scrape_pipeline (does not run dbt)
 # failure never clears. `|| true` on the recording: bookkeeping must not
 # change the exit status of the build itself.
 dbt: ## dbt deps + build (seed, models, and tests in DAG order; does not scrape)
-	@set +e; \
-	$(COMPOSE_RUN_TOOLS) dbt sh -c \
-		'dbt deps --profiles-dir . && dbt build --profiles-dir .'; \
-	dbt_exit=$$?; \
-	$(COMPOSE_RUN_TOOLS) scraper python -m main pipeline record-dbt \
-		--dbt-exit $$dbt_exit --detail "make dbt" >/dev/null || true; \
-	exit $$dbt_exit
+	COMPOSE="$(COMPOSE)" LABEL="make dbt" ./scripts/dbt-build.sh
 
 ml: ## Score Elo and logit (when trained) into source.game_predictions
 	$(COMPOSE_RUN_TOOLS) ml python -m main score

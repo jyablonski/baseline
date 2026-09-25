@@ -19,7 +19,14 @@ INSERT_PIPELINE_RUN = text(
 INSERT_DBT_ONLY_RUN = text(
     """
     INSERT INTO source.pipeline_runs (
-        triggered_by, status, scrape_action, scrape_exit, dbt_exit, detail, finished_at
+        triggered_by,
+        status,
+        scrape_action,
+        scrape_exit,
+        dbt_exit,
+        dbt_failed_nodes,
+        detail,
+        finished_at
     )
     VALUES (
         :triggered_by,
@@ -27,6 +34,7 @@ INSERT_DBT_ONLY_RUN = text(
         'dbt',
         NULL,
         :dbt_exit,
+        :failed_nodes,
         :detail,
         NOW()
     )
@@ -54,6 +62,7 @@ UPDATE_PIPELINE_RUN_DBT_EXIT = text(
     UPDATE source.pipeline_runs
     SET
         dbt_exit = :dbt_exit,
+        dbt_failed_nodes = :failed_nodes,
         status = CASE
             WHEN :dbt_exit <> 0 THEN 'failed'
             WHEN status = 'failed' THEN status

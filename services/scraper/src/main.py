@@ -440,14 +440,42 @@ def _record_stage(
     record(run_id, exit_code, detail=detail)
 
 
+_FAILED_NODE_OPTION = click.option(
+    "--failed-node",
+    "failed_nodes",
+    multiple=True,
+    help="A node that failed, as '<resource_type> <name>'. Repeatable; ignored when exit is 0.",
+)
+
+
+def _failed_nodes(dbt_exit: int, failed_nodes: tuple[str, ...]) -> list[str] | None:
+    # Null on success, so the admin view can't show a stale list from a
+    # build that has since passed. An empty list on failure means dbt died
+    # before reporting a node (parse or connection error).
+    return list(failed_nodes) if dbt_exit != 0 else None
+
+
 @pipeline_group.command("mark-dbt")
 @click.option("--run-id", required=True, type=int)
 @click.option("--dbt-exit", required=True, type=int)
 @click.option("--detail", default=None)
+@_FAILED_NODE_OPTION
 @_NOTIFY_OPTION
-def pipeline_mark_dbt_cmd(run_id: int, dbt_exit: int, detail: str | None, notify: bool) -> None:
+def pipeline_mark_dbt_cmd(
+    run_id: int, dbt_exit: int, detail: str | None, failed_nodes: tuple[str, ...], notify: bool
+) -> None:
     """Record dbt exit code onto an existing source.pipeline_runs row."""
-    _record_stage("dbt build", run_id, dbt_exit, detail, notify=notify, record=update_run_dbt_exit)
+    nodes = _failed_nodes(dbt_exit, failed_nodes)
+    _record_stage(
+        "dbt build",
+        run_id,
+        dbt_exit,
+        detail,
+        notify=notify,
+        record=lambda run_id, exit_code, detail=None: update_run_dbt_exit(
+            run_id, exit_code, detail=detail, failed_nodes=nodes
+        ),
+    )
     click.echo(f"Updated run_id={run_id} dbt_exit={dbt_exit}")
 
 
@@ -465,9 +493,14 @@ def pipeline_mark_ml_cmd(run_id: int, ml_exit: int, detail: str | None, notify: 
 @pipeline_group.command("record-dbt")
 @click.option("--dbt-exit", required=True, type=int)
 @click.option("--detail", default=None)
-def pipeline_record_dbt_cmd(dbt_exit: int, detail: str | None) -> None:
+@_FAILED_NODE_OPTION
+def pipeline_record_dbt_cmd(
+    dbt_exit: int, detail: str | None, failed_nodes: tuple[str, ...]
+) -> None:
     """Log a standalone dbt run (no scrape) to source.pipeline_runs."""
-    run_id = record_dbt_only_run(dbt_exit, detail=detail)
+    run_id = record_dbt_only_run(
+        dbt_exit, detail=detail, failed_nodes=_failed_nodes(dbt_exit, failed_nodes)
+    )
     click.echo(f"Recorded run_id={run_id} dbt_exit={dbt_exit}")
 
 
