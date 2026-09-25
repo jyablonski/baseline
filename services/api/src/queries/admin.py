@@ -52,16 +52,22 @@ ADMIN_RECENT_RUNS = text(
         pipeline_runs.reddit_ran,
         pipeline_runs.reddit_exit,
         pipeline_runs.dbt_exit,
+        pipeline_runs.dbt_failed_nodes,
         pipeline_runs.ml_exit,
         pipeline_runs.detail,
         pipeline_runs.started_at,
         pipeline_runs.finished_at,
         EXTRACT(EPOCH FROM (pipeline_runs.finished_at - pipeline_runs.started_at)) AS duration_seconds
     FROM source.pipeline_runs
-    ORDER BY pipeline_runs.started_at DESC
+    ORDER BY
+        pipeline_runs.started_at DESC,
+        pipeline_runs.run_id DESC
     LIMIT :limit
+    OFFSET :offset
     """
 )
+
+ADMIN_RUN_COUNT = text("SELECT count(*) FROM source.pipeline_runs")
 
 # Latest attempt per source, plus its unhealthy streak: how many of its most
 # recent attempted runs in a row failed or came back below expectation. One bad
@@ -186,28 +192,24 @@ ADMIN_FRESHNESS = text(
 # needed. n_live_tup is approximate, which is fine at a glance.
 ADMIN_DBT_STATUS = text(
     """
+    WITH latest_dbt AS (
+        SELECT
+            pipeline_runs.dbt_exit,
+            pipeline_runs.dbt_failed_nodes,
+            pipeline_runs.started_at,
+            pipeline_runs.run_id
+        FROM source.pipeline_runs
+        WHERE pipeline_runs.dbt_exit IS NOT NULL
+        ORDER BY pipeline_runs.started_at DESC
+        LIMIT 1
+    )
     SELECT
-        (
-            SELECT pipeline_runs.dbt_exit
-            FROM source.pipeline_runs
-            WHERE pipeline_runs.dbt_exit IS NOT NULL
-            ORDER BY pipeline_runs.started_at DESC
-            LIMIT 1
-        ) AS last_dbt_exit,
-        (
-            SELECT pipeline_runs.started_at
-            FROM source.pipeline_runs
-            WHERE pipeline_runs.dbt_exit IS NOT NULL
-            ORDER BY pipeline_runs.started_at DESC
-            LIMIT 1
-        ) AS last_dbt_run_at,
-        (
-            SELECT pipeline_runs.run_id
-            FROM source.pipeline_runs
-            WHERE pipeline_runs.dbt_exit IS NOT NULL
-            ORDER BY pipeline_runs.started_at DESC
-            LIMIT 1
-        ) AS last_dbt_run_id
+        latest_dbt.dbt_exit AS last_dbt_exit,
+        latest_dbt.dbt_failed_nodes AS last_dbt_failed_nodes,
+        latest_dbt.started_at AS last_dbt_run_at,
+        latest_dbt.run_id AS last_dbt_run_id
+    FROM (SELECT 1) AS always_one_row
+    LEFT JOIN latest_dbt ON true
     """
 )
 
@@ -277,5 +279,71 @@ SELECT_ADMIN_JOBS = text(
     FROM source.admin_jobs
     ORDER BY admin_jobs.requested_at DESC
     LIMIT :limit
+    """
+)
+
+# --- VM diagnostics ------------------------------------------------------
+# Written by the host runner (scripts/host-snapshot.py); the API cannot collect
+# any of it itself without the Docker socket.
+ADMIN_LATEST_HOST_SNAPSHOT = text(
+    """
+    SELECT
+        host_snapshots.captured_at,
+        host_snapshots.payload
+    FROM source.host_snapshots
+    ORDER BY host_snapshots.captured_at DESC
+    LIMIT 1
+    """
+)
+
+# Live, not snapshotted: the API already has a connection. Grouped so a pool of
+# ten idle API connections reads as one row. `is_external` is anything outside
+# loopback, RFC 1918, and IPv6 private/link-local, i.e. not another container: Postgres is published on
+# the public IP for DBeaver, so that is where an unexpected client would show.
+# A NULL client_addr is a Unix socket (`compose exec postgres psql`). This
+# request's own backend is left out so the panel is not always "1 active".
+ADMIN_DB_CONNECTIONS = text(
+    """
+    SELECT
+        pg_stat_activity.usename AS user_name,
+        coalesce(nullif(pg_stat_activity.application_name, ''), '(unnamed)') AS application_name,
+        host(pg_stat_activity.client_addr) AS client_addr,
+        coalesce(
+            NOT (
+                pg_stat_activity.client_addr << inet '10.0.0.0/8'
+                OR pg_stat_activity.client_addr << inet '172.16.0.0/12'
+                OR pg_stat_activity.client_addr << inet '192.168.0.0/16'
+                OR pg_stat_activity.client_addr << inet '127.0.0.0/8'
+                OR pg_stat_activity.client_addr = inet '::1'
+                OR pg_stat_activity.client_addr << inet 'fc00::/7'
+                OR pg_stat_activity.client_addr << inet 'fe80::/10'
+            ),
+            false
+        ) AS is_external,
+        coalesce(pg_stat_activity.state, 'unknown') AS state,
+        count(*) AS connections,
+        min(pg_stat_activity.backend_start) AS oldest_connected_at,
+        max(EXTRACT(EPOCH FROM (now() - pg_stat_activity.query_start)))
+            FILTER (WHERE pg_stat_activity.state = 'active') AS longest_active_seconds
+    FROM pg_stat_activity
+    WHERE
+        pg_stat_activity.backend_type = 'client backend'
+        AND pg_stat_activity.pid <> pg_backend_pid()
+    GROUP BY
+        pg_stat_activity.usename,
+        pg_stat_activity.application_name,
+        pg_stat_activity.client_addr,
+        pg_stat_activity.state
+    ORDER BY
+        count(*) DESC,
+        pg_stat_activity.application_name
+    """
+)
+
+ADMIN_DB_SETTINGS = text(
+    """
+    SELECT
+        current_setting('max_connections')::int AS max_connections,
+        pg_database_size(current_database()) AS database_size_bytes
     """
 )

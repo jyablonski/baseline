@@ -327,7 +327,7 @@ def test_reddit_client_readonly_and_script(monkeypatch: pytest.MonkeyPatch) -> N
 @pytest.mark.unit
 def test_default_subreddit_is_nba() -> None:
     assert DEFAULT_SUBREDDIT == "nba"
-    assert DEFAULT_COMMENTS_PER_POST == 10
+    assert DEFAULT_COMMENTS_PER_POST == 250
 
 
 @pytest.mark.unit

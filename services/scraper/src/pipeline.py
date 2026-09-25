@@ -74,11 +74,17 @@ ScrapeAction = Literal[
     "skipped_mode_none",
 ]
 
-# Modest daily r/nba pull: hot + top for the day, plus top-N comments per post.
+# Daily r/nba pull: hot + top for the day, plus top-N comments per post.
+# Request cost is ~1 per 100 listing items plus 1 per unique post (its comment
+# page); comments are picked from that already-loaded page (PRAW asks for
+# comment_limit=2048, Reddit returns a few hundred), so raising
+# COMMENTS_PER_POST costs no requests until it exceeds what one page holds.
+# Posts with fewer comments just yield fewer. ~200 requests a day against Reddit's
+# 100/min OAuth quota, which prawcore enforces by sleeping on the rate headers.
 DAILY_REDDIT_SUBREDDIT = DEFAULT_SUBREDDIT
-DAILY_REDDIT_LIMIT = 50
+DAILY_REDDIT_LIMIT = 100
 DAILY_REDDIT_TIME_FILTER = "day"
-DAILY_REDDIT_COMMENTS_PER_POST = 10
+DAILY_REDDIT_COMMENTS_PER_POST = 250
 
 logger = logging.getLogger(__name__)
 
@@ -616,7 +622,9 @@ def run_pipeline_scrape(
     }
 
 
-def record_dbt_only_run(dbt_exit: int, *, detail: str | None = None) -> int:
+def record_dbt_only_run(
+    dbt_exit: int, *, detail: str | None = None, failed_nodes: list[str] | None = None
+) -> int:
     """Log a dbt run that had no scrape attached, returning the new run_id.
 
     `make dbt` and `make prod-dbt` run dbt directly rather than through
@@ -628,18 +636,34 @@ def record_dbt_only_run(dbt_exit: int, *, detail: str | None = None) -> int:
         run_id = int(
             session.execute(
                 INSERT_DBT_ONLY_RUN,
-                {"triggered_by": "dbt", "dbt_exit": dbt_exit, "detail": detail},
+                {
+                    "triggered_by": "dbt",
+                    "dbt_exit": dbt_exit,
+                    "detail": detail,
+                    "failed_nodes": failed_nodes,
+                },
             ).scalar_one()
         )
         session.commit()
     return run_id
 
 
-def update_run_dbt_exit(run_id: int, dbt_exit: int, *, detail: str | None = None) -> None:
+def update_run_dbt_exit(
+    run_id: int,
+    dbt_exit: int,
+    *,
+    detail: str | None = None,
+    failed_nodes: list[str] | None = None,
+) -> None:
     with get_session() as session:
         session.execute(
             UPDATE_PIPELINE_RUN_DBT_EXIT,
-            {"run_id": run_id, "dbt_exit": dbt_exit, "detail": detail},
+            {
+                "run_id": run_id,
+                "dbt_exit": dbt_exit,
+                "detail": detail,
+                "failed_nodes": failed_nodes,
+            },
         )
 
 

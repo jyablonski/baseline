@@ -4,12 +4,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from queries.admin import (
+    ADMIN_DB_CONNECTIONS,
+    ADMIN_DB_SETTINGS,
     ADMIN_DBT_STATUS,
     ADMIN_FRESHNESS,
     ADMIN_GOLD_TABLES,
+    ADMIN_LATEST_HOST_SNAPSHOT,
     ADMIN_ML_STATUS,
     ADMIN_PIPELINE_STATUS,
     ADMIN_RECENT_RUNS,
+    ADMIN_RUN_COUNT,
     ADMIN_SOURCE_HEALTH,
     INSERT_ADMIN_JOB,
     SELECT_ADMIN_JOBS,
@@ -57,8 +61,10 @@ class AdminRepository:
             ),
         }
 
-    def get_recent_runs(self, limit: int = 20) -> list[dict]:
-        rows = self.db.execute(ADMIN_RECENT_RUNS, {"limit": limit}).mappings().all()
+    def get_recent_runs(self, limit: int = 20, offset: int = 0) -> list[dict]:
+        rows = (
+            self.db.execute(ADMIN_RECENT_RUNS, {"limit": limit, "offset": offset}).mappings().all()
+        )
         return [
             {
                 "run_id": row["run_id"],
@@ -69,6 +75,7 @@ class AdminRepository:
                 "reddit_ran": row["reddit_ran"],
                 "reddit_exit": row["reddit_exit"],
                 "dbt_exit": row["dbt_exit"],
+                "dbt_failed_nodes": row["dbt_failed_nodes"],
                 "ml_exit": row["ml_exit"],
                 "detail": row["detail"],
                 "started_at": as_utc(row["started_at"]),
@@ -79,6 +86,9 @@ class AdminRepository:
             }
             for row in rows
         ]
+
+    def count_runs(self) -> int:
+        return int(self.db.execute(ADMIN_RUN_COUNT).scalar_one())
 
     def get_source_health(self) -> list[dict]:
         rows = self.db.execute(ADMIN_SOURCE_HEALTH).mappings().all()
@@ -116,6 +126,7 @@ class AdminRepository:
         tables = self.db.execute(ADMIN_GOLD_TABLES).mappings().all()
         return {
             "last_dbt_exit": row.get("last_dbt_exit"),
+            "last_dbt_failed_nodes": row.get("last_dbt_failed_nodes"),
             "last_dbt_run_at": as_utc(row.get("last_dbt_run_at")),
             "last_dbt_run_id": row.get("last_dbt_run_id"),
             # Empty until dbt has run at least once, which is itself the signal.
@@ -179,13 +190,59 @@ class AdminRepository:
             ) from exc
         return self._job_row(row)
 
-    def get_health(self, run_limit: int = 20) -> dict:
+    def get_host_snapshot(self) -> dict | None:
+        row = self.db.execute(ADMIN_LATEST_HOST_SNAPSHOT).mappings().one_or_none()
+        if row is None:
+            return None
+        payload = row["payload"] or {}
+        return {
+            "captured_at": as_utc(row["captured_at"]),
+            "host": payload.get("host"),
+            "containers": payload.get("containers") or [],
+            "connections": payload.get("connections") or [],
+            "errors": payload.get("errors") or [],
+        }
+
+    def get_database(self) -> dict:
+        settings = self.db.execute(ADMIN_DB_SETTINGS).mappings().one()
+        rows = self.db.execute(ADMIN_DB_CONNECTIONS).mappings().all()
+        groups = [
+            {
+                "user_name": row["user_name"],
+                "application_name": row["application_name"],
+                "client_addr": row["client_addr"],
+                "is_external": bool(row["is_external"]),
+                "state": row["state"],
+                "connections": int(row["connections"]),
+                "oldest_connected_at": as_utc(row["oldest_connected_at"]),
+                "longest_active_seconds": (
+                    float(row["longest_active_seconds"])
+                    if row["longest_active_seconds"] is not None
+                    else None
+                ),
+            }
+            for row in rows
+        ]
+        return {
+            "max_connections": int(settings["max_connections"]),
+            # +1 for this request's own backend, which the grouped list omits.
+            "total_connections": sum(int(row["connections"]) for row in rows) + 1,
+            "database_size_bytes": int(settings["database_size_bytes"]),
+            "connections": groups,
+        }
+
+    def get_health(self, run_limit: int = 20, run_offset: int = 0) -> dict:
         return {
             "pipeline": self.get_pipeline(),
             "sources": self.get_source_health(),
             "freshness": self.get_freshness(),
             "dbt": self.get_dbt(),
             "ml": self.get_ml(),
-            "recent_runs": self.get_recent_runs(run_limit),
+            "recent_runs": self.get_recent_runs(run_limit, run_offset),
+            "recent_runs_total": self.count_runs(),
             "jobs": self.get_jobs(),
+            "diagnostics": {
+                "snapshot": self.get_host_snapshot(),
+                "database": self.get_database(),
+            },
         }

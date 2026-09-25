@@ -58,6 +58,15 @@ reset_jobs
 assert_eq "exit status" 0 "$?"
 assert_eq "no rows created" 0 "$(psql_query 'SELECT count(*) FROM source.admin_jobs')"
 
+echo "==> every tick records a host snapshot"
+psql_query "DELETE FROM source.host_snapshots" >/dev/null
+./scripts/admin-job-runner.sh >/dev/null 2>&1
+assert_eq "one snapshot row" 1 "$(psql_query 'SELECT count(*) FROM source.host_snapshots')"
+assert_eq "host memory captured" "t" \
+  "$(psql_query "SELECT (payload->'host'->>'mem_total_bytes')::bigint > 0 FROM source.host_snapshots")"
+assert_eq "no collector errors" 0 \
+  "$(psql_query "SELECT jsonb_array_length(payload->'errors') FROM source.host_snapshots")"
+
 echo "==> a queued job is claimed, executed and recorded"
 reset_jobs
 psql_query "INSERT INTO source.admin_jobs (job_type, requested_by) VALUES ('dbt','e2e')" >/dev/null

@@ -34,6 +34,9 @@ LOG_TAIL_BYTES="${LOG_TAIL_BYTES:-8000}"
 STALE_JOB_GRACE="${STALE_JOB_GRACE:-5 minutes}"
 # Distinct from any make exit code, so "lock was busy" is unambiguous.
 LOCK_BUSY_EXIT=75
+# /admin's VM panel reads the newest row; older ones are only for looking back
+# at an incident. One row a minute is ~10k rows a week.
+HOST_SNAPSHOT_RETENTION="${HOST_SNAPSHOT_RETENTION:-7 days}"
 
 psql_query() {
   $COMPOSE exec -T postgres \
@@ -121,6 +124,27 @@ requeue_job() {
   " >/dev/null
 }
 
+# Piggybacks on this every-minute cron because it is already the host-side
+# process with Docker access. Best effort: a missing python3, a Docker hiccup,
+# or a not-yet-migrated table must never stop the queue from draining.
+record_host_snapshot() {
+  local encoded
+  encoded="$(python3 "$ROOT/scripts/host-snapshot.py" | base64 | tr -d '\n')" || encoded=""
+  if [[ -z "$encoded" ]]; then
+    echo "admin-job-runner: host snapshot collection failed" >&2
+    return 0
+  fi
+  psql_query "
+    WITH pruned AS (
+      DELETE FROM source.host_snapshots
+      WHERE captured_at < now() - interval '${HOST_SNAPSHOT_RETENTION}'
+    )
+    INSERT INTO source.host_snapshots (payload)
+    VALUES (convert_from(decode('${encoded}', 'base64'), 'UTF8')::jsonb)
+  " >/dev/null || echo "admin-job-runner: could not record host snapshot" >&2
+}
+
+record_host_snapshot
 reap_stale_jobs
 
 # Distinguish "no work" from "cannot reach the database". Swallowing the

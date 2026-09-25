@@ -18,7 +18,11 @@ ADMIN_TOKEN = "test-admin-token"
 
 
 class FakeAdminRepository:
-    def get_health(self, run_limit: int = 20) -> dict:
+    def __init__(self) -> None:
+        self.health_args: tuple[int, int] | None = None
+
+    def get_health(self, run_limit: int = 20, run_offset: int = 0) -> dict:
+        self.health_args = (run_limit, run_offset)
         return {
             "pipeline": {
                 "enabled": True,
@@ -70,7 +74,48 @@ class FakeAdminRepository:
                 }
             ],
             "recent_runs": [],
+            "recent_runs_total": 12,
             "jobs": [],
+            "diagnostics": {
+                "snapshot": {
+                    "captured_at": "2026-09-25T18:00:00Z",
+                    # Deliberately sparse: the host script and the API ship
+                    # separately, so a missing key must not fail validation.
+                    "host": {"mem_total_bytes": 24_000_000_000},
+                    "containers": [
+                        {
+                            "name": "nba-postgres-1",
+                            "service": "postgres",
+                            "started_at": "2026-09-25T10:00:00.123456789Z",
+                            "mem_used_bytes": 304_000_000,
+                            "mem_limit_bytes": 2_147_483_648,
+                        }
+                    ],
+                    "connections": [
+                        {
+                            "service": "caddy",
+                            "ports": [80, 443],
+                            "established": 3,
+                            "distinct_peers": 2,
+                            "top_peers": [{"address": "203.0.113.9", "connections": 2}],
+                        }
+                    ],
+                },
+                "database": {
+                    "max_connections": 100,
+                    "total_connections": 4,
+                    "database_size_bytes": 900_000_000,
+                    "connections": [
+                        {
+                            "user_name": "postgres",
+                            "application_name": "(unnamed)",
+                            "client_addr": "172.18.0.5",
+                            "state": "idle",
+                            "connections": 3,
+                        }
+                    ],
+                },
+            },
         }
 
     def get_recent_runs(self, limit: int = 20) -> list[dict]:
@@ -96,9 +141,10 @@ class FakeAdminRepository:
         }
 
 
-def _client(token: str | None) -> TestClient:
+def _client(token: str | None, repo: FakeAdminRepository | None = None) -> TestClient:
     app = create_app()
-    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
+    fake = repo or FakeAdminRepository()
+    app.dependency_overrides[get_admin_repository] = lambda: fake
     app.dependency_overrides[get_settings] = lambda: Settings(admin_api_token=token)
     return TestClient(app)
 
@@ -153,6 +199,27 @@ def test_admin_health_payload_with_a_valid_token() -> None:
     assert body["sources"][0]["source_name"] == "standings"
     assert body["dbt"]["last_dbt_exit"] == 0
     assert body["ml"][0]["model_version"] == "elo-v0"
+    assert body["recent_runs_total"] == 12
+    snapshot = body["diagnostics"]["snapshot"]
+    assert snapshot["host"]["mem_total_bytes"] == 24_000_000_000
+    assert snapshot["host"]["mem_available_bytes"] is None
+    assert snapshot["containers"][0]["restart_count"] == 0
+    assert snapshot["connections"][0]["top_peers"][0]["address"] == "203.0.113.9"
+    assert body["diagnostics"]["database"]["connections"][0]["is_external"] is False
+
+
+@pytest.mark.unit
+def test_admin_health_pages_recent_runs() -> None:
+    repo = FakeAdminRepository()
+    headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    client = _client(ADMIN_TOKEN, repo)
+
+    assert client.get("/api/v1/admin/health", headers=headers).status_code == 200
+    assert repo.health_args == (20, 0)
+    paged = client.get("/api/v1/admin/health?run_limit=5&run_offset=10", headers=headers)
+    assert paged.status_code == 200
+    assert repo.health_args == (5, 10)
+    assert client.get("/api/v1/admin/health?run_offset=-1", headers=headers).status_code == 422
 
 
 @pytest.mark.unit
