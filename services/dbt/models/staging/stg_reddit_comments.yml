@@ -8,12 +8,15 @@ models:
       Queryable via gold / Cube.
     columns:
       - name: reddit_id
+        description: Reddit base36 id (no t1_/t3_ prefix).
         data_tests:
           - unique
           - not_null
       - name: post_reddit_id
+        description: Parent submission's reddit_id.
         data_tests:
           - not_null
       - name: created_utc
+        description: Creation time in UTC, from Reddit.
         data_tests:
           - not_null

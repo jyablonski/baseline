@@ -5,12 +5,15 @@ models:
     description: Player game logs enriched with back-to-back flags and career/season game numbers.
     columns:
       - name: player_id
+        description: Baseline player UUID.
         data_tests:
           - not_null
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - not_null
       - name: is_back_to_back
+        description: True when the player's previous logged game was the day before.
         data_tests:
           - dbt_expectations.expect_column_values_to_not_be_null
       - name: season_type
@@ -36,6 +39,7 @@ models:
                 min_value: 1
                 max_value: 120
       - name: career_game_number
+        description: row_number per player ordered by game_date, across every loaded season. Counts loaded logs, so it starts at the warehouse's coverage, not the NBA debut.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

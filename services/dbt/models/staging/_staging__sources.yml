@@ -6,32 +6,275 @@ sources:
     tables:
       - name: players
         description: Baseline player registry with provider-independent UUID identity.
+        columns:
+          - name: player_id
+            description: Baseline player UUID.
+          - name: first_name
+            description: "Given name: the full name up to the first space."
+          - name: last_name
+            description: Everything after the first space of the full name.
+          - name: full_name
+            description: Display name as Basketball-Reference shows it.
+          - name: is_active
+            description: Set true whenever a roster, injury, contract, or play-by-play scrape writes the player; never reset to false.
+          - name: jersey_number
+            description: Roster jersey number, as text.
+          - name: position
+            description: Raw roster position code (PG, G-F, or a 1-5 sort key on older scrapes); stg_players maps it to a label.
+          - name: height
+            description: Height as text, e.g. 6-9.
+          - name: weight
+            description: Weight in pounds.
+          - name: birth_date
+            description: Date of birth.
+          - name: team_id
+            description: Team of the latest roster that listed the player (Baseline team UUID).
+          - name: from_year
+            description: Earliest year in the roster years cell.
+          - name: to_year
+            description: Latest year in the roster years cell.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: teams
         description: Repo-owned franchise catalog with provider-independent UUID identity.
+        columns:
+          - name: team_id
+            description: Baseline team UUID.
+          - name: canonical_slug
+            description: Stable repo-owned franchise slug.
+          - name: abbreviation
+            description: Team abbreviation, e.g. BOS.
+          - name: full_name
+            description: Full team name, e.g. Boston Celtics.
+          - name: city
+            description: Team city or region.
+          - name: nickname
+            description: Team nickname, e.g. Celtics.
+          - name: conference
+            description: East or West.
+          - name: division
+            description: Division name.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: games
         description: Basketball-Reference schedule and result rows keyed by Baseline UUIDs.
+        columns:
+          - name: game_id
+            description: Baseline game UUID.
+          - name: season
+            description: NBA season label, e.g. 2025-26.
+          - name: season_type
+            description: Regular Season, PlayIn, Playoffs, or Cup (the NBA Cup final only; other Cup games count as Regular Season).
+          - name: game_date
+            description: Scheduled date (no tip-off time).
+          - name: home_team_id
+            description: Home team (Baseline team UUID).
+          - name: away_team_id
+            description: Away team (Baseline team UUID).
+          - name: home_score
+            description: Home final score; null until Final.
+          - name: away_score
+            description: Away final score; null until Final.
+          - name: arena
+            description: Arena name from the schedule.
+          - name: city
+            description: Arena city.
+          - name: state
+            description: Arena state or province.
+          - name: status
+            description: Final or Scheduled.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: player_game_logs
         description: Basketball-Reference box-score rows keyed by Baseline UUIDs.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: player_id
+            description: Baseline player UUID.
+          - name: game_id
+            description: Baseline game UUID.
+          - name: team_id
+            description: Player's team in this game (Baseline team UUID).
+          - name: game_date
+            description: Game date.
+          - name: season
+            description: NBA season label, e.g. 2025-26.
+          - name: matchup
+            description: Matchup string, e.g. BOS vs. NYK (home) or BOS @ NYK (away).
+          - name: wl
+            description: W or L.
+          - name: min
+            description: Minutes played.
+          - name: pts
+            description: Points.
+          - name: reb
+            description: Total rebounds.
+          - name: ast
+            description: Assists.
+          - name: stl
+            description: Steals.
+          - name: blk
+            description: Blocks.
+          - name: tov
+            description: Turnovers.
+          - name: fgm
+            description: Field goals made.
+          - name: fga
+            description: Field goals attempted.
+          - name: fg_pct
+            description: Field goal percentage (0-1).
+          - name: fg3m
+            description: Three-pointers made.
+          - name: fg3a
+            description: Three-pointers attempted.
+          - name: fg3_pct
+            description: Three-point percentage (0-1).
+          - name: ftm
+            description: Free throws made.
+          - name: fta
+            description: Free throws attempted.
+          - name: ft_pct
+            description: Free throw percentage (0-1).
+          - name: plus_minus
+            description: Plus-minus while on court.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: player_contracts
         description: >
           Remaining player-season salaries from Basketball-Reference team payroll pages.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: player_id
+            description: Baseline player UUID.
+          - name: team_id
+            description: Team the contract is with (Baseline team UUID).
+          - name: player_name
+            description: Name as shown on the payroll page.
+          - name: player_name_normalized
+            description: Lowercased, ASCII-folded, suffix-stripped name used for matching.
+          - name: season
+            description: Season the salary is for, e.g. 2025-26.
+          - name: salary
+            description: Salary for that season (USD).
+          - name: is_fully_guaranteed
+            description: False when Basketball-Reference shows the amount in italics (not fully guaranteed).
+          - name: remaining_guaranteed
+            description: Remaining guaranteed money on the whole contract (USD), repeated on each season row.
+          - name: player_age
+            description: Player age as listed on the payroll page.
+          - name: source_url
+            description: Basketball-Reference page the row was parsed from.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: team_payroll
         description: >
           Team-season payroll totals from the Basketball-Reference
           Team Totals footer. Luxury-tax rules are not applied.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: team_id
+            description: Baseline team UUID.
+          - name: season
+            description: NBA season label, e.g. 2025-26.
+          - name: total_salary
+            description: Team Totals salary for the season (USD).
+          - name: remaining_guaranteed
+            description: Team Totals remaining guaranteed money (USD).
+          - name: source_url
+            description: Basketball-Reference page the row was parsed from.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: standings
         description: >
           Season-to-date Regular Season standings from Basketball-Reference. Unique on (season, season_type, team_id);
           as_of_date is the scrape watermark.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: team_id
+            description: Baseline team UUID.
+          - name: season
+            description: NBA season label, e.g. 2025-26.
+          - name: season_type
+            description: Regular Season.
+          - name: as_of_date
+            description: Date of the scrape that produced this snapshot.
+          - name: conference
+            description: East or West.
+          - name: division
+            description: Division name.
+          - name: conference_rank
+            description: Record-based rank within the conference.
+          - name: division_rank
+            description: Record-based rank within the division.
+          - name: wins
+            description: Wins to date.
+          - name: losses
+            description: Losses to date.
+          - name: win_pct
+            description: Win percentage (0-1).
+          - name: games_back
+            description: Games behind the leader.
+          - name: conf_games_back
+            description: Not populated by the Basketball-Reference scraper; always null.
+          - name: streak
+            description: Current streak, e.g. W 3.
+          - name: last_10
+            description: Record over the last 10 games, e.g. 7-3.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: player_injuries
         description: >
           Current Basketball-Reference injury report snapshot. Unique on
           (player_id, team_id). Not a historical
           ledger; history exists only from the day scraping starts.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: player_id
+            description: Baseline player UUID.
+          - name: team_id
+            description: Team listing the injury (Baseline team UUID).
+          - name: player_name
+            description: Name as shown on the injury report.
+          - name: player_name_normalized
+            description: Lowercased, ASCII-folded, suffix-stripped name used for matching.
+          - name: update_date
+            description: Date Basketball-Reference last updated the note.
+          - name: description
+            description: Injury note text.
+          - name: source_url
+            description: Basketball-Reference page the row was parsed from.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: player_injuries_history
         description: >
           Append-only daily Basketball-Reference injury snapshots. Unique on
           (player_id, team_id, snapshot_date).
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: player_id
+            description: Baseline player UUID.
+          - name: team_id
+            description: Team listing the injury (Baseline team UUID).
+          - name: player_name
+            description: Name as shown on the injury report.
+          - name: player_name_normalized
+            description: Lowercased, ASCII-folded, suffix-stripped name used for matching.
+          - name: update_date
+            description: Date Basketball-Reference last updated the note.
+          - name: description
+            description: Injury note text.
+          - name: source_url
+            description: Basketball-Reference page the row was parsed from.
+          - name: snapshot_date
+            description: Date of the daily scrape that captured this row.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: game_odds
         description: >
           The Odds API h2h / spreads lines. Upcoming events are refreshed each
@@ -39,33 +282,236 @@ sources:
           last pregame row as history (accruing from 2026-27). Unique on
           (odds_event_id, bookmaker, market). Historical odds backfill is out
           of scope. ODDS_API_KEY required to ingest.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: odds_event_id
+            description: The Odds API event id.
+          - name: commence_time
+            description: Scheduled tip-off time from The Odds API.
+          - name: home_team_name
+            description: Home team name as The Odds API spells it.
+          - name: away_team_name
+            description: Away team name as The Odds API spells it.
+          - name: game_id
+            description: Matched game (Baseline game UUID); null when no source.games row matched by teams and date.
+          - name: bookmaker
+            description: Bookmaker key, e.g. draftkings.
+          - name: market
+            description: h2h (moneyline) or spreads.
+          - name: home_price
+            description: Home American odds.
+          - name: away_price
+            description: Away American odds.
+          - name: home_implied_wp
+            description: Home win probability implied by home_price, vig included.
+          - name: away_implied_wp
+            description: Away win probability implied by away_price, vig included.
+          - name: home_market_wp
+            description: home_implied_wp normalized so both sides sum to 1 (de-vigged); null when either side is missing.
+          - name: away_market_wp
+            description: De-vigged away win probability.
+          - name: spread_home
+            description: Home point spread (negative when favored); spreads market only.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: game_predictions
         description: >
           Pregame home win probabilities written by services/ml. Grain is
           (game_id, as_of, model_version).
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: game_id
+            description: Baseline game UUID.
+          - name: as_of
+            description: When services/ml produced the prediction.
+          - name: model_name
+            description: Model family, e.g. elo.
+          - name: model_version
+            description: Model version, e.g. elo-v0.
+          - name: home_team_id
+            description: Home team (Baseline team UUID).
+          - name: away_team_id
+            description: Away team (Baseline team UUID).
+          - name: model_wp
+            description: Pregame home win probability.
+          - name: market_wp
+            description: Consensus de-vigged home win probability at scoring time; null when no odds matched.
+          - name: scraped_at
+            description: When the row was written.
       - name: model_artifacts
         description: >
           Versioned ML artifacts and the single configured champion model.
+        columns:
+          - name: model_version
+            description: Model version; primary key.
+          - name: model_name
+            description: Model family.
+          - name: artifact
+            description: Serialized model parameters (JSONB).
+          - name: trained_at
+            description: When the artifact was fit.
+          - name: is_champion
+            description: True for the model fct_game_predictions surfaces; elo-v0 is used when none is set.
       - name: model_evaluations
         description: >
           Persisted per-season evaluation metrics for versioned ML models.
+        columns:
+          - name: model_name
+            description: Model family.
+          - name: model_version
+            description: Model version.
+          - name: evaluation_name
+            description: Evaluation scheme, e.g. expanding-window.
+          - name: season
+            description: Season evaluated.
+          - name: evaluated_at
+            description: When the evaluation ran.
+          - name: n
+            description: Games evaluated.
+          - name: logloss
+            description: Mean log loss.
+          - name: brier
+            description: Mean Brier score.
+          - name: accuracy
+            description: Share of games where the model picked the winner (home when model_wp >= 0.5).
+          - name: home_always_accuracy
+            description: Baseline accuracy of always picking the home team.
       - name: play_by_play
         description: >
           Basketball-Reference play-by-play actions. Unique on (game_id, action_number, action_id).
           Opt-in current-season ingest; not a full-history backfill.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: game_id
+            description: Baseline game UUID.
+          - name: season
+            description: NBA season label, e.g. 2025-26.
+          - name: action_number
+            description: Sequence number of the action within the game.
+          - name: action_id
+            description: Secondary sequence id; equals action_number for Basketball-Reference rows.
+          - name: period
+            description: Period number; 5+ is overtime.
+          - name: clock
+            description: Time remaining in the period as shown, e.g. 11:45.0.
+          - name: score_home
+            description: Home score after the action; null on rows where it is not shown.
+          - name: score_away
+            description: Away score after the action; null on rows where it is not shown.
+          - name: team_id
+            description: Team credited with the action (Baseline team UUID).
+          - name: player_id
+            description: Primary player (Baseline player UUID).
+          - name: secondary_player_id
+            description: Assister / stealer / blocker / fouled / subbed-out player; null on rows ingested before the parser captured it.
+          - name: action_type
+            description: Always null for Basketball-Reference; int_play_by_play_events parses the description instead.
+          - name: sub_type
+            description: Always null for Basketball-Reference.
+          - name: description
+            description: Free-text play description.
+          - name: extras
+            description: Provider-specific extra fields (JSONB).
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: transactions
         description: >
           Basketball-Reference transactions log. Grain is transaction_key,
           sha256(transaction_date|description).
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: transaction_key
+            description: sha256(transaction_date|description). The grain.
+          - name: transaction_date
+            description: Date listed for the transaction.
+          - name: season
+            description: NBA season label, e.g. 2025-26.
+          - name: description
+            description: Transaction text.
+          - name: source_url
+            description: Basketball-Reference page the row was parsed from.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: transaction_participants
         description: >
           Teams and players named by a transaction, resolved from href slugs.
           Unique on (transaction_key, participant_type, bref_slug, direction);
           a team sending and receiving in one trade is two rows.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: transaction_key
+            description: Parent transaction.
+          - name: participant_type
+            description: player or team.
+          - name: direction
+            description: from / to for teams; the sentinel 'none' for players, so the unique constraint still works.
+          - name: bref_slug
+            description: Basketball-Reference href slug.
+          - name: display_name
+            description: Link text as shown.
+          - name: player_id
+            description: Resolved player (Baseline player UUID); null for teams or unresolved slugs.
+          - name: team_id
+            description: Resolved team (Baseline team UUID); null for players or unresolved slugs.
       - name: reddit_posts
         description: >
           PRAW submission ingest. Unique on reddit_id.
+        columns:
+          - name: reddit_id
+            description: Reddit base36 id (no t3_ prefix).
+          - name: subreddit
+            description: Subreddit name.
+          - name: title
+            description: Submission title.
+          - name: author
+            description: Author username; null when deleted.
+          - name: score
+            description: Net upvotes at scrape time.
+          - name: num_comments
+            description: Comment count at scrape time.
+          - name: created_utc
+            description: Creation time in UTC.
+          - name: permalink
+            description: Absolute reddit.com URL.
+          - name: url
+            description: Link target; the permalink itself for self posts.
+          - name: selftext
+            description: Self-post body.
+          - name: flair
+            description: Post (link) flair.
+          - name: author_flair
+            description: Author's user flair; resolved in fct_reddit_flair.
+          - name: is_self
+            description: True for a text post.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: reddit_comments
         description: >
           PRAW comment ingest. Unique on reddit_id. post_reddit_id
           associates the comment to reddit_posts.
+        columns:
+          - name: reddit_id
+            description: Reddit base36 id (no t1_ prefix).
+          - name: post_reddit_id
+            description: Parent submission's reddit_id.
+          - name: parent_id
+            description: "Reddit fullname of the parent: t3_ for a top-level comment, t1_ for a reply."
+          - name: author
+            description: Author username; null when deleted.
+          - name: body
+            description: Comment text; [removed] / [deleted] when moderated.
+          - name: author_flair
+            description: Author's user flair; resolved in fct_reddit_flair.
+          - name: score
+            description: Net upvotes at scrape time.
+          - name: created_utc
+            description: Creation time in UTC.
+          - name: permalink
+            description: Absolute reddit.com URL.
+          - name: scraped_at
+            description: When the scraper last wrote this row.

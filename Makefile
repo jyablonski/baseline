@@ -397,6 +397,9 @@ test-frontend: ## Frontend unit tests with coverage
 test-frontend-e2e: ## Frontend Playwright e2e
 	cd services/frontend && npm install && npx playwright install chromium && CI=1 FORCE_COLOR=1 npm run test:e2e
 
+dbt-score: ## Score dbt model/source/seed metadata with dbt-score (dbt parse only, no database)
+	scripts/dbt-score.sh
+
 test-dbt: ## dbt e2e against a seeded ephemeral Postgres
 	COMPOSE_PROJECT_NAME=nba-e2e $(COMPOSE) -p nba-e2e -f docker-compose.e2e.yml build migrate dbt
 	COMPOSE_PROJECT_NAME=nba-e2e $(COMPOSE) -p nba-e2e -f docker-compose.e2e.yml up -d postgres --wait

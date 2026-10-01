@@ -8,9 +8,11 @@ models:
       mart does not apply a league-minimum filter.
     columns:
       - name: player_id
+        description: Baseline player UUID.
         data_tests:
           - not_null
       - name: season
+        description: NBA season label, e.g. 2025-26.
         data_tests:
           - not_null
       - name: games_played
@@ -25,6 +27,7 @@ models:
                 min_value: 1
                 max_value: 120
       - name: ppg
+        description: Average points per loaded game log, rounded to one decimal.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

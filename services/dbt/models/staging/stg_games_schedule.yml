@@ -12,14 +12,18 @@ models:
           - unique
           - not_null
       - name: game_date
+        description: Scheduled game date (no tip-off time).
         data_tests:
           - not_null
       - name: status
+        description: "Game status from the schedule: Final or Scheduled."
         data_tests:
           - not_null
       - name: home_team_id
+        description: Home team (Baseline team UUID).
         data_tests:
           - not_null
       - name: away_team_id
+        description: Away team (Baseline team UUID).
         data_tests:
           - not_null

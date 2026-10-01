@@ -13,6 +13,7 @@ models:
       rows loaded earlier until they are re-scraped with --refresh.
     columns:
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - not_null
       - name: event_type
@@ -40,6 +41,7 @@ models:
                   - period_end
                   - other
       - name: shot_value
+        description: 2 or 3 for a field-goal attempt, parsed from the description; null for non-shots and heaves.
         data_tests:
           - accepted_values:
               config:
@@ -48,6 +50,7 @@ models:
                 values: [2, 3]
                 quote: false
       - name: shot_distance_ft
+        description: Shot distance in feet from the description; 0 for 'at rim'. Null when not stated.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -55,6 +58,7 @@ models:
                 max_value: 95
                 row_condition: "shot_distance_ft is not null"
       - name: rebound_side
+        description: offensive or defensive; null when the row is not a rebound.
         data_tests:
           - accepted_values:
               config:
@@ -62,6 +66,7 @@ models:
               arguments:
                 values: [offensive, defensive]
       - name: free_throw_kind
+        description: regular, technical, flagrant, or clear path. Defaults to regular, so only meaningful on free-throw rows.
         data_tests:
           - accepted_values:
               config:

@@ -5,12 +5,15 @@ models:
     description: Current Basketball-Reference injury snapshot resolved to canonical UUIDs.
     columns:
       - name: player_id
+        description: Baseline player UUID.
         data_tests:
           - not_null
       - name: team_id
+        description: Team listing the injury (Baseline team UUID).
         data_tests:
           - not_null
       - name: description
+        description: Injury note as written on Basketball-Reference.
         data_tests:
           - not_null
     data_tests:

@@ -10,18 +10,21 @@ models:
           - unique
           - not_null
       - name: abbreviation
+        description: Three-letter team abbreviation, e.g. BOS.
         data_tests:
           - not_null
           - dbt_expectations.expect_column_value_lengths_to_equal:
               arguments:
                 value: 3
       - name: conference
+        description: Conference, East or West.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_in_set:
               arguments:
                 value_set: ["East", "West"]
                 quote_values: true
       - name: team_name
+        description: Full team name, e.g. Boston Celtics.
         data_tests:
           - dbt_expectations.expect_column_values_to_not_be_null
       - name: current_season_payroll

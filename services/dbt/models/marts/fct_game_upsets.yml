@@ -14,6 +14,7 @@ models:
       odds history starts accruing in 2026-27, with no historical backfill.
     columns:
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - not_null
           - unique
@@ -22,9 +23,11 @@ models:
                 to: ref('fct_team_game_results')
                 field: game_id
       - name: season
+        description: NBA season label, e.g. 2025-26.
         data_tests:
           - not_null
       - name: home_market_wp
+        description: Bookmaker-average de-vigged home win probability from the retained pregame h2h line.
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
@@ -33,6 +36,7 @@ models:
                 max_value: 1
                 strictly: true
       - name: underdog_market_wp
+        description: The lower of the two sides' market win probabilities.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -47,14 +51,17 @@ models:
       - name: underdog_best_moneyline
         description: Best (highest) underdog price offered across bookmakers.
       - name: bookmaker_count
+        description: Distinct bookmakers averaged into the line.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
                 min_value: 1
       - name: is_upset
+        description: True when the market underdog won. Always false for a pick'em.
         data_tests:
           - not_null
       - name: upset_magnitude
+        description: Surprisal of the winner, -ln(winner_market_wp), in nats. 0.69 is a coin flip; higher is a bigger upset.
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:

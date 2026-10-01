@@ -23,6 +23,7 @@ seeds:
           - unique
           - not_null
       - name: salary_cap
+        description: CBA salary cap for the season (USD).
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
@@ -30,6 +31,7 @@ seeds:
                 min_value: 1
                 max_value: 5000000000
       - name: luxury_tax
+        description: CBA luxury-tax level for the season (USD).
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
@@ -37,6 +39,7 @@ seeds:
                 min_value: 1
                 max_value: 5000000000
       - name: first_apron
+        description: CBA first apron for the season (USD).
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
@@ -44,6 +47,7 @@ seeds:
                 min_value: 1
                 max_value: 5000000000
       - name: second_apron
+        description: CBA second apron for the season (USD).
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:

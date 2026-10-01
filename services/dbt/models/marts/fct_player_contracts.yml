@@ -5,6 +5,7 @@ models:
     description: Player-season remaining contract salary with canonical UUID references.
     columns:
       - name: player_id
+        description: Baseline player UUID.
         data_tests:
           - not_null
           - relationships:
@@ -12,9 +13,11 @@ models:
                 to: ref('dim_players')
                 field: player_id
       - name: team_id
+        description: Team the contract is with (Baseline team UUID).
         data_tests:
           - not_null
       - name: match_method
+        description: "How the row was linked to canonical ids. Always external_id: the scraper resolves Basketball-Reference ids at ingest."
         data_tests:
           - dbt_expectations.expect_column_values_to_be_in_set:
               arguments:

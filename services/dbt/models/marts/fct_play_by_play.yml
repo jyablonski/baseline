@@ -10,6 +10,7 @@ models:
       free-throw fields. Season-scoped ingest; do not assume a full-history backfill.
     columns:
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - not_null
           - relationships:
@@ -17,15 +18,19 @@ models:
                 to: ref('fct_team_game_results')
                 field: game_id
       - name: season
+        description: NBA season label, e.g. 2025-26.
         data_tests:
           - not_null
       - name: action_number
+        description: Basketball-Reference action sequence number within the game. Repeated for steal / block pairs, so the grain also needs action_id.
         data_tests:
           - not_null
       - name: action_id
+        description: Disambiguates rows that share an action_number.
         data_tests:
           - not_null
       - name: event_type
+        description: Typed action parsed from the description (see int_play_by_play_events). other means no pattern matched.
         data_tests:
           - not_null
     data_tests:

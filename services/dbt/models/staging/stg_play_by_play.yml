@@ -8,21 +8,28 @@ models:
       Season-scoped ingest; not a full-history backfill.
     columns:
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - not_null
       - name: season
+        description: NBA season label, e.g. 2025-26.
         data_tests:
           - not_null
       - name: action_number
+        description: Basketball-Reference action sequence number within the game. Repeated for steal / block pairs, so the grain also needs action_id.
         data_tests:
           - not_null
       - name: action_id
+        description: Disambiguates rows that share an action_number.
         data_tests:
           - not_null
       - name: secondary_player_id
         description: >
           Assister / stealer / blocker / fouled / subbed-out player. Null for rows
           ingested before the parser started capturing the second linked player.
+        config:
+          meta:
+            nullable: true # only set on rows ingested after the parser captured it
     data_tests:
       - dbt_expectations.expect_compound_columns_to_be_unique:
           arguments:

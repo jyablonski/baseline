@@ -10,9 +10,11 @@ models:
           - not_null
           - unique
       - name: transaction_date
+        description: Date Basketball-Reference lists for the transaction.
         data_tests:
           - not_null
       - name: description
+        description: Transaction text as written on Basketball-Reference.
         data_tests:
           - not_null
 
@@ -23,6 +25,7 @@ models:
       are deliberately absent.
     columns:
       - name: transaction_key
+        description: sha256(transaction_date|description). Joins participants to their transaction.
         data_tests:
           - not_null
           - relationships:
@@ -30,6 +33,7 @@ models:
                 to: ref('stg_transactions')
                 field: transaction_key
       - name: participant_type
+        description: Whether the linked participant is a player or a team.
         data_tests:
           - not_null
           - accepted_values:
@@ -45,6 +49,7 @@ models:
               arguments:
                 values: ["from", "to", "none"]
       - name: bref_slug
+        description: Basketball-Reference href slug the participant was resolved from.
         data_tests:
           - not_null
     data_tests:

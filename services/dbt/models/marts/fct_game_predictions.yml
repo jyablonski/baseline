@@ -7,6 +7,7 @@ models:
       game. Pregame only; not live WP.
     columns:
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - not_null
           - relationships:
@@ -14,6 +15,7 @@ models:
                 to: ref('fct_games_schedule')
                 field: game_id
       - name: model_wp
+        description: Champion model's pregame home win probability.
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
@@ -31,6 +33,7 @@ models:
                 max_value: 1
                 strictly: true
       - name: market_wp
+        description: Consensus de-vigged home win probability from the odds at scoring time; null when no line matched the game.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

@@ -8,11 +8,17 @@ models:
       that link landed, via match_method.
     columns:
       - name: transaction_key
+        description: sha256(transaction_date|description). Joins participants to their transaction.
         data_tests:
           - not_null
       - name: match_method
+        description: external_id when the scraper-resolved id exists in stg_teams / stg_players, otherwise unmatched.
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["external_id", "unmatched"]
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["transaction_key", "participant_type", "bref_slug", "direction"]

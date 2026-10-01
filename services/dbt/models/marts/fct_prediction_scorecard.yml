@@ -9,17 +9,21 @@ models:
       remain visible here even when fct_game_predictions surfaces the champion only.
     columns:
       - name: season
+        description: NBA season label, e.g. 2025-26.
         data_tests:
           - not_null
       - name: model_version
+        description: Model version string, e.g. elo-v0.
         data_tests:
           - not_null
       - name: n
+        description: Final games scored for this season and model.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
                 min_value: 1
       - name: logloss
+        description: Mean log loss of the home win probability, with probabilities clipped away from 0 and 1. Lower is better.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -27,12 +31,14 @@ models:
                 max_value: 10
                 strictly: true
       - name: brier
+        description: Mean squared error of the home win probability. Lower is better; 0.25 is a coin flip.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
                 min_value: 0
                 max_value: 1
       - name: calibration_error
+        description: "Expected calibration error over ten equal-width probability bins: the game-weighted mean gap between predicted and actual home win rate."
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

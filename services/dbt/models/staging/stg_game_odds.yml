@@ -9,12 +9,15 @@ models:
       and is null when a side is missing.
     columns:
       - name: odds_event_id
+        description: The Odds API event id.
         data_tests:
           - not_null
       - name: bookmaker
+        description: Bookmaker key from The Odds API, e.g. draftkings.
         data_tests:
           - not_null
       - name: market
+        description: "Market key: h2h (moneyline) or spreads."
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_in_set:
@@ -22,6 +25,7 @@ models:
                 value_set: ["h2h", "spreads"]
                 quote_values: true
       - name: home_market_wp
+        description: De-vigged home win probability from this bookmaker's prices; null when either side's price is missing.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

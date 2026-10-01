@@ -20,6 +20,7 @@ seeds:
           - unique
           - not_null
       - name: abbreviation
+        description: Team abbreviation, for readability; team_id is the join key.
         data_tests:
           - not_null
           - dbt_expectations.expect_column_value_lengths_to_equal:

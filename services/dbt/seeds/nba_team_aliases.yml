@@ -25,9 +25,11 @@ seeds:
         alias: varchar(32)
     columns:
       - name: team_id
+        description: Canonical team UUID; matches source.teams / dim_teams.
         data_tests:
           - not_null
       - name: abbreviation
+        description: Team abbreviation, for readability; team_id is the join key.
         data_tests:
           - not_null
       - name: alias

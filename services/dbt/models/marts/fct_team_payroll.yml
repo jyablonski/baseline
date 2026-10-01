@@ -7,14 +7,41 @@ models:
       team_id via abbreviation (BRK/CHO/PHO mapped at ingest). This is a
       reported salary sum compared to official CBA tax/apron seeds, not a
       luxury-tax bill (no repeater tax).
+    # dbt model versions. Plain ref('fct_team_payroll') resolves to latest_version,
+    # so v2 is a prerelease until latest_version moves; ref('fct_team_payroll', v=2)
+    # opts in early. Columns below are the v1 shape; each version can include/exclude.
+    latest_version: 1
+    versions:
+      - v: 1 # the original model; what plain ref('fct_team_payroll') returns while latest_version is 1
+        defined_in: fct_team_payroll # read v1 SQL from fct_team_payroll.sql instead of the default fct_team_payroll_v1.sql
+        config: # model configs scoped to this version only
+          alias: fct_team_payroll # keep the original table name for v1 (default would be fct_team_payroll_v1), so Cube reads of gold.fct_team_payroll don't break
+      - v: 2
+        # Builds to gold.fct_team_payroll_v2. Breaking change: the three over_*
+        # booleans collapse into one cap_status tier, plus luxury_tax_room.
+        columns:
+          - include: all
+            exclude: [over_luxury_tax, over_first_apron, over_second_apron]
+          - name: luxury_tax_room
+            description: Season tax level minus reported total_salary; negative when over the tax.
+          - name: cap_status
+            description: Highest CBA threshold the reported total_salary is above.
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values:
+                      [under_cap, over_cap, over_luxury_tax, over_first_apron, over_second_apron]
     columns:
       - name: team_id
+        description: Baseline team UUID.
         data_tests:
           - not_null
       - name: season
+        description: NBA season label, e.g. 2025-26.
         data_tests:
           - not_null
       - name: total_salary
+        description: Reported Basketball-Reference Team Totals salary for the season (USD).
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

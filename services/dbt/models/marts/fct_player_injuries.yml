@@ -5,12 +5,15 @@ models:
     description: Current Basketball-Reference injury snapshot with canonical UUID references.
     columns:
       - name: player_id
+        description: Baseline player UUID.
         data_tests:
           - not_null
       - name: team_id
+        description: Team listing the injury (Baseline team UUID).
         data_tests:
           - not_null
       - name: player_name_normalized
+        description: Player name lowercased with suffixes (Jr., III, ...) and punctuation stripped, via normalize_player_name.
         data_tests:
           - not_null
     data_tests:

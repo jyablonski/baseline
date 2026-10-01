@@ -14,6 +14,7 @@ models:
       overtime period counts.
     columns:
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - not_null
           - unique
@@ -22,6 +23,7 @@ models:
                 to: ref('fct_team_game_results')
                 field: game_id
       - name: scoring_play_count
+        description: Number of plays that changed the score.
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
@@ -29,6 +31,7 @@ models:
                 min_value: 1
                 max_value: 500
       - name: home_lead_pct
+        description: Share of elapsed game time the home team led; null when no time elapsed.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -36,6 +39,7 @@ models:
                 max_value: 1
                 row_condition: "home_lead_pct is not null"
       - name: away_lead_pct
+        description: Share of elapsed game time the away team led; null when no time elapsed.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -43,6 +47,7 @@ models:
                 max_value: 1
                 row_condition: "away_lead_pct is not null"
       - name: tied_pct
+        description: Share of elapsed game time the score was tied; null when no time elapsed.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -50,6 +55,7 @@ models:
                 max_value: 1
                 row_condition: "tied_pct is not null"
       - name: max_lead
+        description: Largest lead either team held.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -101,5 +107,6 @@ models:
                 min_value: 0
                 max_value: 6
       - name: went_to_overtime
+        description: True when the game reached a fifth period.
         data_tests:
           - not_null

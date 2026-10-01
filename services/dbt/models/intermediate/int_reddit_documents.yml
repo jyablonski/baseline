@@ -8,10 +8,12 @@ models:
       dropped — "[removed]" carries no entities. Grain is document_reddit_id.
     columns:
       - name: document_reddit_id
+        description: Reddit id of the post or comment this text came from. The grain.
         data_tests:
           - unique
           - not_null
       - name: document_type
+        description: post (title + self text) or comment (body).
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_in_set:
@@ -19,11 +21,14 @@ models:
                 value_set: ["post", "comment"]
                 quote_values: true
       - name: post_reddit_id
+        description: Parent submission id; equals document_reddit_id for posts.
         data_tests:
           - not_null
       - name: created_utc
+        description: Creation time in UTC, from Reddit.
         data_tests:
           - not_null
       - name: search_text
+        description: Text normalized with normalize_player_name and padded with a space on each side, so a whole-token match is a plain substring test.
         data_tests:
           - not_null

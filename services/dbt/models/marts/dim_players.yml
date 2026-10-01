@@ -10,15 +10,18 @@ models:
           - unique
           - not_null
       - name: full_name
+        description: Display name for the player.
         data_tests:
           - dbt_expectations.expect_column_values_to_not_be_null
       - name: career_games_played
+        description: Loaded game logs across every season; 0 when none are loaded. Warehouse coverage, not a true career total.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
                 min_value: 0
                 max_value: 5000
       - name: seasons_played
+        description: Distinct seasons with a loaded game log; 0 when none are loaded.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

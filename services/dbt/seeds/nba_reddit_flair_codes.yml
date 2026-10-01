@@ -36,6 +36,7 @@ seeds:
           - unique
           - not_null
       - name: scope
+        description: team for a franchise code, league for r/nba's own badge, other for non-team codes (defunct franchises, conferences, joke and meta flairs).
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_in_set:

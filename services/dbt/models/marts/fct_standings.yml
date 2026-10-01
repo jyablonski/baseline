@@ -18,12 +18,15 @@ models:
                 max_value: 10
                 row_condition: "playoff_seed is not null"
       - name: team_id
+        description: Baseline team UUID.
         data_tests:
           - not_null
       - name: season
+        description: NBA season label, e.g. 2025-26.
         data_tests:
           - not_null
       - name: conference
+        description: Conference, East or West.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_in_set:
               arguments:
@@ -31,6 +34,7 @@ models:
                 quote_values: true
                 row_condition: "conference is not null"
       - name: conference_rank
+        description: Record-based rank within the conference (1-15). Ignores play-in results; see playoff_seed.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -38,6 +42,7 @@ models:
                 max_value: 15
                 row_condition: "conference_rank is not null"
       - name: wins
+        description: Regular Season wins to date.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
@@ -45,6 +50,7 @@ models:
                 max_value: 82
                 row_condition: "wins is not null"
       - name: losses
+        description: Regular Season losses to date.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
