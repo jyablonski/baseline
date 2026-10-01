@@ -284,6 +284,18 @@ wheels = [
 ]
 
 [[package]]
+name = "dbt-score"
+version = "0.18.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/79/f9/2b05d20fcd574908140f360e8c66c3b3a48fd1dcb45df491730b8ad746bd/dbt_score-0.18.0.tar.gz", hash = "sha256:c434056a31038ee196a6118ee8e7214b8dd3c4491c06fae98725eea15602afa3", size = 197698, upload-time = "2026-09-28T14:08:00.714Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8e/74/9247758590f175a8f7dd546dfe17f5d6d5c4e19c0b5e31869b40a7622669/dbt_score-0.18.0-py3-none-any.whl", hash = "sha256:d05544678e5b3f0eab16d35eba30cf2fe4c863e20ddbac4bc53161aa845469bf", size = 36720, upload-time = "2026-09-28T14:07:59.705Z" },
+]
+
+[[package]]
 name = "deepdiff"
 version = "8.6.2"
 source = { registry = "https://pypi.org/simple" }
@@ -509,6 +521,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "dbt-score" },
     { name = "sqlfluff" },
     { name = "sqlfluff-templater-dbt" },
     { name = "ty" },
@@ -522,6 +535,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "dbt-score", specifier = "==0.18.0" },
     { name = "sqlfluff", specifier = "==4.3.0" },
     { name = "sqlfluff-templater-dbt", specifier = "==4.3.0" },
     { name = "ty", specifier = "==0.0.78" },

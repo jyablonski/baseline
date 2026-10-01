@@ -9,12 +9,15 @@ models:
       Differential is home minus away. Season-scoped ingest; not a full-history backfill.
     columns:
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - not_null
       - name: action_number
+        description: Basketball-Reference action sequence number within the game. Repeated for steal / block pairs, so the grain also needs action_id.
         data_tests:
           - not_null
       - name: score_differential
+        description: Home score minus away score after this play.
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
@@ -22,6 +25,7 @@ models:
                 min_value: -200
                 max_value: 200
       - name: elapsed_seconds
+        description: Game seconds elapsed at the play, counting 720 per quarter and 300 per overtime.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

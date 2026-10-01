@@ -8,10 +8,12 @@ models:
       Queryable via Cube / MCP.
     columns:
       - name: reddit_id
+        description: Reddit base36 id (no t1_/t3_ prefix).
         data_tests:
           - unique
           - not_null
       - name: post_reddit_id
+        description: Parent submission's reddit_id.
         data_tests:
           - not_null
           - relationships:
@@ -19,5 +21,6 @@ models:
                 to: ref('fct_reddit_posts')
                 field: reddit_id
       - name: created_utc
+        description: Creation time in UTC, from Reddit.
         data_tests:
           - not_null

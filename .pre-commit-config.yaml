@@ -33,6 +33,13 @@ repos:
         pass_filenames: false
         files: ^services/(api|scraper|mcp|cube|ml|migrate)/.*\.py$
         entry: scripts/ty-check.sh
+      # See scripts/dbt-score.sh: dbt parse (no database) then dbt-score lint.
+      - id: dbt-score
+        name: dbt-score
+        language: system
+        pass_filenames: false
+        files: ^services/dbt/((models|seeds|macros|tests|dbt_score_rules)/|dbt_project\.yml$|pyproject\.toml$|packages\.yml$)
+        entry: scripts/dbt-score.sh
       - id: frontend-eslint
         name: frontend eslint
         language: system

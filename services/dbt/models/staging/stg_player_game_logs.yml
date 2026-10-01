@@ -5,24 +5,29 @@ models:
     description: Player game logs with parsed home/away location and opponent abbreviation.
     columns:
       - name: player_id
+        description: Baseline player UUID.
         data_tests:
           - not_null
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - not_null
       - name: location
+        description: home or away, parsed from the matchup string (' vs. ' is home, ' @ ' is away).
         data_tests:
           - dbt_expectations.expect_column_values_to_be_in_set:
               arguments:
                 value_set: ["home", "away"]
                 quote_values: true
       - name: result
+        description: W or L for the player's team.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_in_set:
               arguments:
                 value_set: ["W", "L"]
                 quote_values: true
       - name: points
+        description: Points scored.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

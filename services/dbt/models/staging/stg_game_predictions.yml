@@ -8,15 +8,19 @@ models:
       match that game.
     columns:
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - not_null
       - name: as_of
+        description: When services/ml produced this prediction.
         data_tests:
           - not_null
       - name: model_version
+        description: Model version string, e.g. elo-v0.
         data_tests:
           - not_null
       - name: model_wp
+        description: Model's pregame home win probability.
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
@@ -25,6 +29,7 @@ models:
                 max_value: 1
                 strictly: true
       - name: market_wp
+        description: Consensus de-vigged home win probability from the odds at scoring time; null when no line matched the game.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

@@ -1,0 +1,19 @@
+version: 2
+
+macros:
+  - name: generate_schema_name
+    description: Uses a model's custom schema as-is instead of dbt's default target_schema + custom concatenation, so +schema gold builds into gold rather than gold_gold.
+    arguments:
+      - name: custom_schema_name
+        type: string
+        description: The model's +schema config (silver or gold); none falls back to the profile target schema.
+      - name: node
+        type: object
+        description: The node being built. Required by dbt's macro signature; unused here.
+
+  - name: normalize_player_name
+    description: SQL expression that lowercases a name, strips generational suffixes (Jr., Sr., II, III, IV), and collapses punctuation and whitespace to single spaces. Postgres counterpart of the scraper's normalize_player_name, minus its ASCII folding; accented letters are treated as punctuation here (Jokić becomes joki). Also reused on Reddit free text, where needle and haystack must normalize identically.
+    arguments:
+      - name: column
+        type: string
+        description: SQL expression (usually a column reference) to normalize.

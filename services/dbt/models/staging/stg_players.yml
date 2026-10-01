@@ -18,6 +18,7 @@ models:
                 min_value: 1
                 max_value: 200
       - name: is_active
+        description: Set true whenever a roster, injury, contract, or play-by-play scrape writes the player. Nothing sets it back to false, so it means seen in a current-season scrape at some point, not on a roster today.
         data_tests:
           - dbt_expectations.expect_column_values_to_not_be_null
       - name: position
@@ -46,6 +47,7 @@ models:
               config:
                 severity: warn
       - name: from_year
+        description: Earliest year in the Basketball-Reference roster years cell; null when the cell is empty.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:

@@ -5,12 +5,15 @@ models:
     description: Remaining player-season salaries from Basketball-Reference, already resolved to canonical UUIDs.
     columns:
       - name: player_id
+        description: Baseline player UUID.
         data_tests:
           - not_null
       - name: team_id
+        description: Team the contract is with (Baseline team UUID).
         data_tests:
           - not_null
       - name: season
+        description: NBA season label, e.g. 2025-26.
         data_tests:
           - not_null
     data_tests:

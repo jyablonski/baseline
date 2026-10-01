@@ -19,10 +19,12 @@ models:
       stays `other`.
     columns:
       - name: author_flair
+        description: "Raw flair string as Reddit returns it, e.g. ':lal-1: Lakers'. The grain."
         data_tests:
           - unique
           - not_null
       - name: flair_scope
+        description: team for a franchise, league for a generic NBA / r/nba flair, other for everything else (national teams, bandwagon, defunct franchises).
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_in_set:
@@ -30,6 +32,7 @@ models:
                 value_set: ["team", "league", "other"]
                 quote_values: true
       - name: flair_match_method
+        description: "Which resolution path matched: emoji_code, uncoded_emoji, bracket_abbreviation, label, or unmatched."
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_in_set:
@@ -38,6 +41,10 @@ models:
                   ["emoji_code", "uncoded_emoji", "bracket_abbreviation", "label", "unmatched"]
                 quote_values: true
       - name: flair_team_id
+        description: Resolved franchise (Baseline team UUID). Null unless flair_scope is team.
+        config:
+          meta:
+            nullable: true # null unless flair_scope is team
         data_tests:
           - relationships:
               arguments:

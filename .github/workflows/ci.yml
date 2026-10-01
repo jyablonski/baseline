@@ -68,6 +68,19 @@ jobs:
       # docker-compose.e2e.yml; the target tears the stack down afterwards.
       - run: make test-dbt
 
+  dbt-score:
+    name: dbt score
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: services/dbt/uv.lock
+      # No Postgres needed: see scripts/dbt-score.sh.
+      - run: make dbt-score
+
   python:
     name: Python tests (${{ matrix.service }})
     runs-on: ubuntu-latest
@@ -118,7 +131,7 @@ jobs:
   images:
     name: Build and push images
     if: vars.ENABLE_OCI_DEPLOY == 'true' && github.event_name != 'pull_request'
-    needs: [quality, frontend, frontend-e2e, dbt-e2e, python, admin-jobs-e2e]
+    needs: [quality, frontend, frontend-e2e, dbt-e2e, dbt-score, python, admin-jobs-e2e]
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -173,7 +186,8 @@ jobs:
   # template, so anything omitted here cannot turn the message red.
   notify:
     name: Slack Notification
-    needs: [quality, frontend, frontend-e2e, dbt-e2e, python, admin-jobs-e2e, images, deploy]
+    needs:
+      [quality, frontend, frontend-e2e, dbt-e2e, dbt-score, python, admin-jobs-e2e, images, deploy]
     if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:

@@ -25,6 +25,8 @@ game_end as (
         game_bounds.max_home_lead,
         game_bounds.max_away_lead,
         greatest(game_bounds.max_home_lead, game_bounds.max_away_lead) as max_lead,
+        -- Run the clock to the final buzzer, not the last basket: time after the
+        -- last score still counts toward whoever was leading.
         greatest(
             game_bounds.max_elapsed,
             case
@@ -54,6 +56,9 @@ final_differential as (
     where last_scores.reverse_order = 1
 ),
 
+-- Scoring plays bracketed by a 0-0 row at tip-off and a closing row at the
+-- buzzer. action_number 0 and int max force those to sort first and last when
+-- a scoring play shares their elapsed second.
 timeline as (
     select
         game_end.game_id,
@@ -145,6 +150,8 @@ with_prev_diff as (
     from scoring
 ),
 
+-- Lead changes are direct sign flips only. Passing through a tie (home +1,
+-- tied, away +2) counts as a tie, not a lead change.
 lead_events as (
     select
         with_prev_diff.game_id,
@@ -175,6 +182,8 @@ run_ends as (
     select * from scoring
 ),
 
+-- Every start/end pair of scoring plays in a game (O(n^2) per game). Measuring
+-- from the start row's prev_score includes the starting play's own points.
 run_windows as (
     select
         run_starts.game_id,
@@ -223,6 +232,8 @@ run_candidates as (
 ranked_runs as (
     select
         run_candidates.*,
+        -- Biggest net margin wins; ties go to the more one-sided run, then
+        -- the shorter one, then the earlier one.
         row_number() over (
             partition by run_candidates.game_id
             order by
@@ -237,6 +248,8 @@ ranked_runs as (
     from run_candidates
 ),
 
+-- Margin from the eventual loser's side: positive means the loser was ahead.
+-- The peak of this is the largest lead blown.
 loser_margins as (
     select
         scoring.game_id,

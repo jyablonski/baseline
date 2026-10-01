@@ -11,12 +11,15 @@ models:
       are the mvp_* vars in dbt_project.yml.
     columns:
       - name: player_id
+        description: Baseline player UUID.
         data_tests:
           - not_null
       - name: season
+        description: NBA season label, e.g. 2025-26.
         data_tests:
           - not_null
       - name: season_type
+        description: Regular Season or Playoffs.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_in_set:
               arguments:
@@ -36,18 +39,21 @@ models:
       - name: team_games
         description: Final games the player's latest team has played in the season type, to date.
       - name: games_missed_pct
+        description: Share of team_games the player did not play, rounded to three decimals.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
                 min_value: 0
                 max_value: 1
       - name: availability_multiplier
+        description: 1 inside the missed-games grace share, then ramps down quadratically to 1 - var mvp_availability_max_penalty. Rounded to three decimals.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
                 min_value: 0
                 max_value: 1
       - name: mvp_score
+        description: Average unrounded mvp_game_score times availability_multiplier, rounded to one decimal.
         data_tests:
           - not_null
       - name: mvp_rank

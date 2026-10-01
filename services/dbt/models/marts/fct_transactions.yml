@@ -8,16 +8,20 @@ models:
       lands as a new row rather than an update.
     columns:
       - name: transaction_key
+        description: sha256(transaction_date|description). The grain.
         data_tests:
           - not_null
           - unique
       - name: transaction_date
+        description: Date Basketball-Reference lists for the transaction.
         data_tests:
           - not_null
       - name: season
+        description: NBA season the transaction falls in, e.g. 2025-26.
         data_tests:
           - not_null
       - name: description
+        description: Transaction text as written on Basketball-Reference.
         data_tests:
           - not_null
 
@@ -28,6 +32,7 @@ models:
       receives from, once per direction.
     columns:
       - name: transaction_key
+        description: sha256(transaction_date|description). Joins participants to their transaction.
         data_tests:
           - not_null
           - relationships:
@@ -35,24 +40,34 @@ models:
                 to: ref('fct_transactions')
                 field: transaction_key
       - name: participant_type
+        description: Whether the linked participant is a player or a team.
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["player", "team"]
       - name: direction
+        description: from / to for a team in a trade, from the link's data-attr-from / data-attr-to. 'none' for players.
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["from", "to", "none"]
       - name: team_id
+        description: Linked team (Baseline team UUID); null for player rows.
+        config:
+          meta:
+            nullable: true # null on player rows
         data_tests:
           - relationships:
               arguments:
                 to: ref('dim_teams')
                 field: team_id
       - name: player_id
+        description: Linked player (Baseline player UUID); null for team rows.
+        config:
+          meta:
+            nullable: true # null on team rows
         data_tests:
           - relationships:
               arguments:

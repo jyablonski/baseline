@@ -8,15 +8,18 @@ models:
       are retained with null cold-start features.
     columns:
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - unique
           - not_null
       - name: season_type
+        description: Always Regular Season; the feature set covers the regular season only.
         data_tests:
           - accepted_values:
               arguments:
                 values: ["Regular Season"]
       - name: game_date
+        description: Scheduled game date (no tip-off time).
         data_tests:
           - not_null
       - name: point_diff_diff

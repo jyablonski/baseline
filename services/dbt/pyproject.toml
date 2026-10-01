@@ -9,6 +9,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "dbt-score==0.18.0",
     "sqlfluff-templater-dbt==4.3.0",
     "sqlfluff==4.3.0",
     "ty==0.0.78",
@@ -79,3 +80,20 @@ ignore_words = "location,result,source"
 # dbt ships no Python source; this only anchors ty to this project.
 [tool.ty.environment]
 python-version = "3.13"
+
+[tool.dbt-score]
+# Solo project: there is no meta.owner convention to enforce.
+disabled_rules = [
+    "dbt_score.rules.generic.has_owner",
+    "dbt_score.rules.generic.seed_has_owner",
+    # Example queries belong in Cube / the API, not in every model description.
+    "dbt_score.rules.generic.has_example_sql",
+]
+# Ratchet: just under the current project score so CI fails on regressions.
+# Raise as descriptions get filled in.
+fail_project_under = 9.0
+fail_any_item_under = 5.0
+
+[tool.dbt-score.rules."dbt_score.rules.generic.sql_has_reasonable_number_of_lines"]
+# int_game_features and fct_game_flow are ~450 lines of CTEs by design.
+max_lines = 500

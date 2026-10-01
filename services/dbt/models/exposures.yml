@@ -1,0 +1,108 @@
+version: 2
+
+# Downstream consumers of the warehouse. `dbt ls -s +exposure:<name>` lists what a change can break.
+exposures:
+  - name: api
+    label: Baseline API
+    type: application
+    url: https://baseline.jyablonski.dev/api/v1
+    maturity: high
+    description: FastAPI /api/v1 (services/api) with raw SQL over gold in src/queries. Backs the Next.js frontend; the admin endpoints also read source tables directly, which are not listed here.
+    owner:
+      name: jyablonski
+    depends_on:
+      - ref('dim_players')
+      - ref('dim_teams')
+      - ref('fct_game_flow')
+      - ref('fct_game_odds')
+      - ref('fct_game_predictions')
+      - ref('fct_games_schedule')
+      - ref('fct_play_by_play_scoring')
+      - ref('fct_player_game_logs')
+      - ref('fct_player_mvp_scores')
+      - ref('fct_player_season_stats')
+      - ref('fct_prediction_scorecard')
+      - ref('fct_reddit_comments')
+      - ref('fct_reddit_entity_mentions')
+      - ref('fct_reddit_flair')
+      - ref('fct_reddit_posts')
+      - ref('fct_standings')
+      - ref('fct_team_game_results')
+      - ref('fct_transaction_participants')
+      - ref('fct_transactions')
+
+  - name: cube
+    label: Cube semantic layer
+    type: application
+    maturity: high
+    description: Cube YAML in services/cube/model/cubes, one cube per gold table (team_games and team_game_flow also read fct_team_game_results / fct_game_flow). Internal only; serves Ask and MCP.
+    owner:
+      name: jyablonski
+    depends_on:
+      - ref('dim_players')
+      - ref('dim_teams')
+      - ref('fct_game_flow')
+      - ref('fct_game_odds')
+      - ref('fct_game_predictions')
+      - ref('fct_games_schedule')
+      - ref('fct_game_upsets')
+      - ref('fct_play_by_play')
+      - ref('fct_player_contracts')
+      - ref('fct_player_game_logs')
+      - ref('fct_player_injuries')
+      - ref('fct_player_mvp_scores')
+      - ref('fct_player_season_stats')
+      - ref('fct_reddit_comments')
+      - ref('fct_reddit_entity_mentions')
+      - ref('fct_reddit_flair')
+      - ref('fct_reddit_posts')
+      - ref('fct_standings')
+      - ref('fct_team_game_results')
+      - ref('fct_team_payroll', v=1) # Cube reads gold.fct_team_payroll, v1's relation; pinned so moving latest_version can't retarget it silently
+      - ref('fct_transaction_participants')
+      - ref('fct_transactions')
+
+  - name: mcp
+    label: MCP server
+    type: application
+    url: https://baseline.jyablonski.dev/mcp
+    maturity: medium
+    description: FastMCP tools (services/mcp) over Cube, never gold SQL. query_cube accepts any cube, so this depends on everything Cube exposes.
+    owner:
+      name: jyablonski
+    depends_on:
+      - ref('dim_players')
+      - ref('dim_teams')
+      - ref('fct_game_flow')
+      - ref('fct_game_odds')
+      - ref('fct_game_predictions')
+      - ref('fct_games_schedule')
+      - ref('fct_game_upsets')
+      - ref('fct_play_by_play')
+      - ref('fct_player_contracts')
+      - ref('fct_player_game_logs')
+      - ref('fct_player_injuries')
+      - ref('fct_player_mvp_scores')
+      - ref('fct_player_season_stats')
+      - ref('fct_reddit_comments')
+      - ref('fct_reddit_entity_mentions')
+      - ref('fct_reddit_flair')
+      - ref('fct_reddit_posts')
+      - ref('fct_standings')
+      - ref('fct_team_game_results')
+      - ref('fct_team_payroll', v=1) # Cube reads gold.fct_team_payroll, v1's relation; pinned so moving latest_version can't retarget it silently
+      - ref('fct_transaction_participants')
+      - ref('fct_transactions')
+
+  - name: ml_pregame_wp
+    label: Pregame win probability job
+    type: ml
+    maturity: medium
+    description: services/ml Elo and logit scoring. Reads features, schedule, results, and odds, and writes source.game_predictions, which feeds back in through stg_game_predictions.
+    owner:
+      name: jyablonski
+    depends_on:
+      - ref('stg_game_odds')
+      - ref('int_game_features')
+      - ref('fct_team_game_results')
+      - ref('fct_games_schedule')

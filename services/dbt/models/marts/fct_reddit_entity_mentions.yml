@@ -17,6 +17,7 @@ models:
             column_list: ["entity_type", "entity_id", "document_reddit_id"]
     columns:
       - name: entity_type
+        description: player or team.
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_in_set:
@@ -24,12 +25,15 @@ models:
                 value_set: ["player", "team"]
                 quote_values: true
       - name: entity_id
+        description: Baseline UUID of the matched player or team.
         data_tests:
           - not_null
       - name: entity_name
+        description: "Display name: dim_players.full_name or dim_teams.team_name."
         data_tests:
           - not_null
       - name: match_method
+        description: "What matched: full_name for players; team_name, nickname, or alias for teams."
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_in_set:
@@ -37,6 +41,7 @@ models:
                 value_set: ["full_name", "team_name", "nickname", "alias"]
                 quote_values: true
       - name: document_type
+        description: post (title + self text) or comment.
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_in_set:
@@ -44,6 +49,7 @@ models:
                 value_set: ["post", "comment"]
                 quote_values: true
       - name: post_reddit_id
+        description: Parent submission id; equals document_reddit_id for posts.
         data_tests:
           - not_null
           - relationships:
@@ -51,5 +57,6 @@ models:
                 to: ref('fct_reddit_posts')
                 field: reddit_id
       - name: created_utc
+        description: Creation time of the document in UTC.
         data_tests:
           - not_null

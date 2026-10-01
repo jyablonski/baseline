@@ -7,21 +7,27 @@ models:
       a completed-game fact; fct_team_game_results stays Final-only.
     columns:
       - name: game_id
+        description: Baseline game UUID.
         data_tests:
           - unique
           - not_null
       - name: game_date
+        description: Scheduled game date (no tip-off time).
         data_tests:
           - not_null
       - name: season
+        description: NBA season label, e.g. 2025-26.
         data_tests:
           - not_null
       - name: status
+        description: "Game status from the schedule: Final or Scheduled."
         data_tests:
           - not_null
       - name: home_team_id
+        description: Home team (Baseline team UUID).
         data_tests:
           - not_null
       - name: away_team_id
+        description: Away team (Baseline team UUID).
         data_tests:
           - not_null

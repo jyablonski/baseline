@@ -117,6 +117,9 @@ team_history_ranked as (
             order by completed_team_games.game_date desc, completed_team_games.game_id desc
         ) as history_rank
     from current_team_games
+    -- The leakage guard: strictly earlier dates only, so a same-day game never
+    -- feeds another. Same season only, so form resets each year; the left join
+    -- keeps a team's first game with null history (cold start).
     left join completed_team_games
         on current_team_games.team_id = completed_team_games.team_id
         and current_team_games.season = completed_team_games.season
@@ -142,6 +145,8 @@ team_context as (
             end
         ) as last10_point_diff,
         max(team_history_ranked.history_game_date) as previous_game_date,
+        -- Postgres has no max(uuid); round-trip through text to pick the most
+        -- recent game's venue.
         (
             max(team_history_ranked.history_venue_team_id::text)
             filter (where team_history_ranked.history_rank = 1)
@@ -154,6 +159,8 @@ arena_seed as (
     select * from {{ ref('nba_team_arenas') }}
 ),
 
+-- The seed holds current arenas only, so a past season played in a since-replaced
+-- building still gets today's coordinates.
 arenas as (
     select
         arena_seed.team_id::uuid as team_id,
@@ -202,6 +209,8 @@ head_to_head as (
                 and schedule_games.away_team_id = completed_games_with_winner.home_team_id
             )
         )
+        -- Rolling 365 days rather than the season (unlike team_history_ranked),
+        -- so early-season games still see last year's meetings.
         and completed_games_with_winner.game_date >= schedule_games.game_date - interval '365 days'
     group by schedule_games.game_id, schedule_games.home_team_id
 ),
@@ -261,6 +270,8 @@ feature_rows as (
         on away_team_context.previous_venue_team_id = away_previous_arenas.team_id
 ),
 
+-- Haversine great-circle distance, Earth radius 3958.8 miles, from each team's
+-- previous venue to tonight's home arena.
 travel_features as (
     select
         feature_rows.*,
@@ -357,6 +368,8 @@ select
         when travel_features.away_previous_game_date is null then null
         else travel_features.game_date - travel_features.away_previous_game_date
     end as away_rest_days,
+    -- Timezones approximated as 15-degree longitude bands, not real tz
+    -- boundaries; close enough to count coast-to-coast hops.
     case
         when travel_features.home_previous_longitude is null then null
         else abs(
