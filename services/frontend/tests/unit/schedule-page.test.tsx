@@ -97,7 +97,9 @@ describe("schedule page", () => {
     expect(screen.getAllByTestId("win-probability")[1]).toHaveTextContent("—");
     expect(screen.getAllByTestId("moneyline")[1]).toHaveTextContent("—");
     expect(screen.getAllByTestId("spread")[1]).toHaveTextContent("—");
-    expect(screen.getByText(/not betting advice/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Schedule" }).parentElement).toHaveTextContent(
+      "2026-27 schedule from today onward. Win % is Baseline's pregame model estimate. How accurate is the model?"
+    );
     expect(screen.getByRole("link", { name: "How accurate is the model?" })).toHaveAttribute(
       "href",
       "/predictions"

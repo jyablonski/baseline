@@ -110,7 +110,7 @@ describe("team profile", () => {
       </Providers>
     );
     await waitFor(() => {
-      expect(screen.getByText("MIN")).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "MIN" })).toBeInTheDocument();
     });
 
     expect(screen.getByRole("link", { name: "Teams" })).toHaveAttribute("href", "/teams");
@@ -134,7 +134,7 @@ describe("team profile", () => {
     expect(lastTen).toHaveTextContent("Streak W1");
 
     expect(screen.getByText("Cap position · 2026-27")).toBeInTheDocument();
-    expect(screen.getByText("Over 1st apron (tier 3 of 4)")).toBeInTheDocument();
+    expect(screen.getByText("Over 1st apron · tier 3 of 4")).toBeInTheDocument();
     expect(screen.getByText("Taxpayer mid-level exception")).toBeInTheDocument();
 
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
