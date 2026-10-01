@@ -371,6 +371,7 @@ export type ScheduledGame = {
   season: string;
   season_type?: string | null;
   game_date: string;
+  start_time_et?: string | null;
   status: string;
   home_team_id: string;
   away_team_id: string;
@@ -418,6 +419,10 @@ export type ListScheduleParams = {
   season?: string;
   status?: string;
   from_date?: string;
+  team_id?: string;
+  opponent_team_id?: string;
+  location?: "home" | "away";
+  arena_city?: string;
   limit?: number;
   offset?: number;
 };

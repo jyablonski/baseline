@@ -6,7 +6,12 @@ test("schedule lists the upcoming slate without scores or 2010-11 copy", async (
   await mockApi(page);
   await page.goto("/schedule");
   await expect(page.getByRole("heading", { name: "Schedule" })).toBeVisible();
-  await expect(page.getByText(/Scores stay empty until the game is Final/)).toBeVisible();
+  const scheduleDescription = page
+    .locator("p")
+    .filter({ hasText: "2025-26 schedule from today onward." });
+  await expect(scheduleDescription).toContainText(
+    "2025-26 schedule from today onward. Win % is Baseline's pregame model estimate."
+  );
   await expect(page.getByText("LAL")).toBeVisible();
   await expect(page.getByText("@")).toBeVisible();
   await expect(page.getByRole("link", { name: "GSW" })).toBeVisible();
@@ -24,7 +29,6 @@ test("schedule shows model win % and consensus odds, linking to the scorecard", 
   await expect(page.getByTestId("win-probability")).toHaveText("38% / 62%");
   await expect(page.getByTestId("moneyline")).toHaveText("+130 / -150");
   await expect(page.getByTestId("spread")).toHaveText("GSW -3.5");
-  await expect(page.getByText(/not betting advice/)).toBeVisible();
   await page.getByRole("link", { name: "How accurate is the model?" }).click();
   await expect(page).toHaveURL(/\/predictions$/);
   await expect(page.getByRole("heading", { name: "Model scorecard" })).toBeVisible();

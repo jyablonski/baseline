@@ -8,6 +8,7 @@ import { TeamAbbrLink } from "@/components/team-logo";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import { formatGamesBack, formatRecord, formatWinPctPlain } from "@/lib/format";
+import { teamHref } from "@/lib/nav";
 import { standingsSeed } from "@/lib/team-form";
 import type { StandingRow } from "@/lib/types";
 
@@ -88,7 +89,7 @@ function ConferenceTable({ title, rows }: { title: string; rows: StandingRow[] }
                   <TeamAbbrLink
                     teamId={row.team_id}
                     abbreviation={row.abbreviation}
-                    href={`/teams/${row.team_id}`}
+                    href={teamHref(row.team_name)}
                   />
                   <span className="text-muted-foreground">{row.team_name}</span>
                 </span>

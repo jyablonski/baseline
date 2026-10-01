@@ -4,14 +4,21 @@ import { describe, expect, it, vi } from "vitest";
 const getPlayerGameLog = vi.fn();
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/players/player-1",
+  usePathname: () => "/players/stephen-curry",
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams("season=2025-26"),
-  useParams: () => ({ id: "player-1" }),
+  useParams: () => ({ slug: "stephen-curry" }),
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
+    findPlayerBySlug: async () => ({
+      player_id: "player-1",
+      full_name: "Stephen Curry",
+      position: "PG",
+      team_abbreviation: "GSW",
+      is_active: true,
+    }),
     listSeasons: async () => ({
       data: [{ season: "2025-26" }],
       meta: { total: 1, limit: 1, offset: 0 },
@@ -50,7 +57,7 @@ vi.mock("@/lib/api", () => ({
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
 }));
 
-import PlayerProfilePage from "@/app/players/[id]/page";
+import PlayerProfilePage from "@/app/players/[slug]/page";
 import { Providers } from "@/components/providers";
 
 describe("player profile", () => {

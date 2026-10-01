@@ -41,6 +41,7 @@ import type {
   TeamSummary,
   WarehouseStatus,
 } from "@/lib/types";
+import { slugifyName } from "@/lib/nav";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -177,6 +178,50 @@ export function queryErrorMessage(error: unknown): string {
   return "Something went wrong. Try again in a moment.";
 }
 
+async function searchPlayers(search = "", params: Omit<SearchPlayersParams, "search"> = {}) {
+  return asPaginated<PlayerSummary>(
+    await fetchApi(
+      `/api/v1/players${buildQuery({
+        search,
+        active: params.active,
+        team_id: params.team_id,
+        season: params.season,
+        sort: params.sort,
+        limit: params.limit,
+        offset: params.offset,
+      })}`
+    )
+  );
+}
+
+async function findPlayerBySlug(slug: string) {
+  const normalizedSlug = slugifyName(slug);
+  const suffixes = new Set(["jr", "sr", "ii", "iii", "iv"]);
+  const searchTokens = normalizedSlug
+    .split("-")
+    .filter((token) => token.length > 1 && !suffixes.has(token));
+  const search = searchTokens.at(-1) ?? normalizedSlug.replaceAll("-", " ");
+  if (!search) return null;
+
+  const pageSize = 100;
+  let offset = 0;
+  let match: PlayerSummary | null = null;
+  while (true) {
+    const page = await searchPlayers(search, { sort: "name", limit: pageSize, offset });
+    for (const player of page.data) {
+      if (slugifyName(player.full_name) !== normalizedSlug) continue;
+      if (match && match.player_id !== player.player_id) {
+        throw new ApiClientError("This player name matches multiple players.", 409);
+      }
+      match = player;
+    }
+
+    const nextOffset = page.meta.offset + page.meta.limit;
+    if (page.data.length === 0 || nextOffset >= page.meta.total) return match;
+    offset = nextOffset;
+  }
+}
+
 export const api = {
   getGameBoxScore: async (gameId: string) =>
     asPaginated<BoxScoreRow>(await fetchApi(`/api/v1/games/${gameId}/box-score`)),
@@ -216,20 +261,8 @@ export const api = {
       await fetchApi(`/api/v1/social/${board}${buildQuery({ ...params })}`)
     ),
 
-  searchPlayers: async (search = "", params: Omit<SearchPlayersParams, "search"> = {}) =>
-    asPaginated<PlayerSummary>(
-      await fetchApi(
-        `/api/v1/players${buildQuery({
-          search,
-          active: params.active,
-          team_id: params.team_id,
-          season: params.season,
-          sort: params.sort,
-          limit: params.limit,
-          offset: params.offset,
-        })}`
-      )
-    ),
+  searchPlayers,
+  findPlayerBySlug,
 
   getPlayer: async (id: string) => asData<PlayerDetail>(await fetchApi(`/api/v1/players/${id}`)),
 
@@ -277,7 +310,10 @@ export const api = {
       await fetchApi(`/api/v1/teams${buildQuery({ season: params.season })}`)
     ),
 
-  getTeam: async (id: string) => asData<TeamDetail>(await fetchApi(`/api/v1/teams/${id}`)),
+  getTeam: async (id: string, params: { season?: string } = {}) =>
+    asData<TeamDetail>(
+      await fetchApi(`/api/v1/teams/${id}${buildQuery({ season: params.season })}`)
+    ),
 
   getTeamGames: async (id: string, params: TeamGamesParams = {}) =>
     asPaginated<TeamGame>(
@@ -345,6 +381,10 @@ export const api = {
           season: params.season,
           status: params.status,
           from_date: params.from_date,
+          team_id: params.team_id,
+          opponent_team_id: params.opponent_team_id,
+          location: params.location,
+          arena_city: params.arena_city,
           limit: params.limit ?? 50,
           offset: params.offset,
         })}`

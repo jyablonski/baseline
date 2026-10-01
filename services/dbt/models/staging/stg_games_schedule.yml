@@ -12,9 +12,11 @@ models:
           - unique
           - not_null
       - name: game_date
-        description: Scheduled game date (no tip-off time).
+        description: Scheduled game date in Eastern Time.
         data_tests:
           - not_null
+      - name: start_time_et
+        description: Scheduled tip-off time in Eastern Time; null when unpublished.
       - name: status
         description: "Game status from the schedule: Final or Scheduled."
         data_tests:

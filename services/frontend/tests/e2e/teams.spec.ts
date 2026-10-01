@@ -17,7 +17,7 @@ test("teams directory to profile shows cap position", async ({ page }) => {
 
   await page.getByRole("link", { name: "GSW" }).click();
   await expect(page.getByRole("heading", { name: "Golden State Warriors" })).toBeVisible();
-  await expect(page.getByText(/Chase Center/)).toBeVisible();
+  await expect(page.getByText("Chase Center", { exact: true })).toBeVisible();
   await expect(page.getByText("Cap position").first()).toBeVisible();
   await expect(page.getByText("Regular Season")).toBeVisible();
   await expect(page.getByText("Arena city")).toBeVisible();

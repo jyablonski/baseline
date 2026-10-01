@@ -49,11 +49,19 @@ class GamesRepository:
         from_date: date,
         limit: int,
         offset: int,
+        team_id: UUID | None = None,
+        opponent_team_id: UUID | None = None,
+        location: str | None = None,
+        arena_city: str | None = None,
     ) -> tuple[int, list[dict]]:
         params = {
             "season": season,
             "status": status,
             "from_date": from_date,
+            "team_id": team_id,
+            "opponent_team_id": opponent_team_id,
+            "location": location,
+            "arena_city": f"%{arena_city}%" if arena_city else None,
             "limit": limit,
             "offset": offset,
         }

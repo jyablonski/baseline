@@ -23,3 +23,27 @@ export function withSeason(href: string, season: string) {
   params.set("season", season);
   return `${path}?${params.toString()}`;
 }
+
+export function slugifyName(name: string) {
+  return name
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[.'’]/gu, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-|-$/g, "");
+}
+
+export function playerHref(name: string) {
+  return `/players/${slugifyName(name)}`;
+}
+
+export function teamHref(name: string) {
+  return `/teams/${slugifyName(name)}`;
+}
+
+export function isLegacyEntityId(value: string) {
+  return (
+    /^\d+$/.test(value) ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
+}

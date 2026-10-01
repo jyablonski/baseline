@@ -24,6 +24,8 @@ vi.mock("@/lib/api", () => ({
           away_team_id: 1610612747,
           home_team_abbreviation: "GSW",
           away_team_abbreviation: "LAL",
+          home_team_name: "Golden State Warriors",
+          away_team_name: "Los Angeles Lakers",
           arena: "Chase Center",
           prediction_model_version: "elo-v0",
           home_win_probability: 0.62,
@@ -41,6 +43,8 @@ vi.mock("@/lib/api", () => ({
           away_team_id: 1610612752,
           home_team_abbreviation: "BOS",
           away_team_abbreviation: "NYK",
+          home_team_name: "Boston Celtics",
+          away_team_name: "New York Knicks",
           arena: "TD Garden",
         },
       ],
@@ -72,7 +76,7 @@ describe("schedule page", () => {
     expect(screen.getByText("Chase Center")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "GSW" })).toHaveAttribute(
       "href",
-      "/teams/1610612744?season=2026-27"
+      "/teams/golden-state-warriors?season=2026-27"
     );
     expect(screen.queryByText("PBP →")).not.toBeInTheDocument();
   });
@@ -93,7 +97,9 @@ describe("schedule page", () => {
     expect(screen.getAllByTestId("win-probability")[1]).toHaveTextContent("—");
     expect(screen.getAllByTestId("moneyline")[1]).toHaveTextContent("—");
     expect(screen.getAllByTestId("spread")[1]).toHaveTextContent("—");
-    expect(screen.getByText(/not betting advice/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Schedule" }).parentElement).toHaveTextContent(
+      "2026-27 schedule from today onward. Win % is Baseline's pregame model estimate. How accurate is the model?"
+    );
     expect(screen.getByRole("link", { name: "How accurate is the model?" })).toHaveAttribute(
       "href",
       "/predictions"

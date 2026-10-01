@@ -10,6 +10,7 @@ import { TeamAbbrLink } from "@/components/team-logo";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import { formatRecord, formatWinPctPlain } from "@/lib/format";
+import { teamHref } from "@/lib/nav";
 import type { TeamSummary } from "@/lib/types";
 
 const EAST_DIVISIONS = ["Atlantic", "Central", "Southeast"];
@@ -110,10 +111,10 @@ function ConferenceColumn({
                     <TeamAbbrLink
                       teamId={team.team_id}
                       abbreviation={team.abbreviation}
-                      href={`/teams/${team.team_id}`}
+                      href={teamHref(team.team_name)}
                       size={24}
                     />
-                    <Link href={`/teams/${team.team_id}`} className="hover:text-primary">
+                    <Link href={teamHref(team.team_name)} className="hover:text-primary">
                       {nickname || team.team_name}
                     </Link>
                     <span className="tabular text-muted-foreground">

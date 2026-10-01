@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS gold.fct_games_schedule (
     season                  VARCHAR(10) NOT NULL,
     season_type             VARCHAR(20),
     game_date               DATE NOT NULL,
+    start_time_et           TIME,
     status                  VARCHAR(20) NOT NULL,
     arena                   VARCHAR(100),
     arena_city              VARCHAR(50),

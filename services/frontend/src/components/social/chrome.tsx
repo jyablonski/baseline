@@ -19,7 +19,8 @@ export function SummaryStrip({
 }: {
   summary: SocialSummary | undefined;
   topPlayer: SocialEntity | undefined;
-  mostContested: { title: string; score: number; num_comments: number } | undefined;
+  mostContested:
+    { title: string; permalink: string; score: number; num_comments: number } | undefined;
 }) {
   return (
     <div className="grid border-y border-rule-strong sm:grid-cols-2 lg:grid-cols-4">
@@ -52,9 +53,26 @@ export function SummaryStrip({
       <Cell label="Most contested">
         {mostContested ? (
           <>
-            <span className="type-module block leading-tight">“{mostContested.title}”</span>
+            <a
+              className="type-module line-clamp-3 h-[3.75em] leading-tight hover:underline"
+              href={mostContested.permalink}
+              target="_blank"
+              rel="noreferrer"
+              title={mostContested.title}
+            >
+              “{mostContested.title}”
+            </a>
             <Note>
               {formatCount(mostContested.num_comments)} comments on a score of {mostContested.score}
+              {" · "}
+              <a
+                className="text-foreground underline underline-offset-2"
+                href={mostContested.permalink}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open post ↗
+              </a>
             </Note>
           </>
         ) : (

@@ -8,6 +8,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { useDebounce } from "@/hooks/use-debounce";
 import { api, queryErrorMessage } from "@/lib/api";
+import { playerHref } from "@/lib/nav";
 import {
   formatDate,
   formatNumber,
@@ -264,7 +265,7 @@ function ComparePlayers() {
                   <tr key={row.player_id}>
                     <td className="py-3">
                       <Link
-                        href={`/players/${row.player_id}`}
+                        href={playerHref(row.full_name)}
                         className="text-lg font-semibold hover:text-primary"
                       >
                         {row.full_name}
@@ -458,7 +459,7 @@ function HeadToHeadPanel({
               <tr key={row.player_id}>
                 <td className="py-3">
                   <Link
-                    href={`/players/${row.player_id}`}
+                    href={playerHref(row.full_name)}
                     className="text-lg font-semibold hover:text-primary"
                   >
                     {row.full_name}

@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlencode
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import requests
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
@@ -29,6 +30,7 @@ ODDS_API_BASE = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 ODDS_REQUEST_TIMEOUT = 30
 ODDS_REGIONS = "us"
 ODDS_MARKETS = "h2h,spreads"
+EASTERN = ZoneInfo("America/New_York")
 
 
 class OddsHTTPError(RuntimeError):
@@ -217,7 +219,11 @@ def match_odds_game_id(
     commence = row.get("commence_time")
     if home_id is None or away_id is None or not isinstance(commence, datetime):
         return None
-    game_date = commence.date()
+    commence_utc = (
+        commence.replace(tzinfo=UTC) if commence.tzinfo is None else commence.astimezone(UTC)
+    )
+    # Odds API timestamps are UTC; BRef schedule dates are Eastern calendar days.
+    game_date = commence_utc.astimezone(EASTERN).date()
     matches = [
         game
         for game in games

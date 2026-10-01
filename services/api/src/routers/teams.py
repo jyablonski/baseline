@@ -66,13 +66,14 @@ def list_teams(
 @router.get("/{team_id}", response_model=ItemResponse[TeamDetail])
 def get_team(
     team_id: UUID,
+    season: Annotated[str | None, Query()] = None,
     repo: TeamsRepository = Depends(get_teams_repository),
     standings_repo: StandingsRepository = Depends(get_standings_repository),
 ) -> ItemResponse[TeamDetail]:
     team = repo.get_team(team_id)
     if team is None:
         raise HTTPException(status_code=404, detail="Team not found")
-    latest_season = repo.latest_season_for_team(team_id)
+    latest_season = season or repo.latest_season_for_team(team_id)
     season_record = None
     play_in_record = None
     playoff_record = None
@@ -80,6 +81,17 @@ def get_team(
         by_type = repo.records_by_season_type(team, latest_season)
         if "Regular Season" in by_type:
             season_record = TeamRecord.model_validate(by_type["Regular Season"])
+        else:
+            season_record = TeamRecord.model_validate(
+                repo.compute_record(
+                    team,
+                    repo.game_filter_params(
+                        team_id,
+                        season=latest_season,
+                        season_type="Regular Season",
+                    ),
+                )
+            )
         if "PlayIn" in by_type:
             play_in_record = TeamRecord.model_validate(by_type["PlayIn"])
         if "Playoffs" in by_type:

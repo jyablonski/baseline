@@ -15,6 +15,7 @@ import {
 } from "recharts";
 
 import { formatStat } from "@/lib/format";
+import { teamHref } from "@/lib/nav";
 import {
   leagueRatingAverages,
   paddedDomain,
@@ -63,7 +64,7 @@ export function TeamLogoMarker({
   const logoUrl = teamLogoUrl(payload.abbreviation);
   return (
     <g>
-      <a href={`/teams/${payload.team_id}`}>
+      <a href={teamHref(payload.team_name)}>
         {logoUrl ? (
           <image
             href={logoUrl}

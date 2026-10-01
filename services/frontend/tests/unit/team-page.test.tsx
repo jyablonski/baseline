@@ -2,10 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/teams/1610612743",
+  usePathname: () => "/teams/denver-nuggets",
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
-  useParams: () => ({ id: "1610612743" }),
+  useParams: () => ({ slug: "denver-nuggets" }),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -90,12 +90,16 @@ vi.mock("@/lib/api", () => ({
       ],
       meta: { total: 88, limit: 200, offset: 0 },
     }),
+    listSchedule: async () => ({
+      data: [],
+      meta: { total: 0, limit: 10, offset: 0 },
+    }),
     getTeamRecord: async () => ({ wins: 56, losses: 32, win_pct: 0.636, games: 88 }),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
 }));
 
-import TeamProfilePage from "@/app/teams/[id]/page";
+import TeamProfilePage from "@/app/teams/[slug]/page";
 import { Providers } from "@/components/providers";
 
 describe("team profile", () => {
@@ -106,7 +110,7 @@ describe("team profile", () => {
       </Providers>
     );
     await waitFor(() => {
-      expect(screen.getByText("MIN")).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "MIN" })).toBeInTheDocument();
     });
 
     expect(screen.getByRole("link", { name: "Teams" })).toHaveAttribute("href", "/teams");
@@ -130,7 +134,7 @@ describe("team profile", () => {
     expect(lastTen).toHaveTextContent("Streak W1");
 
     expect(screen.getByText("Cap position · 2026-27")).toBeInTheDocument();
-    expect(screen.getByText("Over 1st apron (tier 3 of 4)")).toBeInTheDocument();
+    expect(screen.getByText("Over 1st apron · tier 3 of 4")).toBeInTheDocument();
     expect(screen.getByText("Taxpayer mid-level exception")).toBeInTheDocument();
 
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
@@ -144,8 +148,7 @@ describe("team profile", () => {
     expect(screen.queryByText("MRG")).not.toBeInTheDocument();
     expect(screen.getByText("-12")).toBeInTheDocument();
     expect(screen.queryByText("+12")).not.toBeInTheDocument();
-    expect(screen.getByText("Filtered games")).toBeInTheDocument();
-    expect(screen.getAllByText("56–32 | 63.6%")).toHaveLength(3);
+    expect(screen.getByText("Remaining schedule")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "home" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));

@@ -11,7 +11,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import { formatNumber, formatStat } from "@/lib/format";
-import { withSeason } from "@/lib/nav";
+import { playerHref, withSeason } from "@/lib/nav";
 import type { PlayerSort } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -216,7 +216,7 @@ function PlayersDirectory() {
                     </td>
                     <td>
                       <Link
-                        href={`/players/${player.player_id}`}
+                        href={playerHref(player.full_name)}
                         className="text-primary hover:underline"
                       >
                         {player.full_name}
