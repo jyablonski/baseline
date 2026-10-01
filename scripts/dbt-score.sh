@@ -32,6 +32,11 @@ if [[ -z "$UV" ]]; then
   exit 1
 fi
 
+# The quality CI job's setup-uv exports UV_PYTHON=3.14 for the 3.14 services,
+# and `make quality` runs hooks inside the repo-root venv (VIRTUAL_ENV). dbt is
+# pinned to 3.13, so let services/dbt/.python-version decide instead.
+unset UV_PYTHON VIRTUAL_ENV
+
 export POSTGRES_USER="${POSTGRES_USER:-parse}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-parse}"
 export POSTGRES_DB="${POSTGRES_DB:-parse}"
