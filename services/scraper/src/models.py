@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from sqlalchemy import (
     CHAR,
@@ -18,6 +18,7 @@ from sqlalchemy import (
     PrimaryKeyConstraint,
     String,
     Text,
+    Time,
     UniqueConstraint,
     func,
 )
@@ -78,6 +79,7 @@ class Game(Base):
     season: Mapped[str] = mapped_column(String(10), nullable=False)
     season_type: Mapped[str] = mapped_column(String(20), nullable=False)
     game_date: Mapped[date] = mapped_column(Date, nullable=False)
+    start_time_et: Mapped[time | None] = mapped_column(Time)
     home_team_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("source.teams.team_id"), nullable=False
     )

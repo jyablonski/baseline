@@ -12,6 +12,7 @@ dependencies = [
     "requests==2.34.2",
     "beautifulsoup4==4.13.5",
     "praw==8.0.3",
+    "tzdata==2026.4",
 ]
 
 [dependency-groups]

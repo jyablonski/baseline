@@ -7,6 +7,7 @@ select
     source.season,
     source.season_type,
     source.game_date,
+    source.start_time_et,
     source.home_team_id,
     source.away_team_id,
     source.home_score,

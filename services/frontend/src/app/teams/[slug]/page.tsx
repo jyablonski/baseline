@@ -1,15 +1,16 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { CapPosition } from "@/components/teams/cap-position";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
+import { TeamLogo } from "@/components/team-logo";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
-import { withSeason } from "@/lib/nav";
+import { isLegacyEntityId, slugifyName, teamHref, withSeason } from "@/lib/nav";
 import {
   formatDate,
   formatGamesBack,
@@ -17,12 +18,17 @@ import {
   formatOrdinal,
   formatRecord,
   formatRecordWithWinPct,
+  formatScheduleDate,
   formatSignedMargin,
+  formatTimeET,
   teamCentricMargin,
 } from "@/lib/format";
 import { lastTenFromGames, streakFromGames } from "@/lib/team-form";
 import type { TeamGame } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const GAME_PAGE_SIZE = 10;
+const SCHEDULE_PAGE_SIZE = GAME_PAGE_SIZE;
 
 export default function TeamProfilePage() {
   return (
@@ -33,24 +39,41 @@ export default function TeamProfilePage() {
 }
 
 function TeamProfile() {
-  const params = useParams<{ id: string }>();
-  const teamId = params.id;
-  const { season: requestedSeason } = useSeason();
+  const params = useParams<{ slug: string }>();
+  const router = useRouter();
+  const routeSlug = params.slug;
+  const isLegacyRoute = isLegacyEntityId(routeSlug);
+  const { season: requestedSeason, isLoading: seasonsLoading } = useSeason();
   const [seasonOverride, setSeasonOverride] = useState<string | null>(null);
   const [opponentId, setOpponentId] = useState("");
   const [arenaCity, setArenaCity] = useState("");
   const [location, setLocation] = useState<"all" | "home" | "away">("all");
+  const [gamesPage, setGamesPage] = useState(0);
+  const [schedulePage, setSchedulePage] = useState(0);
   const season = seasonOverride ?? requestedSeason;
 
-  const teamQuery = useQuery({
-    queryKey: ["team", teamId],
-    queryFn: () => api.getTeam(teamId),
-    enabled: Boolean(teamId),
-  });
   const teamsQuery = useQuery({
     queryKey: ["teams"],
     queryFn: () => api.listTeams(),
   });
+  const resolvedTeam = (teamsQuery.data?.data ?? []).find(
+    (item) =>
+      slugifyName(item.team_name) === slugifyName(routeSlug) ||
+      slugifyName(item.abbreviation) === slugifyName(routeSlug)
+  );
+  const teamId = isLegacyRoute ? routeSlug : String(resolvedTeam?.team_id ?? "");
+  const teamQuery = useQuery({
+    queryKey: ["team", teamId, season],
+    queryFn: () => api.getTeam(teamId, { season: season || undefined }),
+    enabled: Boolean(teamId) && !seasonsLoading,
+  });
+  const team = teamQuery.data;
+
+  useEffect(() => {
+    if (team && routeSlug !== slugifyName(team.team_name)) {
+      router.replace(withSeason(teamHref(team.team_name), season));
+    }
+  }, [routeSlug, router, season, team]);
 
   const recordParams = {
     season: season || undefined,
@@ -60,27 +83,35 @@ function TeamProfile() {
   };
 
   const gamesQuery = useQuery({
-    queryKey: ["team", teamId, "games", recordParams],
-    queryFn: () => api.getTeamGames(teamId, { ...recordParams, limit: 200 }),
+    queryKey: ["team", teamId, "games", recordParams, gamesPage],
+    queryFn: () =>
+      api.getTeamGames(teamId, {
+        ...recordParams,
+        limit: GAME_PAGE_SIZE,
+        offset: gamesPage * GAME_PAGE_SIZE,
+      }),
     enabled: Boolean(teamId),
+  });
+  const remainingScheduleQuery = useQuery({
+    queryKey: ["team", teamId, "remaining-schedule", recordParams, schedulePage],
+    queryFn: () =>
+      api.listSchedule({
+        season: season || undefined,
+        status: "Scheduled",
+        team_id: teamId,
+        opponent_team_id: opponentId || undefined,
+        location: location === "all" ? undefined : location,
+        arena_city: arenaCity || undefined,
+        limit: SCHEDULE_PAGE_SIZE,
+        offset: schedulePage * SCHEDULE_PAGE_SIZE,
+      }),
+    enabled: Boolean(teamId && season),
   });
   const overallQuery = useQuery({
     queryKey: ["team", teamId, "record", "overall", recordParams],
     queryFn: () => api.getTeamRecord(teamId, recordParams),
     enabled: Boolean(teamId),
   });
-  const homeQuery = useQuery({
-    queryKey: ["team", teamId, "record", "home", recordParams],
-    queryFn: () => api.getTeamRecord(teamId, { ...recordParams, location: "home" }),
-    enabled: Boolean(teamId),
-  });
-  const awayQuery = useQuery({
-    queryKey: ["team", teamId, "record", "away", recordParams],
-    queryFn: () => api.getTeamRecord(teamId, { ...recordParams, location: "away" }),
-    enabled: Boolean(teamId),
-  });
-
-  const team = teamQuery.data;
   const standing = team?.standing;
   const headerSeason = team?.record_season;
   const needsForm = Boolean(headerSeason && (!standing?.last_10 || !standing?.streak));
@@ -97,9 +128,18 @@ function TeamProfile() {
 
   const games = gamesQuery.data?.data ?? [];
   const overall = overallQuery.data;
+  const remainingSchedule = remainingScheduleQuery.data?.data ?? [];
+
+  if (!isLegacyRoute && teamsQuery.isLoading) {
+    return <LoadingState label="Loading team…" />;
+  }
+
+  if (!isLegacyRoute && teamsQuery.isError) {
+    return <ErrorState message={queryErrorMessage(teamsQuery.error)} />;
+  }
 
   if (!teamId) {
-    return <ErrorState message="Invalid team id." />;
+    return <ErrorState message="Team not found." />;
   }
 
   if (teamQuery.isLoading) {
@@ -126,11 +166,17 @@ function TeamProfile() {
   const last10 = standing?.last_10 || lastTenFromGames(formQuery.data?.data ?? []);
   const streak = standing?.streak || streakFromGames(formQuery.data?.data ?? []);
   const gamesTotal = gamesQuery.data?.meta.total ?? games.length;
+  const scheduleTotal = remainingScheduleQuery.data?.meta.total ?? remainingSchedule.length;
+  const gamesFrom = gamesTotal === 0 ? 0 : gamesPage * GAME_PAGE_SIZE + 1;
+  const gamesTo = Math.min(gamesTotal, (gamesPage + 1) * GAME_PAGE_SIZE);
+  const scheduleFrom = scheduleTotal === 0 ? 0 : schedulePage * SCHEDULE_PAGE_SIZE + 1;
+  const scheduleTo = Math.min(scheduleTotal, (schedulePage + 1) * SCHEDULE_PAGE_SIZE);
+  const hasSeasonGames = (team.season_record?.games ?? 0) > 0;
   const rankLine =
-    standing?.conference_rank != null
+    hasSeasonGames && standing?.conference_rank != null
       ? `${formatOrdinal(standing.conference_rank)} in ${standing.conference}`
       : null;
-  const gamesBack = formatGamesBack(standing?.games_back);
+  const gamesBack = hasSeasonGames ? formatGamesBack(standing?.games_back) : "—";
   const rsSubline = [
     headerRecord?.games != null ? `${headerRecord.games} games` : null,
     rankLine,
@@ -140,10 +186,16 @@ function TeamProfile() {
     .join(" · ");
 
   function resetFilters() {
+    resetPages();
     setSeasonOverride(null);
     setOpponentId("");
     setArenaCity("");
     setLocation("all");
+  }
+
+  function resetPages() {
+    setGamesPage(0);
+    setSchedulePage(0);
   }
 
   // TeamRecord.games is optional; a missing count reads as zero so the KPI hides.
@@ -162,7 +214,10 @@ function TeamProfile() {
 
       <div className="flex flex-wrap items-start justify-between gap-6">
         <div>
-          <h1 className="type-entity">{team.team_name}</h1>
+          <h1 className="type-entity flex items-center gap-3">
+            <TeamLogo teamId={team.team_id} abbreviation={team.abbreviation} size={36} />
+            <span>{team.team_name}</span>
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {[
               team.abbreviation,
@@ -192,22 +247,26 @@ function TeamProfile() {
             }
             subtext={rsSubline}
           />
-          {team.play_in_record && playInGames > 0 ? (
-            <SeasonKpi
-              testId="team-kpi-play-in"
-              label="Play-in"
-              value={formatRecord(team.play_in_record.wins, team.play_in_record.losses)}
-              subtext={`${playInGames} GP`}
-            />
-          ) : null}
-          {team.playoff_record && playoffGames > 0 ? (
-            <SeasonKpi
-              testId="team-kpi-playoffs"
-              label="Playoffs"
-              value={formatRecord(team.playoff_record.wins, team.playoff_record.losses)}
-              subtext={`${playoffGames} GP`}
-            />
-          ) : null}
+          <SeasonKpi
+            testId="team-kpi-play-in"
+            label="Play-in"
+            value={
+              team.play_in_record && playInGames > 0
+                ? formatRecord(team.play_in_record.wins, team.play_in_record.losses)
+                : "—"
+            }
+            subtext={playInGames > 0 ? `${playInGames} GP` : null}
+          />
+          <SeasonKpi
+            testId="team-kpi-playoffs"
+            label="Playoffs"
+            value={
+              team.playoff_record && playoffGames > 0
+                ? formatRecord(team.playoff_record.wins, team.playoff_record.losses)
+                : "—"
+            }
+            subtext={playoffGames > 0 ? `${playoffGames} GP` : null}
+          />
           <SeasonKpi
             testId="team-kpi-last-10"
             label="Last 10"
@@ -224,7 +283,10 @@ function TeamProfile() {
         <LabeledSelect
           label="Opponent"
           value={opponentId}
-          onChange={setOpponentId}
+          onChange={(value) => {
+            setOpponentId(value);
+            resetPages();
+          }}
           options={[
             { value: "", label: "Any" },
             ...opponents.map((item) => ({ value: String(item.team_id), label: item.abbreviation })),
@@ -233,7 +295,10 @@ function TeamProfile() {
         <LabeledSelect
           label="Arena city"
           value={arenaCity}
-          onChange={setArenaCity}
+          onChange={(value) => {
+            setArenaCity(value);
+            resetPages();
+          }}
           options={[
             { value: "", label: "Any" },
             ...arenaCities.map((city) => ({ value: city, label: city })),
@@ -244,7 +309,10 @@ function TeamProfile() {
             <button
               key={value}
               type="button"
-              onClick={() => setLocation(value)}
+              onClick={() => {
+                setLocation(value);
+                resetPages();
+              }}
               className={cn("seg-btn", location === value && "seg-btn-active")}
             >
               {value}
@@ -324,28 +392,92 @@ function TeamProfile() {
               </tbody>
             </table>
           )}
+          <PageControls
+            from={gamesFrom}
+            to={gamesTo}
+            total={gamesTotal}
+            page={gamesPage}
+            onPage={setGamesPage}
+          />
         </section>
 
         <aside>
           <div className="border border-border p-4">
-            <h2 className="type-module">Split under this filter</h2>
-            <div className="mt-4 space-y-3">
-              <RecordBar
-                label="Filtered games"
-                wins={overall?.wins ?? 0}
-                losses={overall?.losses ?? 0}
-              />
-              <RecordBar
-                label="Home"
-                wins={homeQuery.data?.wins ?? 0}
-                losses={homeQuery.data?.losses ?? 0}
-              />
-              <RecordBar
-                label="Away"
-                wins={awayQuery.data?.wins ?? 0}
-                losses={awayQuery.data?.losses ?? 0}
-              />
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="type-module">Remaining schedule</h2>
+              {scheduleTotal > 0 ? (
+                <span className="text-xs text-muted-foreground">
+                  {formatNumber(scheduleTotal)} games
+                </span>
+              ) : null}
             </div>
+            {remainingScheduleQuery.isLoading ? (
+              <LoadingState label="Loading remaining schedule…" />
+            ) : remainingScheduleQuery.isError ? (
+              <ErrorState message={queryErrorMessage(remainingScheduleQuery.error)} />
+            ) : remainingSchedule.length === 0 ? (
+              <EmptyState message="No remaining games match these filters." />
+            ) : (
+              <div className="mt-3 divide-y divide-border">
+                {remainingSchedule.map((game) => {
+                  const isHome = game.home_team_id === teamId;
+                  const opponentTeamId = isHome ? game.away_team_id : game.home_team_id;
+                  const opponentAbbreviation = isHome
+                    ? game.away_team_abbreviation
+                    : game.home_team_abbreviation;
+                  const opponentName = isHome ? game.away_team_name : game.home_team_name;
+                  return (
+                    <div key={game.game_id} className="py-2 first:pt-0 last:pb-0">
+                      <div className="flex justify-between gap-3 text-sm">
+                        <span className="whitespace-nowrap font-medium">
+                          {formatScheduleDate(game.game_date)}
+                        </span>
+                        <span className="whitespace-nowrap tabular text-muted-foreground">
+                          {formatTimeET(game.start_time_et)}
+                        </span>
+                      </div>
+                      <p className="mt-1 flex items-center gap-1.5 text-sm">
+                        <span className="shrink-0 text-muted-foreground">
+                          {isHome ? "vs" : "@"}
+                        </span>
+                        {opponentTeamId ? (
+                          <Link
+                            href={withSeason(
+                              teamHref(opponentName ?? opponentAbbreviation ?? ""),
+                              season
+                            )}
+                            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap font-semibold hover:text-primary"
+                          >
+                            <TeamLogo
+                              teamId={opponentTeamId}
+                              abbreviation={opponentAbbreviation}
+                              size={18}
+                            />
+                            {opponentAbbreviation ?? "Opponent"}
+                          </Link>
+                        ) : (
+                          <span className="whitespace-nowrap font-semibold">
+                            {opponentAbbreviation ?? "Opponent"}
+                          </span>
+                        )}
+                      </p>
+                      {game.arena || game.arena_city ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {game.arena || game.arena_city}
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <PageControls
+              from={scheduleFrom}
+              to={scheduleTo}
+              total={scheduleTotal}
+              page={schedulePage}
+              onPage={setSchedulePage}
+            />
           </div>
         </aside>
       </div>
@@ -405,20 +537,42 @@ function LabeledSelect({
   );
 }
 
-function RecordBar({ label, wins, losses }: { label: string; wins: number; losses: number }) {
-  const total = wins + losses;
-  const pct = total ? wins / total : 0;
+function PageControls({
+  from,
+  to,
+  total,
+  page,
+  onPage,
+}: {
+  from: number;
+  to: number;
+  total: number;
+  page: number;
+  onPage: (page: number) => void;
+}) {
+  if (total === 0) return null;
   return (
-    <div>
-      <div className="mb-1 flex justify-between text-xs">
-        <span>{label}</span>
-        <span className="tabular text-muted-foreground">
-          {formatRecordWithWinPct(wins, losses, total ? pct : null)}
-        </span>
-      </div>
-      <div className="flex h-2 bg-skel-1">
-        <div className="bg-primary" style={{ width: `${pct * 100}%` }} />
-        <div className="bg-loss-bar" style={{ width: `${(1 - pct) * 100}%` }} />
+    <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+      <p className="text-muted-foreground">
+        {from}–{to} of {formatNumber(total)}
+      </p>
+      <div className="flex gap-1">
+        <button
+          type="button"
+          disabled={page === 0}
+          onClick={() => onPage(Math.max(0, page - 1))}
+          className="btn-ghost"
+        >
+          ← Prev
+        </button>
+        <button
+          type="button"
+          disabled={to >= total}
+          onClick={() => onPage(page + 1)}
+          className="btn-ghost"
+        >
+          Next →
+        </button>
       </div>
     </div>
   );

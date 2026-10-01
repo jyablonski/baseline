@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Any
 from urllib.parse import urljoin
 
@@ -95,6 +95,27 @@ def _game_date_text(row: Tag) -> str | None:
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", csk):
         return csk
     return cell.get_text(" ", strip=True) or None
+
+
+def _game_start_time_et(row: Tag) -> time | None:
+    value = _cell_text(row, "game_start_time")
+    if not value:
+        return None
+    text = value.strip().lower().replace(" ", "").replace(".", "")
+    match = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?([ap])m?", text)
+    if match:
+        twelve_hour = int(match.group(1))
+        minute = int(match.group(2) or 0)
+        if 1 <= twelve_hour <= 12 and minute < 60:
+            hour = twelve_hour % 12 + (12 if match.group(3) == "p" else 0)
+            return time(hour, minute)
+        return None
+    match = re.fullmatch(r"(\d{1,2}):(\d{2})", text)
+    if match:
+        hour, minute = int(match.group(1)), int(match.group(2))
+        if hour < 24 and minute < 60:
+            return time(hour, minute)
+    return None
 
 
 def _team_code(row: Tag, stat: str) -> str | None:
@@ -209,6 +230,7 @@ def parse_schedule_html(html: str, *, season: str, source_url: str) -> list[dict
                     cup_final_date=cup_final_date,
                 ),
                 "game_date": game_date,
+                "start_time_et": _game_start_time_et(row),
                 "home_bref_abbreviation": home,
                 "away_bref_abbreviation": visitor,
                 "home_score": home_score,
@@ -274,6 +296,7 @@ def scrape_games(season: str, *, fetch_html: Callable[[str], str] | None = None)
                         "away_score": record["away_score"],
                         "arena": record["arena"],
                         "status": record["status"],
+                        "start_time_et": record["start_time_et"],
                         "scraped_at": stamp,
                     },
                 )

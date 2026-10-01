@@ -64,6 +64,34 @@ export function formatDate(value: string | null | undefined) {
   });
 }
 
+export function formatScheduleDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+export function formatTimeET(value: string | null | undefined) {
+  const match = value?.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return "TBD";
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return "TBD";
+  const date = new Date(Date.UTC(1970, 0, 1, hour, minute));
+  const formattedTime = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+  });
+  return `${formattedTime} ET`;
+}
+
 export function seasonFromDate(dateStr: string) {
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) return "Unknown";

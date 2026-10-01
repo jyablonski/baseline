@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,6 +11,7 @@ class ScheduledGame(BaseModel):
     season: str
     season_type: str | None = None
     game_date: date
+    start_time_et: time | None = None
     status: str
     arena: str | None = None
     arena_city: str | None = None

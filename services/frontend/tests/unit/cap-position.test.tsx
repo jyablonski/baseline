@@ -23,14 +23,15 @@ describe("cap position", () => {
     );
 
     expect(screen.getByText("Cap position · 2026-27")).toBeInTheDocument();
-    expect(screen.getByText("Over 1st apron (tier 3 of 4)")).toBeInTheDocument();
+    expect(screen.getByText("Over 1st apron · tier 3 of 4")).toBeInTheDocument();
     expect(screen.getAllByText("$221.3M").length).toBeGreaterThan(0);
     expect(screen.getByText("$429.1M")).toBeInTheDocument();
-    expect(screen.getByText("+$20.9M over")).toBeInTheDocument();
-    expect(screen.getByText("-$0.4M under")).toBeInTheDocument();
+    expect(screen.getByText("over the 1st apron")).toBeInTheDocument();
+    expect(screen.getByText(/To get under the 1st apron: shed/)).toBeInTheDocument();
     expect(screen.getByText("Taxpayer mid-level exception")).toBeInTheDocument();
     expect(screen.getByText("Aggregating salaries in trade")).toBeInTheDocument();
-    expect(screen.getByText(/Not a tax bill/)).toBeInTheDocument();
+    expect(screen.getByText(/To get under the tax: shed/)).toBeInTheDocument();
+    expect(screen.getByText(/not a tax bill/i)).toBeInTheDocument();
     expect(screen.queryByText(/tax bill of/i)).not.toBeInTheDocument();
   });
 
@@ -39,7 +40,7 @@ describe("cap position", () => {
     expect(screen.getByText("No BRef payroll snapshot for this team yet.")).toBeInTheDocument();
   });
 
-  it("staggers close tax/apron labels so Detroit-like thresholds stay readable", () => {
+  it("shows the threshold values and payroll marker on the focused cap scale", () => {
     render(
       <CapPosition
         team={{
@@ -57,14 +58,12 @@ describe("cap position", () => {
       />
     );
 
-    const tax = screen.getByText("Tax $200.4M");
-    const first = screen.getByText("1st apron $209M");
-    const second = screen.getByText("2nd apron $221.7M");
+    const tax = screen.getByTitle("Luxury tax $200.4M");
+    const first = screen.getByTitle("1st apron $209M");
+    const second = screen.getByTitle("2nd apron $221.7M");
     expect(tax).toHaveAttribute("data-lane", "0");
-    expect(first).toHaveAttribute("data-lane", "1");
+    expect(first).toHaveAttribute("data-lane", "0");
     expect(second).toBeInTheDocument();
-    expect(new Set([tax, first, second].map((node) => node.getAttribute("data-lane"))).size).toBe(
-      2
-    );
+    expect(screen.getByText("This team")).toBeInTheDocument();
   });
 });

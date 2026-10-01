@@ -9,13 +9,14 @@ import { TeamAbbrLink } from "@/components/team-logo";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import {
-  formatDate,
   formatMoneyline,
   formatNumber,
   formatProbability,
+  formatScheduleDate,
   formatSpread,
+  formatTimeET,
 } from "@/lib/format";
-import { withSeason } from "@/lib/nav";
+import { teamHref, withSeason } from "@/lib/nav";
 import type { ScheduledGame } from "@/lib/types";
 
 const PAGE_SIZE = 50;
@@ -29,7 +30,7 @@ export default function SchedulePage() {
 }
 
 function ScheduleBody() {
-  const { season } = useSeason();
+  const { season, isLoading: seasonIsLoading } = useSeason();
   const [page, setPage] = useState(0);
 
   const scheduleQuery = useQuery({
@@ -41,6 +42,7 @@ function ScheduleBody() {
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
       }),
+    enabled: !seasonIsLoading,
   });
 
   const rows = scheduleQuery.data?.data ?? [];
@@ -54,11 +56,8 @@ function ScheduleBody() {
         <div>
           <h1 className="type-page">Schedule</h1>
           <p className="mt-1 text-sm text-ink-2">
-            Scheduled games from today onward. Scores stay empty until the game is Final.
-          </p>
-          <p className="mt-1 text-sm text-ink-2">
-            Win % is Baseline&apos;s pregame model estimate. Moneyline and spread are a consensus of
-            US sportsbook odds. Both are for context, not betting advice.{" "}
+            {season ? `${season} schedule` : "Upcoming schedule"} from today onward. Win % is
+            Baseline&apos;s pregame model estimate.{" "}
             <Link href="/predictions" className="underline underline-offset-2">
               How accurate is the model?
             </Link>
@@ -80,7 +79,7 @@ function ScheduleBody() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Date</th>
+                <th>Date / time (ET)</th>
                 <th>Matchup</th>
                 <th title="Pregame model estimate, away / home">Win % (away / home)</th>
                 <th title="Consensus moneyline, away / home">Moneyline</th>
@@ -133,14 +132,19 @@ function ScheduleRow({ game, season }: { game: ScheduledGame; season: string }) 
   const arena = game.arena || game.arena_city || "—";
   return (
     <tr>
-      <td className="tabular whitespace-nowrap">{formatDate(game.game_date)}</td>
+      <td className="tabular whitespace-nowrap">
+        <span className="block">{formatScheduleDate(game.game_date)}</span>
+        <span className="block text-xs text-muted-foreground">
+          {formatTimeET(game.start_time_et)}
+        </span>
+      </td>
       <td>
         <span className="inline-flex flex-wrap items-center gap-1.5">
           {game.away_team_id ? (
             <TeamAbbrLink
               teamId={game.away_team_id}
               abbreviation={away}
-              href={withSeason(`/teams/${game.away_team_id}`, season)}
+              href={withSeason(teamHref(game.away_team_name ?? away), season)}
             />
           ) : (
             <span className="font-semibold">{away}</span>
@@ -150,7 +154,7 @@ function ScheduleRow({ game, season }: { game: ScheduledGame; season: string }) 
             <TeamAbbrLink
               teamId={game.home_team_id}
               abbreviation={home}
-              href={withSeason(`/teams/${game.home_team_id}`, season)}
+              href={withSeason(teamHref(game.home_team_name ?? home), season)}
             />
           ) : (
             <span className="font-semibold">{home}</span>

@@ -16,7 +16,7 @@ import {
   formatSignedMargin,
   formatWinPctPlain,
 } from "@/lib/format";
-import { withSeason } from "@/lib/nav";
+import { teamHref, withSeason } from "@/lib/nav";
 import { standingsSeed } from "@/lib/team-form";
 import { cn } from "@/lib/utils";
 import type { LeagueGame, StandingRow } from "@/lib/types";
@@ -176,14 +176,14 @@ function GameRow({ game, season }: { game: LeagueGame; season: string }) {
       </td>
       <td>
         <Link
-          href={withSeason(`/teams/${game.away_team_id ?? ""}`, season)}
+          href={withSeason(teamHref(game.away_team_name ?? away), season)}
           className="font-semibold text-primary hover:underline"
         >
           {away}
         </Link>
         <span className="px-1 text-muted-foreground">at</span>
         <Link
-          href={withSeason(`/teams/${game.home_team_id ?? ""}`, season)}
+          href={withSeason(teamHref(game.home_team_name ?? home), season)}
           className="font-semibold text-primary hover:underline"
         >
           {home}
@@ -231,7 +231,7 @@ function SnapshotColumn({
             <TeamAbbrLink
               teamId={row.team_id}
               abbreviation={row.abbreviation}
-              href={withSeason(`/teams/${row.team_id}`, season)}
+              href={withSeason(teamHref(row.team_name), season)}
             />
             <span className="text-muted-foreground">{formatRecord(row.wins, row.losses)}</span>
             <span className="text-right">{formatWinPctPlain(row.win_pct)}</span>

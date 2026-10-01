@@ -15,6 +15,7 @@ select
     games.season,
     games.season_type,
     games.game_date,
+    games.start_time_et,
     games.status,
     games.arena,
     games.arena_city,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -19,7 +19,7 @@ import {
   formatUsdCompact,
   locationLabel,
 } from "@/lib/format";
-import { withSeason } from "@/lib/nav";
+import { isLegacyEntityId, playerHref, slugifyName, withSeason } from "@/lib/nav";
 import type { GameLogEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -45,15 +45,22 @@ export default function PlayerProfilePage() {
 }
 
 function PlayerProfile() {
-  const params = useParams<{ id: string }>();
+  const params = useParams<{ slug: string }>();
   const router = useRouter();
-  const playerId = params.id;
+  const routeSlug = params.slug;
+  const isLegacyRoute = isLegacyEntityId(routeSlug);
   const { season } = useSeason();
   const [sortKey, setSortKey] = useState<SortKey>("game_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [b2bOnly, setB2bOnly] = useState(false);
   const [page, setPage] = useState(0);
 
+  const playerLookupQuery = useQuery({
+    queryKey: ["player-by-slug", routeSlug],
+    queryFn: () => api.findPlayerBySlug(routeSlug),
+    enabled: Boolean(routeSlug) && !isLegacyRoute,
+  });
+  const playerId = isLegacyRoute ? routeSlug : (playerLookupQuery.data?.player_id ?? "");
   const playerQuery = useQuery({
     queryKey: ["player", playerId],
     queryFn: () => api.getPlayer(playerId),
@@ -89,6 +96,13 @@ function PlayerProfile() {
       }),
     enabled: Boolean(playerId),
   });
+  const player = playerQuery.data;
+
+  useEffect(() => {
+    if (player && routeSlug !== slugifyName(player.full_name)) {
+      router.replace(withSeason(playerHref(player.full_name), season));
+    }
+  }, [player, routeSlug, router, season]);
 
   const recentPoints = useMemo(
     () =>
@@ -109,8 +123,20 @@ function PlayerProfile() {
     setSortDir("desc");
   }
 
+  if (!isLegacyRoute && playerLookupQuery.isLoading) {
+    return <LoadingState label="Loading player…" />;
+  }
+
+  if (!isLegacyRoute && playerLookupQuery.isError) {
+    return <ErrorState message={queryErrorMessage(playerLookupQuery.error)} />;
+  }
+
+  if (!isLegacyRoute && !playerLookupQuery.data) {
+    return <ErrorState message="Player not found." />;
+  }
+
   if (!playerId) {
-    return <ErrorState message="Invalid player id." />;
+    return <ErrorState message="Player not found." />;
   }
 
   if (playerQuery.isLoading) {
@@ -125,17 +151,17 @@ function PlayerProfile() {
     );
   }
 
-  const player = playerQuery.data;
+  const loadedPlayer = playerQuery.data;
   const b2b = b2bQuery.data;
   const logs = logQuery.data?.data ?? [];
   const totalLogs = logQuery.data?.meta.total ?? 0;
   const identity = [
-    player.team_abbreviation,
-    player.jersey_number ? `#${player.jersey_number}` : null,
-    player.position,
-    player.weight != null ? `${player.weight} lb` : null,
-    formatBirthDate(player.birth_date),
-    player.is_active ? "Active" : "Inactive",
+    loadedPlayer.team_abbreviation,
+    loadedPlayer.jersey_number ? `#${loadedPlayer.jersey_number}` : null,
+    loadedPlayer.position,
+    loadedPlayer.weight != null ? `${loadedPlayer.weight} lb` : null,
+    formatBirthDate(loadedPlayer.birth_date),
+    loadedPlayer.is_active ? "Active" : "Inactive",
   ].filter(Boolean) as string[];
 
   return (
@@ -145,12 +171,12 @@ function PlayerProfile() {
           Players
         </Link>
         {" / "}
-        {player.full_name}
+        {loadedPlayer.full_name}
       </p>
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="type-entity">{player.full_name}</h1>
+          <h1 className="type-entity">{loadedPlayer.full_name}</h1>
           <p className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
             {identity.map((item, index) => (
               <span key={`${item}-${index}`} className="inline-flex items-center gap-2">
@@ -173,13 +199,13 @@ function PlayerProfile() {
         <div>
           <p className="text-[11px] tracking-wide text-muted-foreground uppercase">Season</p>
           <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-5">
-            <CareerStat label="Games" value={formatNumber(player.career_games_played)} />
-            <CareerStat label="PPG" value={formatStat(player.career_ppg)} />
-            <CareerStat label="RPG" value={formatStat(player.career_rpg)} />
-            <CareerStat label="APG" value={formatStat(player.career_apg)} />
+            <CareerStat label="Games" value={formatNumber(loadedPlayer.career_games_played)} />
+            <CareerStat label="PPG" value={formatStat(loadedPlayer.career_ppg)} />
+            <CareerStat label="RPG" value={formatStat(loadedPlayer.career_rpg)} />
+            <CareerStat label="APG" value={formatStat(loadedPlayer.career_apg)} />
             <CareerStat
-              label={`${player.mvp_season ?? "Season"} MVP rank`}
-              value={player.mvp_rank != null ? `#${player.mvp_rank}` : "—"}
+              label={`${loadedPlayer.mvp_season ?? "Season"} MVP rank`}
+              value={loadedPlayer.mvp_rank != null ? `#${loadedPlayer.mvp_rank}` : "—"}
             />
           </dl>
         </div>
@@ -191,16 +217,16 @@ function PlayerProfile() {
           <dl className="mt-3 grid grid-cols-2 gap-4">
             <div className="flex flex-col-reverse">
               <dt className="text-[11px] text-muted-foreground">
-                {player.current_contract_season ?? "Season"} salary
+                {loadedPlayer.current_contract_season ?? "Season"} salary
               </dt>
               <dd className="type-stat tabular">
-                {formatUsdCompact(player.current_season_salary)}
+                {formatUsdCompact(loadedPlayer.current_season_salary)}
               </dd>
             </div>
             <div className="flex flex-col-reverse">
               <dt className="text-[11px] text-muted-foreground">Remaining guaranteed</dt>
               <dd className="type-stat tabular">
-                {formatUsdCompact(player.current_remaining_guaranteed)}
+                {formatUsdCompact(loadedPlayer.current_remaining_guaranteed)}
               </dd>
             </div>
           </dl>

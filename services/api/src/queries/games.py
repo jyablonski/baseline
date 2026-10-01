@@ -177,26 +177,80 @@ GET_GAME_FLOW = text(
     """
 )
 
+SCHEDULE_FILTERS = """
+    fct_games_schedule.game_date >= :from_date
+    AND (:season IS NULL OR fct_games_schedule.season = :season)
+    AND (
+        :status IS NULL
+        OR (
+            lower(:status) = 'scheduled'
+            AND lower(fct_games_schedule.status) NOT IN ('final', '3')
+        )
+        OR fct_games_schedule.status = :status
+    )
+    AND (
+        :team_id IS NULL
+        OR fct_games_schedule.home_team_id = :team_id
+        OR fct_games_schedule.away_team_id = :team_id
+    )
+    AND (
+        :opponent_team_id IS NULL
+        OR (
+            :team_id IS NOT NULL
+            AND (
+                (
+                    fct_games_schedule.home_team_id = :team_id
+                    AND fct_games_schedule.away_team_id = :opponent_team_id
+                )
+                OR (
+                    fct_games_schedule.away_team_id = :team_id
+                    AND fct_games_schedule.home_team_id = :opponent_team_id
+                )
+            )
+        )
+    )
+    AND (
+        :location IS NULL
+        OR (
+            :team_id IS NOT NULL
+            AND (
+                (:location = 'home' AND fct_games_schedule.home_team_id = :team_id)
+                OR (:location = 'away' AND fct_games_schedule.away_team_id = :team_id)
+            )
+        )
+    )
+    AND (
+        :arena_city IS NULL
+        OR (
+            CASE
+                WHEN nullif(btrim(fct_games_schedule.arena), '') IS NULL
+                    OR btrim(fct_games_schedule.arena) = home_teams.arena_name
+                    THEN coalesce(nullif(btrim(fct_games_schedule.arena_city), ''), home_teams.city)
+                ELSE nullif(btrim(fct_games_schedule.arena_city), '')
+            END
+        ) ILIKE :arena_city
+    )
+"""
+
 LIST_SCHEDULE_COUNT = text(
-    """
+    f"""
+    WITH home_teams AS (
+        SELECT
+            team_id,
+            arena_name,
+            city
+        FROM gold.dim_teams
+    )
     SELECT count(*) AS total
     FROM gold.fct_games_schedule
-    WHERE
-        fct_games_schedule.game_date >= :from_date
-        AND (:season IS NULL OR fct_games_schedule.season = :season)
-        AND (
-            :status IS NULL
-            OR (
-                lower(:status) = 'scheduled'
-                AND lower(fct_games_schedule.status) NOT IN ('final', '3')
-            )
-            OR fct_games_schedule.status = :status
-        )
+    LEFT JOIN home_teams
+        ON home_teams.team_id = fct_games_schedule.home_team_id
+    WHERE {SCHEDULE_FILTERS}
     """
 )
 
 LIST_SCHEDULE = text(
-    """
+    f"""
     WITH home_teams AS (
         SELECT
             team_id,
@@ -242,6 +296,7 @@ LIST_SCHEDULE = text(
         fct_games_schedule.season,
         fct_games_schedule.season_type,
         fct_games_schedule.game_date,
+        fct_games_schedule.start_time_et,
         fct_games_schedule.status,
         coalesce(nullif(btrim(fct_games_schedule.arena), ''), home_teams.arena_name) AS arena,
         -- Only borrow the home team's city when the row is at the home team's
@@ -281,19 +336,10 @@ LIST_SCHEDULE = text(
         ON moneyline_odds.game_id = fct_games_schedule.game_id
     LEFT JOIN spread_odds
         ON spread_odds.game_id = fct_games_schedule.game_id
-    WHERE
-        fct_games_schedule.game_date >= :from_date
-        AND (:season IS NULL OR fct_games_schedule.season = :season)
-        AND (
-            :status IS NULL
-            OR (
-                lower(:status) = 'scheduled'
-                AND lower(fct_games_schedule.status) NOT IN ('final', '3')
-            )
-            OR fct_games_schedule.status = :status
-        )
+    WHERE {SCHEDULE_FILTERS}
     ORDER BY
         fct_games_schedule.game_date ASC,
+        fct_games_schedule.start_time_et ASC NULLS LAST,
         fct_games_schedule.game_id ASC
     LIMIT :limit OFFSET :offset
     """
