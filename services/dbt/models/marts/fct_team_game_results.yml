@@ -38,6 +38,9 @@ models:
                 min_value: 0
                 max_value: 400
     data_tests:
+      # Empty between seasons (and after a prod reset): warn, don't fail the build.
       - dbt_expectations.expect_table_row_count_to_be_between:
           arguments:
             min_value: 1
+          config:
+            severity: warn

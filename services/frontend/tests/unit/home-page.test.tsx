@@ -2,18 +2,20 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const listGames = vi.fn();
+let searchParams = "season=2025-26";
+let seasons = ["2025-26"];
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  useSearchParams: () => new URLSearchParams("season=2025-26"),
+  useSearchParams: () => new URLSearchParams(searchParams),
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
     listSeasons: async () => ({
-      data: [{ season: "2025-26" }],
-      meta: { total: 1, limit: 1, offset: 0 },
+      data: seasons.map((season) => ({ season })),
+      meta: { total: seasons.length, limit: seasons.length, offset: 0 },
     }),
     getStatus: async () => ({
       last_scraped_at: null,
@@ -150,5 +152,25 @@ describe("home desk", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("No standings yet")).not.toBeInTheDocument();
     expect(screen.queryByText(/Official standings were not ingested/)).not.toBeInTheDocument();
+  });
+
+  it("labels coverage with the current season before it has any games", async () => {
+    searchParams = "";
+    seasons = ["2026-27", "2025-26"];
+    listGames.mockResolvedValue({ data: [], meta: { total: 0, limit: 10, offset: 0 } });
+    try {
+      render(
+        <Providers>
+          <HomePage />
+        </Providers>
+      );
+      await waitFor(() => {
+        expect(screen.getByText("No games yet for this season.")).toBeInTheDocument();
+      });
+      expect(screen.getByText(/^Coverage/).nextElementSibling).toHaveTextContent("2026-27");
+    } finally {
+      searchParams = "season=2025-26";
+      seasons = ["2025-26"];
+    }
   });
 });
