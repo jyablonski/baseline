@@ -50,7 +50,9 @@ function HomeDesk() {
   });
 
   const status = statusQuery.data;
-  const coverageSeason = status?.last_season ?? season ?? "—";
+  // The selected season (newest on the schedule by default), not the newest one
+  // with games: between seasons that would still name last year.
+  const coverageSeason = season || status?.last_season || "—";
   const players = statusQuery.isError ? "—" : formatNumber(status?.player_count);
   const games = statusQuery.isError ? "—" : formatNumber(status?.game_count);
 
