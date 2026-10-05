@@ -66,6 +66,7 @@ Run after scrape + dbt; it needs gold Finals and schedule.
 ```bash
 make ml         # score all models, then the dbt copy into gold.fct_game_predictions
 make ml-train   # fit logit v1 and persist its artifact
+make ml-snapshot # persist Elo v0/v1 ratings so they survive deleting past seasons
 make ml-eval    # expanding-window logit metrics vs the Elo and always-home baselines
 
 # or directly
@@ -80,6 +81,15 @@ docker compose --profile tools run --rm --no-deps ml python -m main score
 - Unit tests: `make test-ml` (90% coverage gate, no Docker).
 
 **Never train on the daily cron.** `make ml-train` is manual: training beside the always-on stack is how the refresh starts OOMing, and a nightly retrain can't be reproduced. `refresh-daily.sh` runs `score` only.
+
+### Keeping models without their history
+
+Elo is refit from the loaded Finals on every run, so deleting a season would otherwise reset every team to 1500. `make ml-snapshot` (production: `make prod-ml-snapshot`) stores both Elos' end state in `source.model_artifacts` (`elo-v0`: ratings; `elo-v1`: ratings, games played this season, and the home win tally), with the season, date, and game count it runs through. Logit's artifact from `make ml-train` already persists.
+
+- **Order:** load the season, `make dbt`, `make ml-train`, `make ml-snapshot`, then delete the season and rebuild.
+- **Used only when needed.** While every game behind a snapshot is still loaded, `score` and `backfill` walk the full history as before and ignore it. Once those games are gone they resume from the snapshot and walk only Finals dated after it, so the next season still starts from regressed ratings.
+- **Rerunnable.** A later `ml-snapshot` rolls the stored state forward over newer Finals; it never restarts from 1500 because the old games are missing. Take it after a completed slate: Finals dated on the snapshot's last day are treated as already counted.
+- **Don't rerun `ml-train` after the delete** unless you mean to: logit would be refit on whatever is left.
 
 ### Backfill
 

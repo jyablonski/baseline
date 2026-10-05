@@ -89,15 +89,30 @@ def _update(state: EloV1State, game: GameRow, expected: float) -> None:
     state.home_wins += 1.0 if home_won else 0.0
 
 
-def walk_forward(games: Sequence[GameRow]) -> tuple[list[float], EloV1State]:
+def walk_forward(
+    games: Sequence[GameRow],
+    *,
+    state: EloV1State | None = None,
+    season: str | None = None,
+) -> tuple[list[float], EloV1State]:
     """Predict each game from the state entering it, then update on its result.
 
     Games must be sorted by (game_date, game_id). Games with home_won None are
-    scored but change nothing.
+    scored but change nothing. `state` and `season` resume a walk from a stored
+    snapshot: the state, and the season it was left in.
     """
-    state = EloV1State()
+    state = (
+        EloV1State()
+        if state is None
+        else EloV1State(
+            ratings=dict(state.ratings),
+            season_games=dict(state.season_games),
+            home_wins=state.home_wins,
+            home_games=state.home_games,
+        )
+    )
     preds: list[float] = []
-    current_season: str | None = None
+    current_season: str | None = season
     for game in games:
         if current_season is not None and game.season != current_season:
             state.ratings = regress_ratings(state.ratings)

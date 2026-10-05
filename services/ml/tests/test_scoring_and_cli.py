@@ -1,3 +1,4 @@
+import json
 from contextlib import contextmanager
 from datetime import date, datetime
 from unittest.mock import MagicMock
@@ -24,11 +25,15 @@ from scoring import (
     evaluate,
     evaluate_holdout,
     holdout_season,
+    load_elo_seed,
     load_live_predicted_games,
     load_market_wp,
     load_regular_season_finals,
     load_upcoming_games,
     score_and_persist,
+    snapshot_elo,
+    walk_elo_v0,
+    walk_elo_v1,
 )
 
 TEAM_HOME = UUID("00000000-0000-4000-8000-000000000201")
@@ -395,3 +400,132 @@ def test_settings_and_db_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
             with get_session():
                 pass
     fake.rollback.assert_called()
+
+
+def _season_games() -> list[GameRow]:
+    """Two seasons, two games each, on distinct dates."""
+    return [
+        GameRow(
+            game_id=_id(f"s{index}"),
+            game_date=game_date,
+            season=season,
+            home_team_id=TEAM_HOME,
+            away_team_id=TEAM_AWAY,
+            home_won=home_won,
+            home_margin=8 if home_won else -3,
+        )
+        for index, (season, game_date, home_won) in enumerate(
+            [
+                ("2025-26", date(2025, 10, 22), True),
+                ("2025-26", date(2025, 10, 24), True),
+                ("2026-27", date(2026, 10, 20), False),
+                ("2026-27", date(2026, 10, 22), True),
+            ]
+        )
+    ]
+
+
+def _snapshot(monkeypatch: pytest.MonkeyPatch, history: list[GameRow], seeds: dict) -> dict:
+    """Run snapshot_elo over `history`, returning the artifacts it stored by version."""
+    session = MagicMock()
+    monkeypatch.setattr("scoring.get_session", lambda: _session(session))
+    monkeypatch.setattr("scoring.load_regular_season_finals", lambda sess: history)
+    monkeypatch.setattr("scoring.load_elo_seed", lambda sess, version: seeds.get(version))
+    snapshot_elo(trained_at=datetime(2026, 10, 4))
+    return {
+        call.args[1]["model_version"]: json.loads(call.args[1]["artifact"])
+        for call in session.execute.call_args_list
+    }
+
+
+@pytest.mark.unit
+def test_elo_snapshot_survives_deleting_its_games(monkeypatch: pytest.MonkeyPatch) -> None:
+    games = _season_games()
+    _all, full_v0_preds, full_ratings = walk_elo_v0(games)
+    _all, full_v1_preds, full_state = walk_elo_v1(games)
+
+    seeds = _snapshot(monkeypatch, games[:2], {})
+    assert seeds["elo-v0"]["through_season"] == "2025-26"
+    assert seeds["elo-v0"]["through_date"] == "2025-10-24"
+    assert seeds["elo-v0"]["games"] == 2
+
+    # 2025-26 deleted: resuming from the snapshot matches the uninterrupted walk,
+    # including the regression at the season boundary.
+    walked, v0_preds, ratings = walk_elo_v0(games[2:], seeds["elo-v0"])
+    assert walked == games[2:]
+    assert v0_preds == pytest.approx(full_v0_preds[2:])
+    assert ratings == pytest.approx(full_ratings)
+    _walked, v1_preds, state = walk_elo_v1(games[2:], seeds["elo-v1"])
+    assert v1_preds == pytest.approx(full_v1_preds[2:])
+    assert state.ratings == pytest.approx(full_state.ratings)
+    assert state.season_games == full_state.season_games
+    assert (state.home_wins, state.home_games) == (full_state.home_wins, full_state.home_games)
+
+    # Nothing loaded at all still scores from the snapshot rather than 1500.
+    _walked, _preds, ratings = walk_elo_v0([], seeds["elo-v0"])
+    assert ratings[TEAM_HOME] > 1500.0 > ratings[TEAM_AWAY]
+
+
+@pytest.mark.unit
+def test_elo_snapshot_is_ignored_while_its_games_are_loaded() -> None:
+    games = _season_games()
+    stale = {
+        "ratings": {str(TEAM_HOME): 1900.0, str(TEAM_AWAY): 1100.0},
+        "through_season": "2025-26",
+        "through_date": "2025-10-24",
+        "games": 2,
+    }
+    walked, preds, ratings = walk_elo_v0(games, stale)
+    assert walked == games
+    assert (preds, ratings) == walk_elo_v0(games)[1:]
+    rows = build_backfill_rows(
+        games, [], {}, season="2025-26", scraped_at=datetime(2026, 10, 4), v0_seed=stale
+    )
+    assert sum(row["model_version"] == "elo-v0" for row in rows) == 2
+
+
+@pytest.mark.unit
+def test_elo_snapshot_rolls_forward_and_refuses_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    games = _season_games()
+    seeds = _snapshot(monkeypatch, games[:2], {})
+    # Old season gone, one new Final: the snapshot advances instead of restarting.
+    rolled = _snapshot(monkeypatch, games[2:3], seeds)
+    assert rolled["elo-v0"]["games"] == 3
+    assert rolled["elo-v0"]["through_season"] == "2026-27"
+    assert rolled["elo-v1"]["home_games"] == 3
+    # No new games: unchanged.
+    assert _snapshot(monkeypatch, [], seeds) == seeds
+    with pytest.raises(ValueError, match="no Regular Season Finals"):
+        _snapshot(monkeypatch, [], {})
+
+
+@pytest.mark.unit
+def test_load_elo_seed() -> None:
+    session = MagicMock()
+    session.execute.return_value.mappings.return_value.first.return_value = None
+    assert load_elo_seed(session, "elo-v0") is None
+    # The migration registers elo-v0 with an empty artifact.
+    session.execute.return_value.mappings.return_value.first.return_value = {"artifact": {}}
+    assert load_elo_seed(session, "elo-v0") is None
+    seed = {"ratings": {}, "through_season": "2025-26", "through_date": "2026-04-12", "games": 0}
+    session.execute.return_value.mappings.return_value.first.return_value = {"artifact": seed}
+    assert load_elo_seed(session, "elo-v0") == seed
+
+
+@pytest.mark.unit
+def test_cli_snapshot_elo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "main.snapshot_elo",
+        lambda: {
+            "model_versions": ["elo-v0", "elo-v1"],
+            "through_season": "2025-26",
+            "through_date": "2026-04-12",
+            "games": 1230,
+            "teams": 30,
+            "trained_at": "2026-10-04T00:00:00",
+        },
+    )
+    result = CliRunner().invoke(cli, ["snapshot-elo"])
+    assert result.exit_code == 0
+    assert "through_season=2025-26" in result.output
+    assert "games=1230" in result.output
