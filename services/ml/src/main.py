@@ -11,6 +11,7 @@ from scoring import (
     evaluate,
     evaluate_logit,
     score_and_persist,
+    snapshot_elo,
     train_model,
 )
 
@@ -87,6 +88,18 @@ def train_cmd() -> None:
     click.echo(f"model={result['model_name']} version={result['model_version']}")
     click.echo(f"training_rows={result['training_rows']}")
     click.echo(f"training_seasons={','.join(result['training_seasons'])}")
+    click.echo(f"trained_at={result['trained_at']}")
+
+
+@cli.command("snapshot-elo")
+def snapshot_elo_cmd() -> None:
+    """Persist both Elos' ratings so they survive deleting the seasons behind them."""
+    result = snapshot_elo()
+    click.echo(f"model_versions={','.join(result['model_versions'])}")
+    click.echo(f"through_season={result['through_season']}")
+    click.echo(f"through_date={result['through_date']}")
+    click.echo(f"games={result['games']}")
+    click.echo(f"teams={result['teams']}")
     click.echo(f"trained_at={result['trained_at']}")
 
 

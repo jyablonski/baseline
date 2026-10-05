@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import Any
 from uuid import UUID
 
@@ -32,13 +32,13 @@ from elo import (
     MODEL_NAME,
     MODEL_VERSION,
     GameRow,
-    fit_ratings,
     game_row_from_mapping,
     score_games,
     walk_forward,
 )
 from elo_v1 import MODEL_NAME as ELO_V1_MODEL_NAME
 from elo_v1 import MODEL_VERSION as ELO_V1_MODEL_VERSION
+from elo_v1 import EloV1State
 from elo_v1 import score_games as score_games_v1
 from elo_v1 import walk_forward as walk_forward_v1
 from metrics import summarize
@@ -119,6 +119,154 @@ def _is_valid_logit_artifact(artifact: Mapping[str, Any]) -> bool:
         and len(coefficients) == len(FEATURE_NAMES)
         and "intercept" in artifact
     )
+
+
+def load_elo_seed(session: Session, model_version: str) -> dict[str, Any] | None:
+    """Stored Elo snapshot for a version, or None when it has never been taken."""
+    row = (
+        session.execute(
+            SELECT_MODEL_ARTIFACT,
+            {"model_version": model_version},
+        )
+        .mappings()
+        .first()
+    )
+    if not isinstance(row, Mapping):
+        return None
+    artifact = row.get("artifact")
+    if not isinstance(artifact, Mapping) or "ratings" not in artifact:
+        return None
+    return dict(artifact)
+
+
+def _split_at_seed(
+    history: list[GameRow],
+    seed: Mapping[str, Any] | None,
+) -> tuple[Mapping[str, Any] | None, list[GameRow]]:
+    """The seed to resume from (if any) and the games to walk on top of it.
+
+    A snapshot only matters once the games behind it are gone. While they are
+    all still loaded the full walk is used instead, so a snapshot never changes
+    results or hides those games from `backfill`.
+    """
+    if seed is None:
+        return None, history
+    through = date.fromisoformat(seed["through_date"])
+    if sum(1 for game in history if game.game_date <= through) >= int(seed["games"]):
+        return None, history
+    return seed, [game for game in history if game.game_date > through]
+
+
+def _seed_extent(seed: Mapping[str, Any] | None, games: list[GameRow]) -> dict[str, Any]:
+    if games:
+        through_season = games[-1].season
+        through_date = games[-1].game_date.isoformat()
+    elif seed is not None:
+        through_season = seed["through_season"]
+        through_date = seed["through_date"]
+    else:
+        raise ValueError("no Regular Season Finals to snapshot")
+    return {
+        "through_season": through_season,
+        "through_date": through_date,
+        "games": (int(seed["games"]) if seed is not None else 0) + len(games),
+    }
+
+
+def walk_elo_v0(
+    history: list[GameRow],
+    seed: Mapping[str, Any] | None = None,
+) -> tuple[list[GameRow], list[float], dict[UUID, float]]:
+    """Walked games, their pregame WP, and the ratings after them."""
+    seed, games = _split_at_seed(history, seed)
+    if seed is None:
+        preds, ratings = walk_forward(games, update=True)
+    else:
+        preds, ratings = walk_forward(
+            games,
+            update=True,
+            ratings={UUID(team_id): float(rating) for team_id, rating in seed["ratings"].items()},
+            season=seed["through_season"],
+        )
+    return games, preds, ratings
+
+
+def walk_elo_v1(
+    history: list[GameRow],
+    seed: Mapping[str, Any] | None = None,
+) -> tuple[list[GameRow], list[float], EloV1State]:
+    """Walked games, their pregame WP, and the state after them."""
+    seed, games = _split_at_seed(history, seed)
+    if seed is None:
+        preds, state = walk_forward_v1(games)
+    else:
+        preds, state = walk_forward_v1(
+            games,
+            state=EloV1State(
+                ratings={
+                    UUID(team_id): float(rating) for team_id, rating in seed["ratings"].items()
+                },
+                season_games={
+                    UUID(team_id): int(played) for team_id, played in seed["season_games"].items()
+                },
+                home_wins=float(seed["home_wins"]),
+                home_games=int(seed["home_games"]),
+            ),
+            season=seed["through_season"],
+        )
+    return games, preds, state
+
+
+def snapshot_elo(*, trained_at: datetime | None = None) -> dict[str, Any]:
+    """Persist both Elos' end state so it outlives the games it was built from.
+
+    Rolls an existing snapshot forward over any newer Finals, so rerunning it
+    after the old games are deleted never loses them.
+    """
+    timestamp = trained_at or datetime.now()
+    with get_session() as session:
+        history = load_regular_season_finals(session)
+        v0_seed = load_elo_seed(session, MODEL_VERSION)
+        v1_seed = load_elo_seed(session, ELO_V1_MODEL_VERSION)
+        v0_start, _ = _split_at_seed(history, v0_seed)
+        v0_games, _v0_preds, ratings = walk_elo_v0(history, v0_seed)
+        v0_artifact = {
+            **_seed_extent(v0_start, v0_games),
+            "ratings": {str(team_id): rating for team_id, rating in ratings.items()},
+        }
+        v1_start, _ = _split_at_seed(history, v1_seed)
+        v1_games, _v1_preds, state = walk_elo_v1(history, v1_seed)
+        v1_artifact = {
+            **_seed_extent(v1_start, v1_games),
+            "ratings": {str(team_id): rating for team_id, rating in state.ratings.items()},
+            "season_games": {
+                str(team_id): played for team_id, played in state.season_games.items()
+            },
+            "home_wins": state.home_wins,
+            "home_games": state.home_games,
+        }
+        for version, name, artifact in (
+            (MODEL_VERSION, MODEL_NAME, v0_artifact),
+            (ELO_V1_MODEL_VERSION, ELO_V1_MODEL_NAME, v1_artifact),
+        ):
+            session.execute(
+                UPSERT_MODEL_ARTIFACT,
+                {
+                    "model_version": version,
+                    "model_name": name,
+                    "artifact": json.dumps(artifact, sort_keys=True),
+                    "trained_at": timestamp,
+                },
+            )
+        session.commit()
+    return {
+        "model_versions": [MODEL_VERSION, ELO_V1_MODEL_VERSION],
+        "through_season": v0_artifact["through_season"],
+        "through_date": v0_artifact["through_date"],
+        "games": v0_artifact["games"],
+        "teams": len(v0_artifact["ratings"]),
+        "trained_at": timestamp.isoformat(),
+    }
 
 
 def register_elo_v1(session: Session) -> None:
@@ -253,10 +401,12 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
         upcoming = load_upcoming_games(session)
         market = load_market_wp(session)
         feature_rows = load_feature_rows(session)
-        ratings = fit_ratings(history)
+        _v0_games, _v0_preds, ratings = walk_elo_v0(history, load_elo_seed(session, MODEL_VERSION))
         elo_probs = score_games(upcoming, ratings)
         rows = build_prediction_rows(upcoming, elo_probs, market, as_of=scored_at)
-        _v1_preds, v1_state = walk_forward_v1(history)
+        _v1_games, _v1_preds, v1_state = walk_elo_v1(
+            history, load_elo_seed(session, ELO_V1_MODEL_VERSION)
+        )
         rows.extend(
             build_prediction_rows(
                 upcoming,
@@ -354,21 +504,24 @@ def build_backfill_rows(
     scraped_at: datetime,
     live: set[tuple[UUID, str]] | None = None,
     with_logit: bool = False,
+    v0_seed: Mapping[str, Any] | None = None,
+    v1_seed: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Walk-forward predictions for past Finals, per model.
 
     Both Elos walk every loaded season so ratings carry over (regressed) into
-    the target one. Logit is opt-in because it refits per 50-game block (the
+    the target one, starting from a stored snapshot when the seasons behind it
+    are no longer loaded. Logit is opt-in because it refits per 50-game block (the
     same blocks as `eval-logit`), which is by far the slow part; games in the
     first block have nothing to train on and get no logit row. Any (game,
     model_version) in `live` already has a real pregame prediction and is left
     alone, so the scorecard keeps grading what was actually published.
     """
-    v0_probs, _ratings = walk_forward(history, update=True)
-    v1_probs, _state = walk_forward_v1(history)
+    v0_games, v0_probs, _ratings = walk_elo_v0(history, v0_seed)
+    v1_games, v1_probs, _state = walk_elo_v1(history, v1_seed)
     rows = [
         *build_graded_rows(
-            list(zip(history, v0_probs, strict=True)),
+            list(zip(v0_games, v0_probs, strict=True)),
             market_wp,
             model_name=MODEL_NAME,
             model_version=MODEL_VERSION,
@@ -376,7 +529,7 @@ def build_backfill_rows(
             scraped_at=scraped_at,
         ),
         *build_graded_rows(
-            list(zip(history, v1_probs, strict=True)),
+            list(zip(v1_games, v1_probs, strict=True)),
             market_wp,
             model_name=ELO_V1_MODEL_NAME,
             model_version=ELO_V1_MODEL_VERSION,
@@ -424,6 +577,8 @@ def backfill_and_persist(
             scraped_at=timestamp,
             live=load_live_predicted_games(session),
             with_logit=with_logit,
+            v0_seed=load_elo_seed(session, MODEL_VERSION),
+            v1_seed=load_elo_seed(session, ELO_V1_MODEL_VERSION),
         )
         register_elo_v1(session)
         written = 0

@@ -34,7 +34,7 @@ All workflows are Make targets: read the [Makefile](Makefile) rather than guessi
 Gotchas the target names don't tell you:
 
 - Never `compose down -v` in production; `prod-deploy` / `prod-release` never do.
-- `make ml-train` / `ml-eval` are manual only, never on the daily cron.
+- `make ml-train` / `ml-eval` / `ml-snapshot` are manual only, never on the daily cron. `ml-snapshot` stores Elo ratings in `source.model_artifacts` so they survive deleting the seasons behind them (`docs/ml.md`).
 - `make prod-record-deploy` writes `.env.deploy`, which every target `-include`s, so a bare `make prod-refresh` on cron gets the deployed sha. Precedence: command line > environment > `.env.deploy` > defaults. `prod-refresh` re-pulls the tool images first because `compose run` never pulls.
 - `make prod-release IMAGE_TAG=<sha>` is the rollback path: no rebuild, no Alembic.
 - `db-restore` / `prod-db-restore` replace the live DB and need `CONFIRM_RESTORE=RESTORE`.

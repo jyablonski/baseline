@@ -66,16 +66,19 @@ def walk_forward(
     games: Sequence[GameRow],
     *,
     update: bool = True,
+    ratings: dict[UUID, float] | None = None,
+    season: str | None = None,
 ) -> tuple[list[float], dict[UUID, float]]:
     """Predict each game from ratings entering the night, then update.
 
     Games must already be sorted by (game_date, game_id). Season changes
     regress ratings toward the mean. Games with home_won is None are
-    scored but do not update ratings.
+    scored but do not update ratings. `ratings` and `season` resume a walk
+    from a stored snapshot: the ratings, and the season they were left in.
     """
-    ratings: dict[UUID, float] = {}
+    ratings = dict(ratings or {})
     preds: list[float] = []
-    current_season: str | None = None
+    current_season: str | None = season
     for game in games:
         if current_season is None:
             current_season = game.season

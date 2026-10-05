@@ -2,12 +2,12 @@
 	test test-api test-scraper test-mcp test-cube test-ml test-frontend test-frontend-e2e test-dbt \
 	test-migrate \
 	build build-multiarch ensure-buildx-builder remove-buildx-builder sync db-migrate migrate \
-	pipeline-status pipeline-enable pipeline-disable scrape dbt ml ml-train ml-eval ml-backfill refresh \
+	pipeline-status pipeline-enable pipeline-disable scrape dbt ml ml-train ml-snapshot ml-eval ml-backfill refresh \
 	refresh-daily refresh-daily-once seed-demo seed-demo-clean \
 	prod-config prod-up prod-migrate prod-dbt prod-deploy prod-release prod-build prod-pull prod-pull-tools prod-record-deploy \
 	prod-pipeline-status prod-pipeline-enable prod-pipeline-disable prod-refresh prod-refresh-daily prod-refresh-daily-once \
 	prod-health prod-prune prod-check-freshness check-freshness prod-caddy-reload \
-	prod-scrape prod-ml prod-ml-backfill prod-ml-train admin-jobs prod-admin-jobs test-admin-jobs quality \
+	prod-scrape prod-ml prod-ml-backfill prod-ml-train prod-ml-snapshot admin-jobs prod-admin-jobs test-admin-jobs quality \
 	db-backup prod-db-backup db-restore-test db-restore prod-db-restore test-backups
 
 COMPOSE ?= docker compose
@@ -155,6 +155,11 @@ prod-ml-train: ## Fit and persist the logit artifact in production; run delibera
 	@test -n "$(IMAGE_PREFIX)" || { echo "prod-ml-train requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
 	$(MAKE) prod-pull-tools
 	COMPOSE="$(COMPOSE_PROD)" $(MAKE) ml-train
+
+prod-ml-snapshot: ## Persist Elo ratings in production so they survive deleting past seasons
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-ml-snapshot requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
+	$(MAKE) prod-pull-tools
+	COMPOSE="$(COMPOSE_PROD)" $(MAKE) ml-snapshot
 
 # Drains source.admin_jobs. Runs on the host (cron/systemd), never in a
 # container: executing `make` needs the Docker socket, which the API must not
@@ -328,6 +333,9 @@ ml: ## Score Elo and logit (when trained) into source.game_predictions
 # retrains nightly is one whose output cannot be reproduced. See docs/ml.md.
 ml-train: ## Fit logit v1 from silver.int_game_features and persist its artifact
 	$(COMPOSE_RUN_TOOLS) ml python -m main train
+
+ml-snapshot: ## Persist Elo v0/v1 ratings so they survive deleting the seasons behind them
+	$(COMPOSE_RUN_TOOLS) ml python -m main snapshot-elo
 
 ml-eval: ## Expanding-window logit v1 metrics against the Elo and always-home baselines
 	$(COMPOSE_RUN_TOOLS) ml python -m main eval-logit
