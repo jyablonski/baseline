@@ -11,9 +11,14 @@ from queries.evaluations import UPSERT_MODEL_EVALUATION
 from queries.features import SELECT_GAME_FEATURES
 from queries.games import SELECT_REGULAR_SEASON_FINALS, SELECT_UPCOMING_GAMES
 from queries.odds import SELECT_MARKET_WP_BY_GAME
-from queries.predictions import INSERT_GAME_PREDICTION, SELECT_LIVE_PREDICTED_GAMES
+from queries.predictions import (
+    DELETE_PREDICTIONS_BEYOND_HORIZON,
+    INSERT_GAME_PREDICTION,
+    SELECT_LIVE_PREDICTED_GAMES,
+)
 
 __all__ = [
+    "DELETE_PREDICTIONS_BEYOND_HORIZON",
     "INSERT_GAME_PREDICTION",
     "SELECT_MARKET_WP_BY_GAME",
     "SELECT_GAME_FEATURES",

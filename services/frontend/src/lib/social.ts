@@ -35,12 +35,17 @@ export function isSocialRange(value: string | null | undefined): value is Social
   return SOCIAL_RANGES.some((range) => range.key === value);
 }
 
-/** Inclusive UTC day bounds for a range, counting back from `today`. */
-export function rangeToDates(range: SocialRangeKey, today = new Date()) {
+/**
+ * Inclusive UTC day bounds for a range, counting back from `anchor`. The anchor
+ * day is partial (it stops at the newest post), so a range is that day plus
+ * `days` whole days before it: "24h" on its own would be only the few hours
+ * between midnight UTC and the last collection.
+ */
+export function rangeToDates(range: SocialRangeKey, anchor = new Date()) {
   const days = SOCIAL_RANGES.find((item) => item.key === range)?.days ?? 7;
-  const to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const to = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate()));
   const from = new Date(to);
-  from.setUTCDate(from.getUTCDate() - (days - 1));
+  from.setUTCDate(from.getUTCDate() - days);
   return { from_date: isoDay(from), to_date: isoDay(to) };
 }
 

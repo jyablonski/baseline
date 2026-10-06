@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     champion_model_version: str = "elo-v0"
     logit_model_version: str = "logit-v1"
     logit_cold_start_games: int = 10
+    score_horizon_days: int = 7
 
     @model_validator(mode="after")
     def assemble_database_url(self) -> Settings:

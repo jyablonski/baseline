@@ -294,9 +294,8 @@ class GamePrediction(Base):
     __table_args__ = (
         UniqueConstraint(
             "game_id",
-            "as_of",
             "model_version",
-            name="game_predictions_game_id_as_of_model_version_key",
+            name="game_predictions_game_id_model_version_key",
         ),
         {"schema": "source"},
     )

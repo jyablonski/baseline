@@ -11,7 +11,7 @@ test("social reaches from the nav and labels its sampling honestly", async ({ pa
   await expect(page.getByRole("heading", { name: "Social", level: 1 })).toBeVisible();
 
   // The gap between captured and posted comments has to stay on screen.
-  await expect(page.getByText(/top 10 per post, of 18,204 posted/i)).toBeVisible();
+  await expect(page.getByText(/top-scoring per post, of 18,204 posted/i)).toBeVisible();
   // Comments stay collapsed until asked for.
   await expect(page.getByText(/the rest of the thread is not stored/i)).toHaveCount(0);
   await page.getByRole("button", { name: /show top 1 of 132/i }).click();
@@ -29,7 +29,7 @@ test("social reaches from the nav and labels its sampling honestly", async ({ pa
   const teams = page.locator("section").filter({ hasText: "Team mentions" });
   await expect(teams.getByText("Clippers", { exact: true })).toBeVisible();
   await expect(teams.getByText("LAC", { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/what this page cannot tell you/i)).toBeVisible();
+  await expect(page.getByText(/what this page cannot tell you/i)).toHaveCount(0);
 });
 
 test("social filters write to the URL", async ({ page }) => {

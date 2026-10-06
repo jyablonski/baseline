@@ -210,7 +210,7 @@ describe("social page", () => {
   it("shows captured comments against the real thread total", async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("402")).toBeInTheDocument());
-    expect(screen.getByText(/top 10 per post, of 18,204 posted/i)).toBeInTheDocument();
+    expect(screen.getByText(/top-scoring per post, of 18,204 posted/i)).toBeInTheDocument();
   });
 
   it("leaves the per-post ratio strip off feed cards", async () => {
@@ -257,8 +257,7 @@ describe("social page", () => {
       expect(screen.queryByRole("heading", { name: gone })).not.toBeInTheDocument();
     }
     expect(screen.getByText("Contested")).toBeInTheDocument();
-    expect(screen.getByText(/what this page cannot tell you/i)).toBeInTheDocument();
-    expect(screen.getByText(/no score history/i)).toBeInTheDocument();
+    expect(screen.queryByText(/what this page cannot tell you/i)).not.toBeInTheDocument();
   });
 
   it("puts the chosen filter in the URL so a view is shareable", async () => {

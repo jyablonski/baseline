@@ -320,7 +320,7 @@ sources:
       - name: game_predictions
         description: >
           Pregame home win probabilities written by services/ml. Grain is
-          (game_id, as_of, model_version).
+          (game_id, model_version), overwritten in place by each run.
         columns:
           - name: id
             description: Surrogate key.
