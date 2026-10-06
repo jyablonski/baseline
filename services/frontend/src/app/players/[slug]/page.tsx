@@ -19,7 +19,7 @@ import {
   formatUsdCompact,
   locationLabel,
 } from "@/lib/format";
-import { isLegacyEntityId, playerHref, slugifyName, withSeason } from "@/lib/nav";
+import { decodeRouteSlug, isLegacyEntityId, playerHref, slugifyName, withSeason } from "@/lib/nav";
 import type { GameLogEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +47,7 @@ export default function PlayerProfilePage() {
 function PlayerProfile() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
-  const routeSlug = params.slug;
+  const routeSlug = decodeRouteSlug(params.slug);
   const isLegacyRoute = isLegacyEntityId(routeSlug);
   const { season } = useSeason();
   const [sortKey, setSortKey] = useState<SortKey>("game_date");

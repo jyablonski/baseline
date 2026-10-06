@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isNavActive, PRIMARY_NAV, withSeason } from "@/lib/nav";
+import { decodeRouteSlug, isNavActive, PRIMARY_NAV, slugifyName, withSeason } from "@/lib/nav";
 
 describe("nav", () => {
   it("lists primary tabs including Ask", () => {
@@ -25,6 +25,15 @@ describe("nav", () => {
     expect(isNavActive("/games", "/games")).toBe(true);
     expect(isNavActive("/schedule", "/schedule")).toBe(true);
     expect(isNavActive("/schedule", "/games")).toBe(false);
+  });
+
+  it("decodes a route slug so an accented name still matches its player", () => {
+    const fromRoute = decodeRouteSlug("nikola-joki%C4%87");
+    expect(fromRoute).toBe("nikola-jokić");
+    expect(slugifyName(fromRoute)).toBe(slugifyName("Nikola Jokić"));
+    expect(decodeRouteSlug("stephen-curry")).toBe("stephen-curry");
+    // Not a valid escape: left as written instead of throwing.
+    expect(decodeRouteSlug("100%")).toBe("100%");
   });
 
   it("appends season to links", () => {
