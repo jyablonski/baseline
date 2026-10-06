@@ -33,7 +33,9 @@ export function SummaryStrip({
           {formatCount(summary?.captured_comment_count ?? 0)}
         </span>
         {/* The gap between these two numbers is the whole honesty of the page. */}
-        <Note>top 10 per post, of {formatCount(summary?.reported_comment_count ?? 0)} posted</Note>
+        <Note>
+          top-scoring per post, of {formatCount(summary?.reported_comment_count ?? 0)} posted
+        </Note>
       </Cell>
       <Cell label="Most discussed">
         {topPlayer ? (

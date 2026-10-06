@@ -50,6 +50,6 @@ describe("social page with nothing collected", () => {
     expect(screen.queryByText(/no full-name matches in this range/i)).not.toBeInTheDocument();
     expect(await screen.findByText(/no user flair collected/i)).toBeInTheDocument();
     // The summary strip still renders, with honest zeroes.
-    expect(screen.getByText(/top 10 per post, of 0 posted/i)).toBeInTheDocument();
+    expect(screen.getByText(/top-scoring per post, of 0 posted/i)).toBeInTheDocument();
   });
 });

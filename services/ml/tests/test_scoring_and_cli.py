@@ -10,6 +10,7 @@ from click.testing import CliRunner
 from elo import MODEL_VERSION, GameRow
 from main import cli, main
 from queries import (
+    DELETE_PREDICTIONS_BEYOND_HORIZON,
     INSERT_GAME_PREDICTION,
     REGISTER_MODEL,
     SELECT_LIVE_PREDICTED_GAMES,
@@ -68,6 +69,8 @@ def test_query_sql_targets_gold_and_source() -> None:
     assert "gold.fct_games_schedule" in str(SELECT_UPCOMING_GAMES)
     assert "silver.stg_game_odds" in str(SELECT_MARKET_WP_BY_GAME)
     assert "INSERT INTO source.game_predictions" in str(INSERT_GAME_PREDICTION)
+    assert "ON CONFLICT (game_id, model_version)" in str(INSERT_GAME_PREDICTION)
+    assert "BETWEEN :from_date AND :through_date" in str(SELECT_UPCOMING_GAMES)
 
 
 @pytest.mark.unit
@@ -126,8 +129,14 @@ def test_load_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
             "away_team_id": TEAM_AWAY,
         }
     ]
-    upcoming = load_upcoming_games(session)
+    upcoming = load_upcoming_games(
+        session, from_date=date(2024, 10, 26), through_date=date(2024, 11, 2)
+    )
     assert upcoming[0].home_won is None
+    assert session.execute.call_args.args == (
+        SELECT_UPCOMING_GAMES,
+        {"from_date": date(2024, 10, 26), "through_date": date(2024, 11, 2)},
+    )
     session.execute.return_value.mappings.return_value.all.return_value = [
         {"game_id": _id("003"), "market_wp": 0.58},
         {"game_id": _id("004"), "market_wp": None},
@@ -147,10 +156,24 @@ def test_score_and_persist_and_evaluate(monkeypatch: pytest.MonkeyPatch) -> None
     }
     monkeypatch.setattr("scoring.get_session", lambda: _session(session))
     monkeypatch.setattr("scoring.load_regular_season_finals", lambda sess: history)
-    monkeypatch.setattr("scoring.load_upcoming_games", lambda sess: upcoming)
+    windows: list[dict] = []
+    conflicts: list[list[str]] = []
+    monkeypatch.setattr(
+        "scoring.load_upcoming_games", lambda sess, **window: windows.append(window) or upcoming
+    )
     monkeypatch.setattr("scoring.load_market_wp", lambda sess: {_id("u1"): 0.52})
-    monkeypatch.setattr("scoring.upsert_rows", lambda *args, **kwargs: 1)
+    monkeypatch.setattr(
+        "scoring.upsert_rows",
+        lambda _session, _model, _rows, conflict: conflicts.append(conflict) or 1,
+    )
     result = score_and_persist(as_of=datetime(2024, 10, 26, 8, 0, 0))
+    # Today through the 7-day horizon, one row per game and model overwritten in
+    # place, and anything already stored past the horizon cleared.
+    assert windows == [{"from_date": date(2024, 10, 26), "through_date": date(2024, 11, 2)}]
+    assert conflicts == [["game_id", "model_version"]]
+    session.execute.assert_any_call(
+        DELETE_PREDICTIONS_BEYOND_HORIZON, {"through_date": date(2024, 11, 2)}
+    )
     assert result["written"] == 1
     assert result["upcoming_games"] == 1
     assert result["history_games"] == 2
@@ -381,7 +404,7 @@ def test_settings_and_db_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
             "scraped_at": now,
         }
     ]
-    assert upsert_rows(session, GamePrediction, rows, ["game_id", "as_of", "model_version"]) == 1
+    assert upsert_rows(session, GamePrediction, rows, ["game_id", "model_version"]) == 1
     session.execute.assert_called()
 
     fake = MagicMock()

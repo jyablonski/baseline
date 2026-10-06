@@ -34,6 +34,7 @@ SELECT_UPCOMING_GAMES = text(
     FROM gold.fct_games_schedule
     WHERE season_type = 'Regular Season'
       AND lower(status) NOT IN ('final', '3')
+      AND game_date BETWEEN :from_date AND :through_date
     ORDER BY game_date, game_id
     """
 )

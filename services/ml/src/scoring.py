@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -54,7 +54,7 @@ from queries.evaluations import UPSERT_MODEL_EVALUATION
 from queries.features import SELECT_GAME_FEATURES
 from queries.games import SELECT_REGULAR_SEASON_FINALS, SELECT_UPCOMING_GAMES
 from queries.odds import SELECT_MARKET_WP_BY_GAME
-from queries.predictions import SELECT_LIVE_PREDICTED_GAMES
+from queries.predictions import DELETE_PREDICTIONS_BEYOND_HORIZON, SELECT_LIVE_PREDICTED_GAMES
 
 
 def load_regular_season_finals(session: Session) -> list[GameRow]:
@@ -62,8 +62,20 @@ def load_regular_season_finals(session: Session) -> list[GameRow]:
     return [game_row_from_mapping(row) for row in rows]
 
 
-def load_upcoming_games(session: Session) -> list[GameRow]:
-    rows = session.execute(SELECT_UPCOMING_GAMES).mappings().all()
+def load_upcoming_games(session: Session, *, from_date: date, through_date: date) -> list[GameRow]:
+    """Unplayed games in the scoring window, both ends inclusive.
+
+    The window opens on the scoring date because a row stamped after game day
+    is never graded, and with one row per game it would overwrite the pregame
+    prediction that is.
+    """
+    rows = (
+        session.execute(
+            SELECT_UPCOMING_GAMES, {"from_date": from_date, "through_date": through_date}
+        )
+        .mappings()
+        .all()
+    )
     return [game_row_from_mapping(row) for row in rows]
 
 
@@ -396,9 +408,12 @@ def build_prediction_rows(
 
 def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
     scored_at = as_of or datetime.now()
+    through_date = scored_at.date() + timedelta(days=settings.score_horizon_days)
     with get_session() as session:
         history = load_regular_season_finals(session)
-        upcoming = load_upcoming_games(session)
+        upcoming = load_upcoming_games(
+            session, from_date=scored_at.date(), through_date=through_date
+        )
         market = load_market_wp(session)
         feature_rows = load_feature_rows(session)
         _v0_games, _v0_preds, ratings = walk_elo_v0(history, load_elo_seed(session, MODEL_VERSION))
@@ -440,11 +455,12 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
             )
         register_elo_v1(session)
         set_champion_model(session, settings.champion_model_version)
+        session.execute(DELETE_PREDICTIONS_BEYOND_HORIZON, {"through_date": through_date})
         written = upsert_rows(
             session,
             GamePrediction,
             rows,
-            ["game_id", "as_of", "model_version"],
+            ["game_id", "model_version"],
         )
     return {
         "history_games": len(history),
@@ -589,7 +605,7 @@ def backfill_and_persist(
                 session,
                 GamePrediction,
                 rows[start : start + BACKFILL_BATCH_SIZE],
-                ["game_id", "as_of", "model_version"],
+                ["game_id", "model_version"],
             )
     return {
         "model_versions": sorted({row["model_version"] for row in rows}),

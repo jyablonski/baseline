@@ -131,7 +131,7 @@ def test_score_writes_elo_and_logit_when_artifact_exists(monkeypatch: pytest.Mon
     captured: list[dict] = []
     monkeypatch.setattr(scoring, "get_session", session_context)
     monkeypatch.setattr(scoring, "load_regular_season_finals", lambda _session: history)
-    monkeypatch.setattr(scoring, "load_upcoming_games", lambda _session: upcoming)
+    monkeypatch.setattr(scoring, "load_upcoming_games", lambda _session, **_window: upcoming)
     monkeypatch.setattr(scoring, "load_market_wp", lambda _session: {})
     monkeypatch.setattr(scoring, "load_feature_rows", lambda _session: [feature])
     monkeypatch.setattr(scoring, "load_model_artifact", lambda _session, _version: artifact)

@@ -28,7 +28,8 @@ INSERT_GAME_PREDICTION = text(
         :market_wp,
         :scraped_at
     )
-    ON CONFLICT (game_id, as_of, model_version) DO UPDATE SET
+    ON CONFLICT (game_id, model_version) DO UPDATE SET
+        as_of = EXCLUDED.as_of,
         model_name = EXCLUDED.model_name,
         home_team_id = EXCLUDED.home_team_id,
         away_team_id = EXCLUDED.away_team_id,
@@ -53,5 +54,18 @@ SELECT_LIVE_PREDICTED_GAMES = text(
     WHERE
         game_predictions.as_of::date <= games.game_date
         AND game_predictions.as_of <> games.game_date::timestamp
+    """
+)
+
+# Unplayed games past the scoring horizon keep no prediction, so a row written
+# before a game was pushed back (or before the horizon existed) does not linger
+# on the schedule with a stale number.
+DELETE_PREDICTIONS_BEYOND_HORIZON = text(
+    """
+    DELETE FROM source.game_predictions
+    USING source.games
+    WHERE
+        game_predictions.game_id = games.game_id
+        AND games.game_date > :through_date
     """
 )

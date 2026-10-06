@@ -24,17 +24,32 @@ export default function SocialPage() {
 function SocialBody() {
   const { range, contentType, sort, setRange, setContentType, setSort } = useSocialFilters();
 
+  // Ranges count back from the newest collected post, not the clock. Collection
+  // is one batch a day, so a clock-anchored window slides off the data: once the
+  // UTC date rolls over, "24h" covered a day nothing had been collected for yet.
+  const anchorQuery = useQuery({
+    queryKey: ["social-anchor"],
+    queryFn: () => api.getSocialSummary(),
+  });
+  const anchorAt = anchorQuery.data?.last_post_at;
+  const anchored = !anchorQuery.isPending;
+
   // One date window for every panel, so nothing on the page disagrees about
   // "now". Named to avoid shadowing the global `window` in a client component.
-  const dateWindow = useMemo(() => rangeToDates(range), [range]);
+  const dateWindow = useMemo(
+    () => rangeToDates(range, anchorAt ? new Date(anchorAt) : undefined),
+    [range, anchorAt]
+  );
 
   const summaryQuery = useQuery({
     queryKey: ["social-summary", dateWindow],
     queryFn: () => api.getSocialSummary(dateWindow),
+    enabled: anchored,
   });
   const facetsQuery = useQuery({
     queryKey: ["social-facets", dateWindow],
     queryFn: () => api.listSocialFacets(dateWindow),
+    enabled: anchored,
   });
   const feedQuery = useQuery({
     queryKey: ["social-posts", dateWindow, contentType, sort],
@@ -45,31 +60,38 @@ function SocialBody() {
         sort,
         limit: FEED_LIMIT,
       }),
+    enabled: anchored,
   });
   const contestedQuery = useQuery({
     queryKey: ["social-contested", dateWindow],
     queryFn: () =>
       api.listSocialPosts({ ...dateWindow, contested: true, sort: "comments", limit: 1 }),
+    enabled: anchored,
   });
   const playersQuery = useQuery({
     queryKey: ["social-players", dateWindow],
     queryFn: () => api.listSocialEntities("player", dateWindow),
+    enabled: anchored,
   });
   const teamsQuery = useQuery({
     queryKey: ["social-teams", dateWindow],
     queryFn: () => api.listSocialEntities("team", dateWindow),
+    enabled: anchored,
   });
   const fanbasesQuery = useQuery({
     queryKey: ["social-fanbases", dateWindow],
     queryFn: () => api.listSocialFanbases({ ...dateWindow, limit: 12 }),
+    enabled: anchored,
   });
   const tagsQuery = useQuery({
     queryKey: ["social-tags", dateWindow],
     queryFn: () => api.listSocialBoard("tags", { ...dateWindow, limit: 8 }),
+    enabled: anchored,
   });
   const sourcesQuery = useQuery({
     queryKey: ["social-sources", dateWindow],
     queryFn: () => api.listSocialBoard("sources", { ...dateWindow, limit: 8 }),
+    enabled: anchored,
   });
 
   const summary = summaryQuery.data;
@@ -84,8 +106,8 @@ function SocialBody() {
         {/* No max-width: the strapline reads as one line at full width and still
             wraps on a narrow viewport. */}
         <p className="type-prose mt-1 text-ink-2">
-          What r/nba is talking about. Posts and their ten highest-scoring comments, collected once
-          a day.
+          What r/nba is talking about. Posts and their highest-scoring comments, collected once a
+          day.
         </p>
       </header>
 
@@ -112,7 +134,7 @@ function SocialBody() {
               </span>
             </div>
 
-            {feedQuery.isLoading ? (
+            {!anchored || feedQuery.isLoading ? (
               <LoadingState label="Loading posts…" />
             ) : feedQuery.isError ? (
               <ErrorState message={queryErrorMessage(feedQuery.error)} />
@@ -170,26 +192,6 @@ function SocialBody() {
           />
         </Panel>
       </div>
-
-      <section className="border border-rule bg-tint px-[var(--ct-space-4)] py-[var(--ct-space-3)]">
-        <h2 className="type-eyebrow">What this page cannot tell you</h2>
-        <ul className="type-caption mt-2 list-disc space-y-1 pl-5">
-          <li>
-            Whether a post is rising or already cooling. There is one snapshot per post and no score
-            history.
-          </li>
-          <li>Full thread sentiment or reply depth beyond the ten comments captured per post.</li>
-          <li>
-            Which player a post means when it says only “Jokic”, “Kawhi” or “Wemby”. Matching needs
-            the full name, because the player dimension holds only current players and would read
-            “Jordan” as the wrong person.
-          </li>
-          <li>
-            Anything before collection started. Posts stored before flair ingest shipped carry no
-            user flair either, because Reddit only reports an author’s current badge.
-          </li>
-        </ul>
-      </section>
     </div>
   );
 }

@@ -21,17 +21,18 @@ describe("social helpers", () => {
   });
 
   it("builds inclusive UTC day bounds", () => {
-    const today = new Date("2026-09-11T18:30:00Z");
-    expect(rangeToDates("24h", today)).toEqual({
-      from_date: "2026-09-11",
+    const anchor = new Date("2026-09-11T03:50:00Z");
+    // The anchor day is partial, so 24h reaches back through the whole day before it.
+    expect(rangeToDates("24h", anchor)).toEqual({
+      from_date: "2026-09-10",
       to_date: "2026-09-11",
     });
-    expect(rangeToDates("7d", today)).toEqual({
-      from_date: "2026-09-05",
+    expect(rangeToDates("7d", anchor)).toEqual({
+      from_date: "2026-09-04",
       to_date: "2026-09-11",
     });
     // Crossing a month boundary must not clamp to the 1st.
-    expect(rangeToDates("30d", new Date("2026-03-05T00:00:00Z")).from_date).toBe("2026-02-04");
+    expect(rangeToDates("30d", new Date("2026-03-05T00:00:00Z")).from_date).toBe("2026-02-03");
   });
 
   it("renders missing numbers as a placeholder rather than NaN", () => {

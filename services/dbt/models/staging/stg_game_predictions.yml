@@ -4,8 +4,8 @@ models:
   - name: stg_game_predictions
     description: >
       Pregame home win probabilities written by services/ml. Grain is
-      game_id x as_of x model_version. market_wp is null when odds did not
-      match that game.
+      game_id x model_version: each run overwrites the row in place.
+      market_wp is null when odds did not match that game.
     columns:
       - name: game_id
         description: Baseline game UUID.
@@ -40,4 +40,4 @@ models:
     data_tests:
       - dbt_expectations.expect_compound_columns_to_be_unique:
           arguments:
-            column_list: ["game_id", "as_of", "model_version"]
+            column_list: ["game_id", "model_version"]
