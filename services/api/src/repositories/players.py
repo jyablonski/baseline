@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from cube.queries import fold_accents
 from sqlalchemy.orm import Session
 
 from queries.players import (
@@ -43,7 +44,7 @@ class PlayersRepository:
         limit: int,
         offset: int,
     ) -> tuple[int, list[dict]]:
-        search_pattern = f"%{search}%" if search else None
+        search_pattern = f"%{fold_accents(search)}%" if search else None
         params = {
             "search": search_pattern,
             "active": active,

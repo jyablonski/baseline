@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
@@ -160,10 +161,18 @@ def contains(member: str, value: str) -> dict[str, Any]:
     return {"member": member, "operator": "contains", "values": [value]}
 
 
+def fold_accents(value: str) -> str:
+    """Strip diacritics (Jokić → Jokic), matching gold.dim_players.full_name_ascii."""
+    decomposed = unicodedata.normalize("NFKD", value)
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
 def search_players_query(name: str) -> dict[str, Any]:
     return {
         "dimensions": list(PLAYER_SEARCH_DIMENSIONS),
-        "filters": [contains("players.full_name", name)] if name.strip() else [],
+        "filters": [contains("players.full_name_ascii", fold_accents(name))]
+        if name.strip()
+        else [],
         "limit": 10,
     }
 

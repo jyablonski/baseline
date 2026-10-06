@@ -19,16 +19,16 @@ INSERT INTO gold.dim_teams (
      'United Center', 41.88056, -87.67417, '#CE1141', '#000000', NULL, NULL, NULL);
 
 INSERT INTO gold.dim_players (
-    player_id, first_name, last_name, full_name, is_active, position, height, weight,
+    player_id, first_name, last_name, full_name, full_name_ascii, is_active, position, height, weight,
     birth_date, team_id, from_year, to_year, career_games_played, first_game_date,
     last_game_date, first_season, last_season, seasons_played, career_ppg, career_rpg, career_apg,
     current_contract_season, current_contract_team_id, current_season_salary,
     current_remaining_guaranteed
 ) VALUES
-    ('00000000-0000-4000-8000-000000000102', 'Kawhi', 'Leonard', 'Kawhi Leonard', TRUE, 'F', '6-7', 225,
+    ('00000000-0000-4000-8000-000000000102', 'Kawhi', 'Leonard', 'Kawhi Leonard', 'Kawhi Leonard', TRUE, 'F', '6-7', 225,
      '1991-06-29', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 2011, 2025, 3, '2024-10-22', '2024-10-25', '2024-25', '2024-25', 1, 27.3, 8.0, 5.0,
      '2024-25', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 45000000, NULL),
-    ('00000000-0000-4000-8000-000000000101', 'Stephen', 'Curry', 'Stephen Curry', TRUE, 'G', '6-2', 185,
+    ('00000000-0000-4000-8000-000000000101', 'Stephen', 'Curry', 'Stephen Curry', 'Stephen Curry', TRUE, 'G', '6-2', 185,
      '1988-03-14', '7bf8726a-a852-452d-b81f-14839127c5fb', 2009, 2025, 2, '2024-10-22', '2024-10-25', '2024-25', '2024-25', 1, 30.5, 4.5, 7.5,
      '2024-25', '7bf8726a-a852-452d-b81f-14839127c5fb', 50000000, 101000000);
 

@@ -80,7 +80,7 @@ LIST_PLAYERS_COUNT = text(
     FROM gold.dim_players
     LEFT JOIN gold.dim_teams t ON t.team_id = dim_players.team_id
     WHERE
-        (:search IS NULL OR dim_players.full_name ILIKE :search)
+        (:search IS NULL OR dim_players.full_name_ascii ILIKE :search)
       AND (:active IS NULL OR dim_players.is_active = :active)
       AND (:team_id IS NULL OR dim_players.team_id = :team_id)
     """
@@ -113,7 +113,7 @@ def list_players_stmt(sort: str):
     LEFT JOIN gold.dim_teams ON dim_players.team_id = dim_teams.team_id
     LEFT JOIN regular_season_mvp ON dim_players.player_id = regular_season_mvp.player_id
     WHERE
-        (:search IS NULL OR dim_players.full_name ILIKE :search)
+        (:search IS NULL OR dim_players.full_name_ascii ILIKE :search)
         AND (:active IS NULL OR dim_players.is_active = :active)
         AND (:team_id IS NULL OR dim_players.team_id = :team_id)
     ORDER BY

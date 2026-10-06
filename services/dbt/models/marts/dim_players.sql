@@ -50,6 +50,7 @@ select
     players.first_name,
     players.last_name,
     players.full_name,
+    unaccent(players.full_name) as full_name_ascii,
     players.is_active,
     players.jersey_number,
     players.position,
