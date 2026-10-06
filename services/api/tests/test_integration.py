@@ -30,6 +30,9 @@ def test_list_players_seeded(integration_client) -> None:
     assert body["meta"]["total"] == 1
     assert body["data"][0]["full_name"] == "Kawhi Leonard"
     assert body["data"][0]["team_abbreviation"] == "LAC"
+    # Diacritics in the query are folded before matching full_name_ascii.
+    accented = integration_client.get("/api/v1/players", params={"search": "Káwhi"})
+    assert accented.json()["data"][0]["full_name"] == "Kawhi Leonard"
 
 
 @pytest.mark.integration

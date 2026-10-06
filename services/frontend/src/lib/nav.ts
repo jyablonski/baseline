@@ -33,6 +33,20 @@ export function slugifyName(name: string) {
     .replace(/^-|-$/g, "");
 }
 
+/**
+ * A dynamic segment as typed, not as sent. `useParams` hands back the
+ * percent-encoded form, so "nikola-jokić" arrives as "nikola-joki%C4%87" and
+ * would slugify into something no player matches.
+ */
+export function decodeRouteSlug(slug: string) {
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    // A stray "%" that is not an escape: use it as written.
+    return slug;
+  }
+}
+
 export function playerHref(name: string) {
   return `/players/${slugifyName(name)}`;
 }

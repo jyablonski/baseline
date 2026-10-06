@@ -244,6 +244,13 @@ def test_query_builders() -> None:
     assert current_nba_season(date(2026, 2, 1)) == "2025-26"
     search = search_players_query("kawhi")
     assert search["filters"][0]["operator"] == "contains"
+    # Accented or not, the search hits the folded column with a folded needle.
+    assert search_players_query("Jokić")["filters"] == search_players_query("Jokic")["filters"]
+    assert search_players_query("Jokić")["filters"][0] == {
+        "member": "players.full_name_ascii",
+        "operator": "contains",
+        "values": ["Jokic"],
+    }
     b2b = player_back_to_backs_query(1, "2024-25")
     assert "player_game_logs.avg_points_b2b" in b2b["measures"]
     assert "player_game_logs.games_played_in_b2b" in b2b["measures"]

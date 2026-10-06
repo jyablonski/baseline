@@ -19,6 +19,11 @@ cubes:
         sql: full_name
         type: string
 
+      - name: full_name_ascii
+        sql: full_name_ascii
+        type: string
+        description: full_name with diacritics folded out (Jokić → Jokic). Filter name searches on this; show full_name.
+
       - name: first_name
         sql: first_name
         type: string

@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_players (
     first_name              VARCHAR(100) NOT NULL,
     last_name               VARCHAR(100) NOT NULL,
     full_name               VARCHAR(200) NOT NULL,
+    full_name_ascii         VARCHAR(200) NOT NULL,
     is_active               BOOLEAN NOT NULL DEFAULT FALSE,
     jersey_number           VARCHAR(10),
     position                VARCHAR(20),
