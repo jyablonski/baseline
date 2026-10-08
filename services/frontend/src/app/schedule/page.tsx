@@ -10,7 +10,6 @@ import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import {
   formatMoneyline,
-  formatNumber,
   formatProbability,
   formatScheduleDate,
   formatSpread,
@@ -19,7 +18,9 @@ import {
 import { teamHref, withSeason } from "@/lib/nav";
 import type { ScheduledGame } from "@/lib/types";
 
-const PAGE_SIZE = 50;
+// One request covers the day on screen and reaches the next one: a full slate
+// is 15 games, so the first row dated later is always inside this window.
+const FETCH_LIMIT = 50;
 
 export default function SchedulePage() {
   return (
@@ -31,24 +32,28 @@ export default function SchedulePage() {
 
 function ScheduleBody() {
   const { season, isLoading: seasonIsLoading } = useSeason();
-  const [page, setPage] = useState(0);
+  // The days paged through so far, oldest first; empty means the first day with
+  // a game from today onward. Prev pops back through the same days, so off days
+  // are skipped in both directions.
+  const [days, setDays] = useState<string[]>([]);
+  const day = days.at(-1);
 
   const scheduleQuery = useQuery({
-    queryKey: ["schedule", season, page],
+    queryKey: ["schedule", season, day ?? "next"],
     queryFn: () =>
       api.listSchedule({
         season: season || undefined,
         status: "Scheduled",
-        limit: PAGE_SIZE,
-        offset: page * PAGE_SIZE,
+        from_date: day,
+        limit: FETCH_LIMIT,
       }),
     enabled: !seasonIsLoading,
   });
 
-  const rows = scheduleQuery.data?.data ?? [];
-  const total = scheduleQuery.data?.meta.total ?? 0;
-  const from = total === 0 ? 0 : page * PAGE_SIZE + 1;
-  const to = Math.min(total, (page + 1) * PAGE_SIZE);
+  const fetched = scheduleQuery.data?.data ?? [];
+  const shownDay = fetched[0]?.game_date.slice(0, 10);
+  const rows = fetched.filter((game) => game.game_date.slice(0, 10) === shownDay);
+  const nextDay = fetched[rows.length]?.game_date.slice(0, 10);
 
   return (
     <div className="space-y-6">
@@ -98,27 +103,29 @@ function ScheduleBody() {
         </div>
       )}
 
-      {total > 0 ? (
+      {rows.length > 0 || days.length > 0 ? (
         <div className="flex items-center justify-between text-sm">
           <p className="text-muted-foreground">
-            {from}–{to} of {formatNumber(total)} games
+            {rows.length > 0
+              ? `${formatScheduleDate(shownDay)} · ${rows.length} ${rows.length === 1 ? "game" : "games"}`
+              : ""}
           </p>
           <div className="flex gap-2">
             <button
               type="button"
-              disabled={page === 0}
-              onClick={() => setPage((current) => Math.max(0, current - 1))}
+              disabled={days.length === 0}
+              onClick={() => setDays((current) => current.slice(0, -1))}
               className="btn-ghost"
             >
-              ← Prev
+              ← Prev day
             </button>
             <button
               type="button"
-              disabled={to >= total}
-              onClick={() => setPage((current) => current + 1)}
+              disabled={!nextDay}
+              onClick={() => nextDay && setDays((current) => [...current, nextDay])}
               className="btn-ghost"
             >
-              Next →
+              Next day →
             </button>
           </div>
         </div>

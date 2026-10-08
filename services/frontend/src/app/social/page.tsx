@@ -4,12 +4,12 @@ import { Suspense, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { SocialControls, SummaryStrip } from "@/components/social/chrome";
-import { PostCard } from "@/components/social/post-card";
+import { FeedHeader, PostCard } from "@/components/social/post-card";
 import { EntityBoard, FanbaseBoard, LeaderBoard, Panel } from "@/components/social/panels";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { useSocialFilters } from "@/hooks/use-social-filters";
 import { api, queryErrorMessage } from "@/lib/api";
-import { SOCIAL_SORTS, formatCount, rangeToDates } from "@/lib/social";
+import { SOCIAL_SORTS, rangeToDates } from "@/lib/social";
 
 const FEED_LIMIT = 5;
 
@@ -126,13 +126,10 @@ function SocialBody() {
 
         <div className="grid gap-[var(--ct-space-5)] lg:grid-cols-[minmax(0,1fr)_320px]">
           <section>
-            <div className="flex items-baseline justify-between gap-2 border-b border-rule px-[var(--ct-space-2)] py-[var(--ct-space-2)]">
-              <h2 className="type-module">Feed</h2>
-              <span className="type-caption">
-                {formatCount(feedQuery.data?.meta.total ?? 0)} posts ·{" "}
-                {SOCIAL_SORTS.find((item) => item.key === sort)?.label.toLowerCase()}
-              </span>
-            </div>
+            <FeedHeader
+              total={feedQuery.data?.meta.total ?? 0}
+              sortLabel={SOCIAL_SORTS.find((item) => item.key === sort)?.label.toLowerCase()}
+            />
 
             {!anchored || feedQuery.isLoading ? (
               <LoadingState label="Loading posts…" />

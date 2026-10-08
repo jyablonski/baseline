@@ -16,6 +16,8 @@ export type MockApiOptions = {
   fail?: boolean;
   /** Delay every /api/v1 answer, so loading states actually paint. */
   delayMs?: number;
+  /** Add a game two days after the default one, so /schedule has a day to page to. */
+  scheduleSecondDay?: boolean;
   /**
    * Pad the blown-leads fixture to this many rows, all blown by MIA. The
    * single default row cannot reproduce layout shifts that depend on a full
@@ -33,6 +35,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
     const fail = Boolean(opts.fail);
     const delayMs = Number(opts.delayMs ?? 0);
     const collapseRows = Number(opts.collapseRows ?? 1);
+    const scheduleSecondDay = Boolean(opts.scheduleSecondDay);
     // Every intercepted URL, so specs can assert on the query params a control
     // actually sent rather than inferring it from unchanged mock rows.
     const calls: string[] = [];
@@ -616,31 +619,49 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
       }
 
       if (url.includes("/schedule")) {
+        const fromDate = new URL(url, "http://localhost").searchParams.get("from_date");
+        const games = empty
+          ? []
+          : [
+              {
+                game_id: "0022500999",
+                season: "2025-26",
+                game_date: "2026-10-22",
+                status: "Scheduled",
+                home_team_id: 1610612744,
+                away_team_id: 1610612747,
+                home_team_abbreviation: "GSW",
+                away_team_abbreviation: "LAL",
+                arena: "Chase Center",
+                arena_city: "San Francisco",
+                national_tv: "ESPN",
+                prediction_model_version: "elo-v0",
+                home_win_probability: 0.62,
+                away_win_probability: 0.38,
+                home_moneyline: -150,
+                away_moneyline: 130,
+                home_spread: -3.5,
+              },
+              ...(scheduleSecondDay
+                ? [
+                    {
+                      game_id: "0022501000",
+                      season: "2025-26",
+                      game_date: "2026-10-24",
+                      status: "Scheduled",
+                      home_team_id: 1610612748,
+                      away_team_id: 1610612749,
+                      home_team_abbreviation: "MIA",
+                      away_team_abbreviation: "MIL",
+                      arena: "Kaseya Center",
+                      arena_city: "Miami",
+                    },
+                  ]
+                : []),
+            ].filter((game) => !fromDate || game.game_date >= fromDate);
         return json({
-          data: empty
-            ? []
-            : [
-                {
-                  game_id: "0022500999",
-                  season: "2025-26",
-                  game_date: "2026-10-22",
-                  status: "Scheduled",
-                  home_team_id: 1610612744,
-                  away_team_id: 1610612747,
-                  home_team_abbreviation: "GSW",
-                  away_team_abbreviation: "LAL",
-                  arena: "Chase Center",
-                  arena_city: "San Francisco",
-                  national_tv: "ESPN",
-                  prediction_model_version: "elo-v0",
-                  home_win_probability: 0.62,
-                  away_win_probability: 0.38,
-                  home_moneyline: -150,
-                  away_moneyline: 130,
-                  home_spread: -3.5,
-                },
-              ],
-          meta: { total: empty ? 0 : 1, limit: 50, offset: 0 },
+          data: games,
+          meta: { total: games.length, limit: 50, offset: 0 },
         });
       }
 

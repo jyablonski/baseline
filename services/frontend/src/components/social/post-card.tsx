@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState, LoadingState } from "@/components/query-state";
 import { api, queryErrorMessage } from "@/lib/api";
+import { playerHref, teamHref } from "@/lib/nav";
 import {
   CONTENT_TYPE_LABELS,
   flairLabel,
@@ -15,6 +17,32 @@ import {
 import type { SocialComment, SocialPost } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+// Feed rows and the feed header share one grid, so the two figures on the right
+// sit under their column labels.
+const FEED_GRID =
+  "grid grid-cols-[minmax(0,1fr)_56px_84px] gap-x-[var(--ct-space-4)] px-[var(--ct-space-2)]";
+
+// Scores from here up are set in the accent colour, so the posts that travelled
+// stand out when scanning the column.
+const HIGH_SCORE = 100;
+
+const COMMENT_PREVIEW = 3;
+
+export function FeedHeader({ total, sortLabel }: { total: number; sortLabel?: string }) {
+  return (
+    <div className={cn(FEED_GRID, "items-baseline border-b border-rule-strong py-2")}>
+      <div className="flex items-baseline gap-[var(--ct-space-3)]">
+        <h2 className="type-module">Feed</h2>
+        <span className="type-caption">
+          {formatCount(total)} posts{sortLabel ? ` · ${sortLabel}` : ""}
+        </span>
+      </div>
+      <span className="type-eyebrow text-right">Score</span>
+      <span className="type-eyebrow text-right">Comments</span>
+    </div>
+  );
+}
+
 export function PostCard({
   post,
   defaultOpen = false,
@@ -23,115 +51,133 @@ export function PostCard({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const flair = flairLabel(post);
+  const typeLabel = CONTENT_TYPE_LABELS[post.content_type] ?? post.content_type;
+  // A "[Highlight]" post is typed Highlight from that same bracket tag, so the
+  // tag only earns a slot when it adds something, like a reporter's name.
+  const tag = post.tag && post.tag.toLowerCase() !== typeLabel.toLowerCase() ? post.tag : null;
   return (
-    <article className="border-b border-rule last:border-b-0">
-      <div className="flex gap-[var(--ct-space-4)] px-[var(--ct-space-2)] py-[var(--ct-space-4)]">
-        <div className="w-[68px] shrink-0 text-right">
-          <p className="type-stat tabular leading-none">{formatCount(post.score)}</p>
-          <p className="type-eyebrow mt-1">Score</p>
-          <p className="type-stat tabular mt-3 leading-none">{formatCount(post.num_comments)}</p>
-          <p className="type-eyebrow mt-1">Comments</p>
-        </div>
+    <article className={cn(FEED_GRID, "border-b border-rule py-[var(--ct-space-4)]")}>
+      <div className="min-w-0">
+        <p className="type-caption flex flex-wrap items-center gap-x-2 gap-y-1">
+          {post.is_contested ? <Tag tone="loss">Contested</Tag> : null}
+          <span className="font-semibold text-ink-2">{typeLabel}</span>
+          <Dot />
+          <span>{postSourceLabel(post)}</span>
+          {tag ? (
+            <>
+              <Dot />
+              <span>{tag}</span>
+            </>
+          ) : null}
+        </p>
 
-        <div className="min-w-0 flex-1">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            {post.is_contested ? <Tag tone="loss">Contested</Tag> : null}
-            <Tag>{CONTENT_TYPE_LABELS[post.content_type] ?? post.content_type}</Tag>
-            <Tag>{postSourceLabel(post)}</Tag>
-            {post.tag ? <Tag>{post.tag}</Tag> : null}
-            {post.flair ? <span className="type-caption">{post.flair}</span> : null}
-          </div>
+        <h3 className="type-module mt-2 leading-snug">{post.title}</h3>
 
-          <h3 className="type-module leading-snug">{post.title}</h3>
-
-          <p className="type-caption mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span>u/{post.author ?? "author unavailable"}</span>
-            <Dot />
-            <AuthorFlair post={post} />
-            <Dot />
-            <span>{relativeAge(post.created_utc)}</span>
-            <Dot />
-            <a className="ct-ask-tool" href={post.permalink} target="_blank" rel="noreferrer">
-              reddit thread
-            </a>
-          </p>
-
+        <p className="type-caption mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span>u/{post.author ?? "author unavailable"}</span>
+          {flair ? (
+            <>
+              <Dot />
+              <span>{flair} fan</span>
+            </>
+          ) : null}
+          <Dot />
+          <span>{relativeAge(post.created_utc)}</span>
           <Mentions post={post} />
+        </p>
 
-          <button
-            type="button"
-            className="ct-ask-tool mt-3"
-            onClick={() => setOpen((value) => !value)}
-            aria-expanded={open}
+        <p className="mt-3 flex flex-wrap items-center gap-x-[var(--ct-space-4)] gap-y-1">
+          {post.captured_comment_count > 0 ? (
+            <button
+              type="button"
+              className="text-[length:var(--ct-fs-cell)] font-semibold text-primary hover:underline"
+              onClick={() => setOpen((value) => !value)}
+              aria-expanded={open}
+            >
+              {open ? "Hide comments" : `Top comments (${post.captured_comment_count})`}
+            </button>
+          ) : null}
+          <a
+            className="text-[length:var(--ct-fs-cell)] text-ink-3 hover:text-foreground"
+            href={post.permalink}
+            target="_blank"
+            rel="noreferrer"
           >
-            {open
-              ? "Hide comments"
-              : `Show top ${post.captured_comment_count} of ${formatCount(post.num_comments)}`}
-          </button>
-        </div>
+            Thread ↗
+          </a>
+        </p>
+
+        {open ? <CapturedComments post={post} /> : null}
       </div>
 
-      {open ? <CapturedComments post={post} /> : null}
+      <p
+        className={cn(
+          "type-stat tabular text-right leading-none",
+          post.score >= HIGH_SCORE && "text-primary"
+        )}
+      >
+        {formatCount(post.score)}
+      </p>
+      <p className="type-stat tabular text-right leading-none">{formatCount(post.num_comments)}</p>
     </article>
   );
 }
 
 function Mentions({ post }: { post: SocialPost }) {
-  const names = [...post.player_mentions, ...post.team_mentions];
-  if (names.length === 0) return null;
-  const shown = names.slice(0, 3);
+  const links = [
+    ...post.player_mentions.map((name) => ({ name, href: playerHref(name) })),
+    ...post.team_mentions.map((name) => ({ name, href: teamHref(name) })),
+  ];
+  if (links.length === 0) return null;
+  const shown = links.slice(0, 3);
   return (
-    <p className="type-caption mt-2">
-      <span className="type-eyebrow mr-2">Mentions</span>
-      {shown.join(", ")}
-      {names.length > shown.length ? ` +${names.length - shown.length} more` : ""}
-    </p>
+    <>
+      <Dot />
+      {shown.map((link) => (
+        <Link key={link.href} href={link.href} className="text-primary hover:underline">
+          {link.name}
+        </Link>
+      ))}
+      {links.length > shown.length ? <span>+{links.length - shown.length}</span> : null}
+    </>
   );
 }
 
-function AuthorFlair({ post }: { post: SocialPost }) {
-  const label = flairLabel(post);
-  if (!label) return <span className="text-ink-4">no flair</span>;
-  return <span>{label} fan</span>;
-}
-
 function CapturedComments({ post }: { post: SocialPost }) {
+  const [showAll, setShowAll] = useState(false);
   const commentsQuery = useQuery({
     queryKey: ["social-comments", post.reddit_id],
     queryFn: () => api.listSocialPostComments(post.reddit_id),
   });
   const rows = commentsQuery.data?.data ?? [];
+  const shown = showAll ? rows : rows.slice(0, COMMENT_PREVIEW);
 
   return (
-    <div className="border-t border-rule bg-raised">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-rule px-[var(--ct-space-2)] py-2">
-        <span className="type-eyebrow">
-          Top {post.captured_comment_count} of {formatCount(post.num_comments)} comments
-        </span>
-        <span className="type-caption">
-          highest-scoring only · the rest of the thread is not stored
-        </span>
-        <a className="ct-ask-tool ml-auto" href={post.permalink} target="_blank" rel="noreferrer">
-          Read all {formatCount(post.num_comments)} on reddit
-        </a>
-      </div>
-
+    <div className="mt-[var(--ct-space-4)] border-l-2 border-rule pl-[var(--ct-space-4)]">
       {commentsQuery.isLoading ? (
-        <div className="px-[var(--ct-space-2)]">
-          <LoadingState label="Loading captured comments…" />
-        </div>
+        <LoadingState label="Loading captured comments…" />
       ) : commentsQuery.isError ? (
         <ErrorState message={queryErrorMessage(commentsQuery.error)} />
       ) : rows.length === 0 ? (
-        <p className="type-caption px-[var(--ct-space-2)] py-4">
-          No comments were captured for this post.
-        </p>
+        <p className="type-caption py-2">No comments were captured for this post.</p>
       ) : (
-        <ul>
-          {rows.map((comment) => (
-            <CommentRow key={comment.reddit_id} comment={comment} />
-          ))}
-        </ul>
+        <>
+          <ul>
+            {shown.map((comment) => (
+              <CommentRow key={comment.reddit_id} comment={comment} />
+            ))}
+          </ul>
+          {rows.length > shown.length ? (
+            <button
+              type="button"
+              className="mt-1 text-[length:var(--ct-fs-cell)] text-primary hover:underline"
+              onClick={() => setShowAll(true)}
+            >
+              Show all {rows.length} captured comments
+            </button>
+          ) : null}
+        </>
       )}
     </div>
   );
@@ -142,32 +188,34 @@ function CommentRow({ comment }: { comment: SocialComment }) {
   return (
     <li
       className={cn(
-        "flex gap-[var(--ct-space-3)] border-b border-rule-soft px-[var(--ct-space-2)] py-[var(--ct-space-3)] last:border-b-0",
-        !comment.is_top_level &&
-          "ml-[var(--ct-space-5)] border-l border-rule pl-[var(--ct-space-3)]",
-        comment.is_removed && "bg-tint"
+        "flex gap-[var(--ct-space-3)] py-[var(--ct-space-3)]",
+        !comment.is_top_level && "ml-[var(--ct-space-4)]"
       )}
     >
-      <span className="tabular w-[54px] shrink-0 text-right text-[var(--ct-fs-num)]">
-        {formatCount(comment.score)}
-      </span>
-      <div className="min-w-0">
-        <p className="type-caption flex flex-wrap items-center gap-2">
-          <span className={cn(comment.author ? "" : "italic text-ink-4")}>
-            {comment.author ? `u/${comment.author}` : "author unavailable"}
-          </span>
-          <Tag>{comment.is_top_level ? "Top level" : "Reply"}</Tag>
-          {flair ? <span className="text-ink-3">{flair} fan</span> : null}
-        </p>
+      <div className="min-w-0 flex-1">
         {comment.is_removed ? (
-          <p className="type-caption mt-1 italic">
+          <p className="type-caption italic">
             [removed]. This comment was deleted or removed before collection. Its score is kept
             because it counted toward concentration.
           </p>
         ) : (
-          <p className="mt-1 text-[var(--ct-fs-cell)] leading-relaxed">{comment.body}</p>
+          <p className="text-[length:var(--ct-fs-cell)] leading-relaxed">{comment.body}</p>
         )}
+        <p className="type-caption mt-1 flex flex-wrap items-center gap-x-2">
+          <span className={cn(comment.author ? "" : "italic text-ink-4")}>
+            {comment.author ? `u/${comment.author}` : "author unavailable"}
+          </span>
+          {flair ? (
+            <>
+              <Dot />
+              <span>{flair} fan</span>
+            </>
+          ) : null}
+        </p>
       </div>
+      <span className="tabular w-[48px] shrink-0 text-right text-[length:var(--ct-fs-num)] text-ink-3">
+        {formatCount(comment.score)}
+      </span>
     </li>
   );
 }

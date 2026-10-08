@@ -24,7 +24,21 @@ describe("about page", () => {
     expect(within(sources!).getByText(/r\/nba posts and their top\s+comments/)).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "How the data gets here" })).toBeInTheDocument();
-    expect(screen.getByText(/transformed and enriched/)).toBeInTheDocument();
+    // 08:15 UTC is 4:15 in summer and 3:15 in winter.
+    expect(screen.getByText(/transformed and enriched/)).toHaveTextContent(
+      /scraped everyday around [34]:15 AM ET, picking up the previous day's games and the upcoming slate\. The data is then transformed and enriched/
+    );
+    expect(screen.getByRole("heading", { name: "Built with" })).toBeInTheDocument();
+    expect(screen.getByText(/Cube semantic layer sits over the warehouse/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Background" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 2 }).map((node) => node.textContent)).toEqual([
+      "Sources",
+      "How the data gets here",
+      "Coverage",
+      "Built with",
+      "Developer",
+      "Version",
+    ]);
     expect(screen.getByRole("heading", { name: "Coverage" })).toBeInTheDocument();
     expect(screen.getByText(/Coverage defaults to the latest season/)).toBeInTheDocument();
   });
