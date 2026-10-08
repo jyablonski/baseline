@@ -283,6 +283,14 @@ describe("api client", () => {
     expect(
       fetchMock.mock.calls.some((call) => String(call[0]).includes("season_type=Regular+Season"))
     ).toBe(true);
+    await api.listHighlights({ season: "2025-26", game_date: "2026-01-12", limit: 15 });
+    expect(
+      fetchMock.mock.calls.some((call) =>
+        String(call[0]).includes(
+          "/api/v1/games/highlights?season=2025-26&game_date=2026-01-12&limit=15"
+        )
+      )
+    ).toBe(true);
     await expect(api.getGamePlayByPlay(GAME_A)).resolves.toMatchObject({
       data: [{ score_differential: 2 }],
     });

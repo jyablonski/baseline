@@ -15,6 +15,7 @@ import type {
   GameLogParams,
   GameCollapse,
   GameFlow,
+  GameHighlight,
   HeadToHeadComparison,
   LeagueGame,
   ListGamesParams,
@@ -29,6 +30,7 @@ import type {
   PlayerDetail,
   PlayerSeasonStats,
   PlayerSummary,
+  PlayerValue,
   PredictionScorecard,
   SearchPlayersParams,
   SeasonInfo,
@@ -264,6 +266,9 @@ export const api = {
   searchPlayers,
   findPlayerBySlug,
 
+  listPlayerValue: async (season?: string) =>
+    asPaginated<PlayerValue>(await fetchApi(`/api/v1/players/value${buildQuery({ season })}`)),
+
   getPlayer: async (id: string) => asData<PlayerDetail>(await fetchApi(`/api/v1/players/${id}`)),
 
   getPlayerGameLog: async (id: string, params: GameLogParams = {}) =>
@@ -405,6 +410,17 @@ export const api = {
           season: params.season,
           blown_lead_team: params.blown_lead_team,
           limit: params.limit ?? 10,
+        })}`
+      )
+    ),
+
+  listHighlights: async (params: { season?: string; game_date?: string; limit?: number } = {}) =>
+    asPaginated<GameHighlight>(
+      await fetchApi(
+        `/api/v1/games/highlights${buildQuery({
+          season: params.season,
+          game_date: params.game_date,
+          limit: params.limit,
         })}`
       )
     ),

@@ -13,6 +13,7 @@ exposures:
     depends_on:
       - ref('dim_players')
       - ref('dim_teams')
+      - ref('fct_daily_highlights')
       - ref('fct_game_flow')
       - ref('fct_game_odds')
       - ref('fct_game_predictions')
@@ -41,6 +42,7 @@ exposures:
     depends_on:
       - ref('dim_players')
       - ref('dim_teams')
+      - ref('fct_daily_highlights')
       - ref('fct_game_flow')
       - ref('fct_game_odds')
       - ref('fct_game_predictions')
@@ -73,6 +75,7 @@ exposures:
     depends_on:
       - ref('dim_players')
       - ref('dim_teams')
+      - ref('fct_daily_highlights')
       - ref('fct_game_flow')
       - ref('fct_game_odds')
       - ref('fct_game_predictions')

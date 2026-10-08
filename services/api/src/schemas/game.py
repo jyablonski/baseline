@@ -22,6 +22,9 @@ class ScheduledGame(BaseModel):
     away_team_id: UUID
     away_team_abbreviation: str | None = None
     away_team_name: str | None = None
+    # National TV and streaming networks from ESPN ("ESPN, ABC"); null for a
+    # local-only game or one ESPN has not listed yet.
+    national_tv: str | None = None
     # Champion pregame model estimate; null until the ML job has scored the game.
     prediction_model_version: str | None = None
     home_win_probability: float | None = None
@@ -154,6 +157,34 @@ class GameCollapse(BaseModel):
     winner_margin_entering_fourth: int | None = None
     lead_changes: int | None = None
     overtime_periods: int | None = None
+
+
+class GameHighlight(BaseModel):
+    """A game's lead highlight from gold.fct_daily_highlights."""
+
+    highlight_id: str
+    game_date: date
+    season: str
+    season_type: str | None = None
+    game_id: UUID
+    highlight_type: str
+    subject_type: str
+    player_id: UUID | None = None
+    player_name: str | None = None
+    team_id: UUID | None = None
+    team_abbreviation: str | None = None
+    home_team_abbreviation: str | None = None
+    away_team_abbreviation: str | None = None
+    home_score: int | None = None
+    away_score: int | None = None
+    headline: str
+    detail: str
+    stat_name: str | None = None
+    stat_value: float | None = None
+    # Higher is more notable; day_rank orders the day's games by it.
+    score: float
+    day_rank: int | None = None
+    is_featured: bool
 
 
 class TeamGameResult(GameResult):

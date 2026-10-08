@@ -44,6 +44,7 @@ Click CLI, `python -m main`. Upserts only — Alembic must have created the tabl
 | `scrape-transactions [--season]`  | `source.transactions`, `source.transaction_participants`           |
 | `scrape-injuries`                 | `source.player_injuries` — current snapshot, deletes leavers       |
 | `scrape-odds`                     | `source.game_odds` — needs `ODDS_API_KEY`, else skipped            |
+| `scrape-broadcasts`               | `source.game_broadcasts` — ESPN national TV, next 14 days, no key  |
 | `scrape-reddit`                   | `source.reddit_posts`, `source.reddit_comments` — needs `REDDIT_*` |
 | `scrape-play-by-play`             | `source.play_by_play`                                              |
 | `scrape-daily`                    | the whole basketball daily, ungated                                |
@@ -61,7 +62,7 @@ Local `compose run` bind-mounts models and SQL, so YAML and SQL edits need no re
 
 **Staging** views mirror source tables one-to-one. **Intermediate** models do the real work — enriched game logs, contract and injury name matching, transaction participant resolution, play-by-play parsing and scoring.
 
-**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_player_mvp_scores`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`, `fct_reddit_entity_mentions`, `fct_reddit_flair`, `fct_transactions`, `fct_transaction_participants`, `fct_prediction_scorecard` (per-model evaluation metrics; see [ml.md](ml.md)), and `fct_game_upsets` (see below).
+**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_player_mvp_scores`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`, `fct_reddit_entity_mentions`, `fct_reddit_flair`, `fct_transactions`, `fct_transaction_participants`, `fct_prediction_scorecard` (per-model evaluation metrics; see [ml.md](ml.md)), `fct_game_upsets`, and `fct_daily_highlights` (both below).
 
 Materialization is a real decision here — see `services/dbt/AGENTS.md` for the policy. Two things to know:
 
@@ -86,6 +87,44 @@ A house metric, not an official award model. Knobs are the `mvp_*` vars in `serv
 How the history is kept: `scrape-odds` never writes an event that has already tipped, because the feed carries in-play prices that would overwrite the pregame line. Its prune only deletes _unstarted_ events that left the feed. So a played game keeps its last pregame row in `source.game_odds`. With one morning scrape a day, that row is a morning line, not a true close.
 
 Served by Cube (`game_upsets`) and MCP (`get_biggest_upsets`). There is no REST route or page yet.
+
+### Daily highlights
+
+`fct_daily_highlights` is the "what stood out" feed: one row per candidate highlight for every Final game, scored and ranked. Text is generated from a template per type, not by a model, so every card traces back to numbers in the row.
+
+| Type                                           | Trigger                                                                                    |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `league_season_high`                           | Most of a stat (points, rebounds, assists, blocks, steals, threes) by anyone this season   |
+| `season_high`                                  | A personal season high in one of those stats by a top-30 MVP-ladder player                 |
+| `elite_game`                                   | Game score in the season's top 1%                                                          |
+| `big_scoring_night`                            | 40 or more points                                                                          |
+| `triple_double`                                | Double digits in three box-score stats                                                     |
+| `scoring_duel`                                 | Both teams' top scorers at 30 or more                                                      |
+| `win_streak` / `losing_streak`                 | A streak reaches 5 or more                                                                 |
+| `win_streak_snapped` / `losing_streak_snapped` | A streak of 5 or more ends                                                                 |
+| `blown_lead`                                   | A lead of 20 or more lost, or one in the season's top 5% that is at least 15               |
+| `lead_changes`                                 | 20 or more lead changes                                                                    |
+| `overtime`                                     | Any overtime                                                                               |
+| `blowout`                                      | Won by 30 or more                                                                          |
+| `upset`                                        | The moneyline underdog won at 30% or less; empty until odds history exists (see Upsets)    |
+| `heavyweight_clash`                            | Both teams in the league's top 5 by record entering the game                               |
+| `top_performer`                                | The game's best line. Every game with logs has one, so a quiet night still shows something |
+
+Every threshold and weight is a `highlight_*` var in `services/dbt/dbt_project.yml`.
+
+- **Score** is `base_weight * (1 + magnitude) * (1 + importance)`. `magnitude` (0-1) is how far past its threshold the event went. `importance` (0-1) is the subject: MVP rank for a player, league rank entering the game for a team, and a flat 1 outside the Regular Season.
+- **Ranking** is one highlight per game. `game_rank` orders a game's candidates, the lead one from each game competes for `day_rank`, and the top three are `is_featured`. A single wild game cannot take every slot, and no player or team shows up twice in a day.
+- **Guards**: season highs need 10 prior games for the player, league highs 10 prior game dates, and team rank 10 games played. Without them the first week of a season is all "season highs".
+- **As-of caveat**: season highs, streaks, and team rank are computed as of the game. MVP rank and the elite-game percentile use the season as it stands today, so an old day's scores can drift as the season goes on.
+- `lead_changes` counts direct lead flips only (`fct_game_flow` treats a pass through a tie as a tie), so it runs lower than a box score's number. That is why the bar is 20, not 30.
+
+Served by REST (`GET /api/v1/games/highlights`, one lead highlight per game for a day), Cube (`daily_highlights`), and MCP (`get_daily_highlights`). The home page shows the featured ones as cards and each game's lead headline under its score.
+
+### National TV
+
+`fct_games_schedule.national_tv` lists a game's national TV and streaming networks, comma-separated (`ESPN, ABC`). It is null for a local-only game or one ESPN has not listed.
+
+The source is ESPN's public scoreboard JSON, the only thing taken from ESPN: neither Basketball-Reference nor The Odds API carries a broadcaster. `scrape-broadcasts` (also a daily pipeline step) reads today plus 14 days, one request per day because the endpoint rejects date ranges, into `source.game_broadcasts`. Events are matched to `source.games` by both teams and the Eastern date, the same way odds are. The endpoint is undocumented and unkeyed, so treat a failure as a source that can change shape without notice. For that reason the step is optional in the daily run: a failure is logged and recorded against the source, but the run still goes on to dbt. The TV column is blank for games further out than the window. Preseason events are stored but match nothing, since preseason games are not on the schedule.
 
 ## Serving
 

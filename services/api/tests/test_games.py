@@ -258,6 +258,7 @@ def test_list_schedule(client, session, mapping_row, query_result) -> None:
                         "away_team_id": TEAM_LAL,
                         "away_team_abbreviation": "LAL",
                         "away_team_name": "Los Angeles Lakers",
+                        "national_tv": "ESPN, ABC",
                         "prediction_model_version": "elo-v0",
                         "home_win_probability": 0.62,
                         "away_win_probability": 0.38,
@@ -287,6 +288,7 @@ def test_list_schedule(client, session, mapping_row, query_result) -> None:
     assert row["home_moneyline"] == -150
     assert row["away_moneyline"] == 130
     assert row["home_spread"] == -3.5
+    assert row["national_tv"] == "ESPN, ABC"
     assert "home_implied_wp" not in row
 
 
@@ -481,3 +483,72 @@ def test_box_score_sql_drops_players_who_never_checked_in() -> None:
     sql = str(LIST_BOX_SCORE)
     assert "fct_player_game_logs.minutes IS NOT NULL" in sql
     assert "fct_player_game_logs.minutes > 0" in sql
+
+
+def _highlight_row(**overrides) -> dict:
+    row = {
+        "highlight_id": "0f3c5a1e9b7d4c2a8e6f1b3d5a7c9e0f",
+        "game_date": date(2026, 1, 12),
+        "season": "2025-26",
+        "season_type": "Regular Season",
+        "game_id": GAME_TWO,
+        "highlight_type": "win_streak",
+        "subject_type": "team",
+        "player_id": None,
+        "player_name": None,
+        "team_id": TEAM_GSW,
+        "team_abbreviation": "GSW",
+        "home_team_abbreviation": "GSW",
+        "away_team_abbreviation": "LAL",
+        "home_score": 118,
+        "away_score": 104,
+        "headline": "Warriors win 5th straight",
+        "detail": "GSW 118, LAL 104.",
+        "stat_name": "games",
+        "stat_value": 5,
+        "score": 7.47,
+        "day_rank": 1,
+        "is_featured": True,
+    }
+    row.update(overrides)
+    return row
+
+
+@pytest.mark.unit
+def test_list_daily_highlights(client, session, mapping_row, query_result) -> None:
+    session.queue = [query_result([mapping_row(_highlight_row())])]
+    response = client.get("/api/v1/games/highlights")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["meta"]["total"] == 1
+    highlight = payload["data"][0]
+    assert highlight["headline"] == "Warriors win 5th straight"
+    assert highlight["highlight_type"] == "win_streak"
+    assert highlight["is_featured"] is True
+    assert highlight["player_id"] is None
+    # No date asked for: the query falls back to the newest day with games.
+    _, params = session.calls[-1]
+    assert params == {"season": None, "game_date": None, "limit": 15}
+
+
+@pytest.mark.unit
+def test_list_daily_highlights_binds_date_and_season(client, session, query_result) -> None:
+    session.queue = [query_result([])]
+    response = client.get(
+        "/api/v1/games/highlights",
+        params={"season": "2025-26", "game_date": "2026-01-12", "limit": 3},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"] == []
+    _, params = session.calls[-1]
+    assert params == {"season": "2025-26", "game_date": date(2026, 1, 12), "limit": 3}
+
+
+@pytest.mark.unit
+def test_daily_highlights_query_is_one_lead_highlight_per_game() -> None:
+    from queries.games import LIST_DAILY_HIGHLIGHTS
+
+    sql = str(LIST_DAILY_HIGHLIGHTS)
+    assert "gold.fct_daily_highlights" in sql
+    assert "fct_daily_highlights.game_rank = 1" in sql
+    assert "coalesce(CAST(:game_date AS date), latest_day.game_date)" in sql

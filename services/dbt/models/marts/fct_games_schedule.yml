@@ -17,6 +17,8 @@ models:
           - not_null
       - name: start_time_et
         description: Scheduled tip-off time in Eastern Time; null when unpublished.
+      - name: national_tv
+        description: Comma-separated national TV and streaming networks from ESPN, e.g. "ESPN, ABC"; null for a local-only game or one ESPN has not listed.
       - name: season
         description: NBA season label, e.g. 2025-26.
         data_tests:

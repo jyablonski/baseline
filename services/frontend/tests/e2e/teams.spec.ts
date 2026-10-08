@@ -20,7 +20,8 @@ test("teams directory to profile shows cap position", async ({ page }) => {
   await expect(page.getByText("Chase Center", { exact: true })).toBeVisible();
   await expect(page.getByText("Cap position").first()).toBeVisible();
   await expect(page.getByText("Regular Season")).toBeVisible();
-  await expect(page.getByText("Arena city")).toBeVisible();
+  await expect(page.getByLabel("Opponent")).toBeVisible();
+  await expect(page.getByText("Arena city")).toHaveCount(0);
 });
 
 test("standings page lists conferences without a 2010-11 range", async ({ page }) => {
@@ -87,13 +88,6 @@ test("team profile home/away segmented control filters the record", async ({ pag
   await expect(page.getByRole("button", { name: "away", exact: true })).not.toHaveClass(
     /seg-btn-active/
   );
-});
-
-test("team profile filters games by arena city", async ({ page }) => {
-  await mockApi(page);
-  await page.goto("/teams/1610612744");
-  await page.getByLabel("Arena city").selectOption("San Francisco");
-  await waitForApiCall(page, "arena_city=San");
 });
 
 test("teams directory surfaces the API failure instead of an empty grid", async ({ page }) => {

@@ -22,6 +22,7 @@ from schemas import (
     PlayerDetail,
     PlayerSeasonStats,
     PlayerSummary,
+    PlayerValue,
 )
 
 router = APIRouter()
@@ -101,6 +102,26 @@ def compare_players_head_to_head(
     logs = repo.list_head_to_head_logs(player_ids[0], player_ids[1])
     payload = build_head_to_head(players, logs, player_ids)
     return ItemResponse(data=HeadToHeadComparison.model_validate(payload))
+
+
+@router.get("/value", response_model=PaginatedResponse[PlayerValue])
+def list_player_value(
+    season: Annotated[
+        str | None, Query(description="MVP season; defaults to the latest scored")
+    ] = None,
+    repo: PlayersRepository = Depends(get_players_repository),
+) -> PaginatedResponse[PlayerValue]:
+    """Every MVP-ladder player with a salary on file, for the value plot.
+
+    Unpaginated on purpose: the plot needs the whole league at once, and that
+    is a few hundred small rows.
+    """
+    rows = repo.list_player_value(season)
+    data = [PlayerValue.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=max(len(data), 1), offset=0),
+    )
 
 
 @router.get("", response_model=PaginatedResponse[PlayerSummary])

@@ -4,10 +4,15 @@ import Link from "next/link";
 import { teamLogoLabel, teamLogoUrl } from "@/lib/team-logo";
 import { cn } from "@/lib/utils";
 
+// One size for every logo that sits beside a team name in a row or list, so
+// tables line up across pages. Only pass `size` for something that is not a
+// row, like a page header.
+export const TEAM_LOGO_SIZE = 24;
+
 export function TeamLogo({
   teamId,
   abbreviation,
-  size = 18,
+  size = TEAM_LOGO_SIZE,
   className,
 }: {
   teamId: string | null | undefined;

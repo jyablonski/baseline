@@ -1,0 +1,132 @@
+cubes:
+  - name: daily_highlights
+    sql_table: gold.fct_daily_highlights
+    description: >
+      Scored "what stood out" candidates, one row per highlight for every Final game: season
+      highs, elite and 40-point games, triple-doubles, opposing 30-point scorers, win and losing
+      streaks extended or snapped, blown leads, lead changes, overtime, blowouts, moneyline upsets,
+      and meetings of two top-ranked teams. score is base_weight * (1 + magnitude) *
+      (1 + importance); higher is more notable. game_rank = 1 is a game's lead highlight, day_rank
+      orders those across the day, and is_featured marks the day's top few (one per game). Filter
+      is_featured = true for a day's headline cards, or game_rank = 1 for one line per game.
+      headline and detail are ready-to-show text.
+
+    dimensions:
+      - name: highlight_id
+        sql: highlight_id
+        type: string
+        primary_key: true
+        public: true
+
+      - name: game_id
+        sql: game_id
+        type: string
+
+      - name: game_date
+        sql: game_date
+        type: time
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: season_type
+        sql: season_type
+        type: string
+
+      - name: highlight_type
+        sql: highlight_type
+        type: string
+
+      - name: subject_type
+        sql: subject_type
+        type: string
+
+      - name: player_id
+        sql: player_id
+        type: string
+
+      - name: player_name
+        sql: player_name
+        type: string
+
+      - name: team_id
+        sql: team_id
+        type: string
+
+      - name: team_abbreviation
+        sql: team_abbreviation
+        type: string
+
+      - name: home_team_abbreviation
+        sql: home_team_abbreviation
+        type: string
+
+      - name: away_team_abbreviation
+        sql: away_team_abbreviation
+        type: string
+
+      - name: home_score
+        sql: home_score
+        type: number
+
+      - name: away_score
+        sql: away_score
+        type: number
+
+      - name: headline
+        sql: headline
+        type: string
+
+      - name: detail
+        sql: detail
+        type: string
+
+      - name: stat_name
+        sql: stat_name
+        type: string
+
+      - name: stat_value
+        sql: stat_value
+        type: number
+
+      - name: base_weight
+        sql: base_weight
+        type: number
+
+      - name: magnitude
+        sql: magnitude
+        type: number
+
+      - name: importance
+        sql: importance
+        type: number
+
+      - name: score
+        sql: score
+        type: number
+
+      - name: game_rank
+        sql: game_rank
+        type: number
+
+      - name: day_rank
+        sql: day_rank
+        type: number
+
+      - name: is_featured
+        sql: is_featured
+        type: boolean
+
+    measures:
+      - name: highlights
+        type: count
+
+      - name: featured_highlights
+        type: count
+        filters:
+          - sql: "{CUBE}.is_featured = true"
+
+      - name: top_score
+        sql: score
+        type: max

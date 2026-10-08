@@ -90,6 +90,26 @@ def test_scrape_contracts_canonicalizes_rows(monkeypatch: pytest.MonkeyPatch) ->
     assert captured[0][2] == ["player_id", "team_id", "season"]
     assert captured[0][1][0]["player_id"] == "player-id"
     assert captured[1][0] is TeamPayroll
+    # Rows this run did not rewrite for the team are players who left its page.
+    statement, params = session.execute.call_args.args
+    assert "DELETE FROM source.player_contracts" in str(statement)
+    assert params["team_id"] == "team-id"
+    assert params["scraped_at"] == captured[0][1][0]["scraped_at"]
+    assert session.execute.call_count == 1
+
+
+@pytest.mark.unit
+def test_scrape_contracts_keeps_old_rows_when_a_page_parses_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty parse is a broken page, not a team with nobody under contract."""
+    session = MagicMock()
+    monkeypatch.setattr("scrapers.contracts.get_session", lambda: _session(session))
+    monkeypatch.setattr("scrapers.contracts.seed_team_catalog", lambda *args, **kwargs: 30)
+    monkeypatch.setattr("scrapers.contracts.upsert_rows", lambda *args: 0)
+    counts = scrape_contracts("GSW", fetch_html=lambda url: "<html><body></body></html>")
+    assert counts == (0, 0)
+    session.execute.assert_not_called()
 
 
 @pytest.mark.unit

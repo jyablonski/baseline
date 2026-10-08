@@ -77,6 +77,32 @@ export function formatScheduleDate(value: string | null | undefined) {
   });
 }
 
+/** Today's calendar date on the US East coast, which is what game dates are. */
+export function isoDateET(now = new Date()) {
+  return now.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
+export function isoDayBefore(value: string) {
+  const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+/** "Mon 12 Jan": a slate's date where the year is already obvious. */
+export function formatSlateDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date
+    .toLocaleDateString("en-GB", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      timeZone: "UTC",
+    })
+    .replace(",", "");
+}
+
 export function formatTimeET(value: string | null | undefined) {
   const match = value?.match(/^(\d{1,2}):(\d{2})/);
   if (!match) return "TBD";

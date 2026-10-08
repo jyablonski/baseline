@@ -289,6 +289,24 @@ class GameOdds(Base):
     )
 
 
+class GameBroadcast(Base):
+    __tablename__ = "game_broadcasts"
+    __table_args__ = {"schema": "source"}
+
+    espn_event_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    commence_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    home_team_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    away_team_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    game_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.games.game_id")
+    )
+    # Comma-separated national networks ("ESPN, ABC"); null for a local-only game.
+    national_tv: Mapped[str | None] = mapped_column(String(200))
+    scraped_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+
 class GamePrediction(Base):
     __tablename__ = "game_predictions"
     __table_args__ = (

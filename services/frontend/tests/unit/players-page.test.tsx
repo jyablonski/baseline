@@ -18,6 +18,8 @@ vi.mock("@/lib/api", () => ({
     }),
     searchPlayers: (...args: unknown[]) => searchPlayers(...args),
     listTeams: (...args: unknown[]) => listTeams(...args),
+    // The value plot has its own tests; an empty ladder renders nothing here.
+    listPlayerValue: async () => ({ data: [], meta: { total: 0, limit: 1, offset: 0 } }),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
 }));
@@ -96,9 +98,8 @@ describe("players directory", () => {
     expect(screen.getByRole("columnheader", { name: "MVP" })).toBeInTheDocument();
     expect(screen.getByText("23.6")).toBeInTheDocument();
     expect(screen.getByText("4")).toBeInTheDocument();
-    expect(
-      screen.getByText(/MVP is a custom metric based on 2025-26 regular-season performance/)
-    ).toBeInTheDocument();
+    // The MVP explanation lives with the plot above, not under the table.
+    expect(screen.queryByText(/MVP is a custom metric/)).not.toBeInTheDocument();
     expect(screen.queryByText(/career/i)).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Status" })).toBeInTheDocument();
     expect(screen.getByText("7.2")).toBeInTheDocument();

@@ -22,6 +22,24 @@ class PlayerSummary(BaseModel):
     mvp_rank: int | None = None
 
 
+class PlayerValue(BaseModel):
+    """One point on the MVP score vs salary plot."""
+
+    player_id: UUID
+    full_name: str
+    position: str | None = None
+    team_id: UUID | None = None
+    team_abbreviation: str | None = None
+    mvp_season: str
+    mvp_score: float
+    mvp_rank: int
+    games_played: int
+    # Current contract season's salary; salary_season names that season, which
+    # can differ from mvp_season.
+    salary: int
+    salary_season: str | None = None
+
+
 class PlayerDetail(PlayerSummary):
     first_name: str
     last_name: str

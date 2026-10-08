@@ -13,6 +13,7 @@ from cube.queries import (
     PLAYER_SALARY_DIMENSIONS,
     biggest_upsets_query,
     current_nba_season,
+    daily_highlights_query,
     game_odds_query,
     game_predictions_query,
     game_standings_query,
@@ -648,3 +649,86 @@ def test_biggest_upsets_resolves_latest_season() -> None:
     assert len(explicit.queries) == 1
     assert biggest_upsets_query("2026-27", "Playoffs")["filters"][-1]["values"] == ["Playoffs"]
     assert biggest_upsets_query("2026-27")["limit"] == 10
+
+
+@pytest.mark.unit
+def test_daily_highlights_resolves_latest_day() -> None:
+    client = ScriptedCubeClient(
+        [
+            [{"game_date": "2026-01-12T00:00:00.000"}],
+            [
+                {
+                    "highlight_id": "abc",
+                    "game_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                    "game_date": "2026-01-12T00:00:00.000",
+                    "season": "2025-26",
+                    "season_type": "Regular Season",
+                    "highlight_type": "win_streak",
+                    "subject_type": "team",
+                    "player_name": None,
+                    "team_abbreviation": "OKC",
+                    "away_team_abbreviation": "OKC",
+                    "home_team_abbreviation": "UTA",
+                    "away_score": "131",
+                    "home_score": "101",
+                    "headline": "Thunder win 15th straight",
+                    "detail": "OKC 131, UTA 101.",
+                    "stat_name": "games",
+                    "stat_value": "15",
+                    "score": "16.00",
+                    "game_rank": "1",
+                    "day_rank": "1",
+                    "is_featured": True,
+                }
+            ],
+        ]
+    )
+    result = CubeAnalytics(client).get_daily_highlights(season="2025-26", limit=500)
+    assert result["game_date"] == "2026-01-12"
+    top = result["highlights"][0]
+    assert top["headline"] == "Thunder win 15th straight"
+    assert top["game_date"] == "2026-01-12"
+    assert top["stat_value"] == 15.0
+    assert top["score"] == 16.0
+    assert top["day_rank"] == 1
+    assert top["away_score"] == 131
+    assert top["is_featured"] is True
+
+    latest, day = client.queries
+    assert latest["order"] == {"daily_highlights.game_date": "desc"}
+    assert latest["limit"] == 1
+    assert latest["filters"] == [
+        {"member": "daily_highlights.season", "operator": "equals", "values": ["2025-26"]}
+    ]
+    assert day["limit"] == 100
+    assert day["order"] == {"daily_highlights.score": "desc"}
+    assert day["filters"] == [
+        {
+            "member": "daily_highlights.game_date",
+            "operator": "inDateRange",
+            "values": ["2026-01-12", "2026-01-12"],
+        },
+        {"member": "daily_highlights.game_rank", "operator": "equals", "values": ["1"]},
+    ]
+
+
+@pytest.mark.unit
+def test_daily_highlights_explicit_date_and_empty_warehouse() -> None:
+    # An explicit date skips the lookup, and a timestamp is cut to its day.
+    explicit = ScriptedCubeClient([[{"game_date": None, "headline": "x"}]])
+    result = CubeAnalytics(explicit).get_daily_highlights(
+        game_date="2025-12-25T00:00:00.000", all_candidates=True
+    )
+    assert result["game_date"] == "2025-12-25"
+    assert result["highlights"][0]["game_date"] is None
+    assert len(explicit.queries) == 1
+    # Runners-up included: no game_rank filter.
+    assert [item["member"] for item in explicit.queries[0]["filters"]] == [
+        "daily_highlights.game_date"
+    ]
+
+    empty = CubeAnalytics(ScriptedCubeClient([[]]))
+    assert empty.get_daily_highlights() == {"game_date": None, "highlights": []}
+    assert empty.client.queries[0]["filters"] == []
+
+    assert daily_highlights_query("2026-01-12")["limit"] == 15

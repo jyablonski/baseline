@@ -11,6 +11,7 @@ import {
   formatProbability,
   formatScrapedAt,
   formatSignedMargin,
+  formatSlateDate,
   formatStat,
   formatUsd,
   formatUsdCompact,
@@ -23,6 +24,8 @@ import {
   formatWinPct,
   formatWinPctPlain,
   teamCentricMargin,
+  isoDateET,
+  isoDayBefore,
   locationLabel,
   playerSubtitle,
   seasonFromDate,
@@ -181,6 +184,27 @@ describe("format helpers", () => {
         over_second_apron: false,
       })
     ).toBe("Over tax · over 1st apron · under 2nd apron");
+  });
+});
+
+describe("slate date helpers", () => {
+  it("reads today's date on the East coast, not in UTC", () => {
+    // 03:00 UTC is still the previous evening in New York.
+    expect(isoDateET(new Date("2026-01-13T03:00:00Z"))).toBe("2026-01-12");
+    expect(isoDateET(new Date("2026-01-13T15:00:00Z"))).toBe("2026-01-13");
+    expect(isoDateET()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("steps back a day across month and year boundaries", () => {
+    expect(isoDayBefore("2026-01-13")).toBe("2026-01-12");
+    expect(isoDayBefore("2026-01-01T00:00:00Z")).toBe("2025-12-31");
+  });
+
+  it("formats a slate date without the year", () => {
+    expect(formatSlateDate("2026-01-12")).toBe("Mon 12 Jan");
+    expect(formatSlateDate("2026-01-12T00:00:00Z")).toBe("Mon 12 Jan");
+    expect(formatSlateDate(null)).toBe("—");
+    expect(formatSlateDate("soon")).toBe("soon");
   });
 });
 

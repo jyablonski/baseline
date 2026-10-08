@@ -296,6 +296,39 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         });
       }
 
+      if (url.includes("/players/value")) {
+        const value = (
+          index: number,
+          full_name: string,
+          team: string,
+          mvp_score: number,
+          salary: number
+        ) => ({
+          player_id: `00000000-0000-4000-8000-0000000009${String(index).padStart(2, "0")}`,
+          full_name,
+          team_id: team,
+          team_abbreviation: team,
+          mvp_season: "2025-26",
+          mvp_score,
+          mvp_rank: index,
+          games_played: 70,
+          salary,
+          salary_season: "2026-27",
+        });
+        const rows = [
+          value(1, "Nikola Jokic", "DEN", 38.1, 55_000_000),
+          value(2, "Stephen Curry", "GSW", 30.2, 59_000_000),
+          value(11, "Bargain Guard", "GSW", 24.0, 2_500_000),
+          value(12, "Solid Wing", "LAL", 18.0, 20_000_000),
+          value(13, "Role Player", "LAL", 12.0, 12_000_000),
+          value(14, "Max Mistake", "DEN", 6.0, 48_000_000),
+        ];
+        return json({
+          data: empty ? [] : rows,
+          meta: { total: empty ? 0 : rows.length, limit: rows.length, offset: 0 },
+        });
+      }
+
       if (url.includes("/players/compare/head-to-head")) {
         return json({
           data: {
@@ -598,6 +631,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                   away_team_abbreviation: "LAL",
                   arena: "Chase Center",
                   arena_city: "San Francisco",
+                  national_tv: "ESPN",
                   prediction_model_version: "elo-v0",
                   home_win_probability: 0.62,
                   away_win_probability: 0.38,
@@ -738,6 +772,29 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
       }
 
       // Must precede the generic /games branch.
+      if (url.includes("/games/highlights")) {
+        return json({
+          data: empty
+            ? []
+            : [
+                {
+                  highlight_id: "hl-1",
+                  game_date: "2024-10-22",
+                  season: "2025-26",
+                  game_id: "0022400001",
+                  highlight_type: "scoring_duel",
+                  subject_type: "game",
+                  headline: "Stephen Curry 38, LeBron James 35",
+                  detail: "Opposing 30-point games. GSW 120, LAL 110.",
+                  score: 14.2,
+                  day_rank: 1,
+                  is_featured: true,
+                },
+              ],
+          meta: { total: empty ? 0 : 1, limit: 15, offset: 0 },
+        });
+      }
+
       if (url.includes("/games/collapses")) {
         const blownLeadTeam = new URL(url, window.location.origin).searchParams.get(
           "blown_lead_team"

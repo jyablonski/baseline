@@ -22,6 +22,7 @@ REQUIRED_CUBES = (
     "player_injuries",
     "game_odds",
     "game_upsets",
+    "daily_highlights",
     "play_by_play",
     "reddit_posts",
     "reddit_comments",
@@ -160,6 +161,14 @@ def validate_schema(root: Path | None = None) -> dict:
     for required in ("is_upset", "upset_magnitude", "upset_rank", "underdog_market_wp"):
         if required not in upset_dims:
             raise ValueError(f"game_upsets is missing dimension {required}")
+
+    highlights = next(item for item in cubes_payload if item["name"] == "daily_highlights")
+    if highlights.get("sql_table") != "gold.fct_daily_highlights":
+        raise ValueError("daily_highlights must query gold.fct_daily_highlights")
+    highlight_dims = {dim["name"] for dim in highlights.get("dimensions") or []}
+    for required in ("highlight_type", "headline", "score", "game_rank", "is_featured"):
+        if required not in highlight_dims:
+            raise ValueError(f"daily_highlights is missing dimension {required}")
 
     return {
         "root": project_dir,

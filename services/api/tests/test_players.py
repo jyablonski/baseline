@@ -729,3 +729,62 @@ def test_compare_accepts_mvp_stat(client, session, mapping_row, query_result) ->
     stmt, params = session.calls[0]
     assert params["season"] == "2024-25"
     assert "regular_season_mvp.mvp_score DESC NULLS LAST" in str(stmt)
+
+
+@pytest.mark.unit
+def test_list_player_value(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "player_id": PLAYER_CURRY,
+                        "full_name": "Stephen Curry",
+                        "position": "Point Guard",
+                        "team_id": TEAM_GSW,
+                        "team_abbreviation": "GSW",
+                        "mvp_season": "2025-26",
+                        "mvp_score": 22.5,
+                        "mvp_rank": 2,
+                        "games_played": 70,
+                        "salary": 59606817,
+                        "salary_season": "2026-27",
+                    }
+                )
+            ]
+        )
+    ]
+    response = client.get("/api/v1/players/value", params={"season": "2025-26"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["meta"]["total"] == 1
+    point = payload["data"][0]
+    assert point["full_name"] == "Stephen Curry"
+    assert point["mvp_score"] == 22.5
+    assert point["salary"] == 59606817
+    # The salary's own season is reported: it is not always the MVP season.
+    assert point["salary_season"] == "2026-27"
+    _, params = session.calls[-1]
+    assert params == {"season": "2025-26"}
+
+
+@pytest.mark.unit
+def test_list_player_value_empty(client, session, query_result) -> None:
+    session.queue = [query_result([])]
+    response = client.get("/api/v1/players/value")
+    assert response.status_code == 200
+    assert response.json()["data"] == []
+    _, params = session.calls[-1]
+    assert params == {"season": None}
+
+
+@pytest.mark.unit
+def test_player_value_query_needs_a_score_and_a_salary() -> None:
+    from queries.players import LIST_PLAYER_VALUE
+
+    sql = str(LIST_PLAYER_VALUE)
+    assert "fct_player_mvp_scores.season_type = 'Regular Season'" in sql
+    assert "dim_players.current_season_salary IS NOT NULL" in sql
+    # Falls back to the latest scored season when the asked-for one is empty.
+    assert "FILTER (" in sql
+    assert "WHERE fct_player_mvp_scores.season = :season" in sql

@@ -16,6 +16,7 @@ def test_validate_schema() -> None:
     assert "team_games" in result["cubes"]
     assert "player_mvp_scores" in result["cubes"]
     assert "game_upsets" in result["cubes"]
+    assert "daily_highlights" in result["cubes"]
     assert (result["root"] / "cube.js").is_file()
 
 
@@ -49,6 +50,7 @@ def test_cube_and_view_names() -> None:
             "player_injuries",
             "game_odds",
             "game_upsets",
+            "daily_highlights",
             "play_by_play",
             "reddit_posts",
             "reddit_comments",

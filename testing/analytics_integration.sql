@@ -188,7 +188,37 @@ CREATE TABLE IF NOT EXISTS gold.fct_games_schedule (
     away_team_id            UUID NOT NULL,
     away_team_abbreviation  VARCHAR(5),
     away_team_name          VARCHAR(100),
-    away_score              INTEGER
+    away_score              INTEGER,
+    national_tv             VARCHAR(200)
+);
+
+CREATE TABLE IF NOT EXISTS gold.fct_daily_highlights (
+    highlight_id            TEXT PRIMARY KEY,
+    game_date               DATE NOT NULL,
+    season                  VARCHAR(10) NOT NULL,
+    season_type             VARCHAR(20),
+    game_id                 UUID NOT NULL,
+    highlight_type          TEXT NOT NULL,
+    subject_type            TEXT NOT NULL,
+    player_id               UUID,
+    player_name             VARCHAR(100),
+    team_id                 UUID,
+    team_abbreviation       VARCHAR(5),
+    home_team_abbreviation  VARCHAR(5),
+    away_team_abbreviation  VARCHAR(5),
+    home_score              INTEGER,
+    away_score              INTEGER,
+    headline                TEXT NOT NULL,
+    detail                  TEXT NOT NULL,
+    stat_name               TEXT NOT NULL,
+    stat_value              NUMERIC,
+    base_weight             NUMERIC NOT NULL,
+    magnitude               NUMERIC,
+    importance              NUMERIC,
+    score                   NUMERIC NOT NULL,
+    game_rank               BIGINT NOT NULL,
+    day_rank                BIGINT,
+    is_featured             BOOLEAN NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS gold.fct_game_predictions (

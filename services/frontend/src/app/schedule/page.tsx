@@ -56,8 +56,8 @@ function ScheduleBody() {
         <div>
           <h1 className="type-page">Schedule</h1>
           <p className="mt-1 text-sm text-ink-2">
-            {season ? `${season} schedule` : "Upcoming schedule"} from today onward. Win % is
-            Baseline&apos;s pregame model estimate.{" "}
+            {season ? `${season} schedule` : "Upcoming schedule"} from today onward. TV lists
+            national broadcasts only. Win % is Baseline&apos;s pregame model estimate.{" "}
             <Link href="/predictions" className="underline underline-offset-2">
               How accurate is the model?
             </Link>
@@ -81,6 +81,7 @@ function ScheduleBody() {
               <tr>
                 <th>Date / time (ET)</th>
                 <th>Matchup</th>
+                <th title="National TV and streaming">TV</th>
                 <th title="Pregame model estimate, away / home">Win % (away / home)</th>
                 <th title="Consensus moneyline, away / home">Moneyline</th>
                 <th title="Consensus home spread">Spread</th>
@@ -160,6 +161,9 @@ function ScheduleRow({ game, season }: { game: ScheduledGame; season: string }) 
             <span className="font-semibold">{home}</span>
           )}
         </span>
+      </td>
+      <td className="whitespace-nowrap" data-testid="national-tv">
+        {game.national_tv || "—"}
       </td>
       <td className="tabular whitespace-nowrap" data-testid="win-probability">
         {pairOrDash(

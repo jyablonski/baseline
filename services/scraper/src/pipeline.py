@@ -54,6 +54,7 @@ from queries.scrape_pipeline import (
 )
 from queries.scrape_source_runs import INSERT_SOURCE_RUN, SELECT_UNHEALTHY_SOURCE_STREAKS
 from scrapers import current_season
+from scrapers.broadcasts import scrape_broadcasts
 from scrapers.contracts import scrape_contracts
 from scrapers.games import scrape_games, scrape_todays_games
 from scrapers.injuries import scrape_injuries
@@ -197,7 +198,7 @@ def decide_action(
         return ("season", f"Scrape season {config.target_season}.")
     return (
         "daily",
-        "Scrape today's slate (Final + upcoming), logs, PBP for those Finals, standings, injuries, contracts, odds.",
+        "Scrape today's slate (Final + upcoming), logs, PBP for those Finals, standings, injuries, contracts, odds, broadcasts.",
     )
 
 
@@ -275,11 +276,19 @@ def execute_scrape(
             n_odds = 0
         else:
             n_odds = collector.try_run("odds", scrape_odds)
+        # Optional: national TV is a garnish from an undocumented endpoint. If
+        # ESPN is down or changes shape, last night's box scores still have to
+        # reach dbt.
+        n_broadcasts = collector.try_run("broadcasts", scrape_broadcasts, optional=True)
         standings_count = 0 if n_standings is None else n_standings
         injuries_count = 0 if n_injuries is None else n_injuries
         odds_count = 0 if n_odds is None else n_odds
-        snapshot_count = standings_count + injuries_count + odds_count
-        extra = f"standings: {standings_count}; injuries: {injuries_count}; odds: {odds_count}."
+        broadcasts_count = 0 if n_broadcasts is None else n_broadcasts
+        snapshot_count = standings_count + injuries_count + odds_count + broadcasts_count
+        extra = (
+            f"standings: {standings_count}; injuries: {injuries_count}; odds: {odds_count}; "
+            f"broadcasts: {broadcasts_count}."
+        )
         if not games:
             # Record the game-dependent steps rather than omitting them: an
             # absent row is indistinguishable from a step that silently stopped

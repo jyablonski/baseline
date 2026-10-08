@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
@@ -9,6 +10,7 @@ from schemas import (
     BoxScoreRow,
     GameCollapse,
     GameFlow,
+    GameHighlight,
     GameResult,
     ItemResponse,
     PaginatedResponse,
@@ -56,6 +58,26 @@ def list_biggest_collapses(
         limit=limit,
     )
     data = [GameCollapse.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=limit, offset=0),
+    )
+
+
+@router.get("/highlights", response_model=PaginatedResponse[GameHighlight])
+def list_daily_highlights(
+    season: Annotated[str | None, Query()] = None,
+    game_date: Annotated[date | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=30)] = 15,
+    repo: GamesRepository = Depends(get_games_repository),
+) -> PaginatedResponse[GameHighlight]:
+    """Each game's lead highlight for one day, most notable first.
+
+    Without game_date this is the newest day that has games, so the caller
+    does not have to know when the last slate was.
+    """
+    rows = repo.list_daily_highlights(season=season, game_date=game_date, limit=limit)
+    data = [GameHighlight.model_validate(row) for row in rows]
     return PaginatedResponse(
         data=data,
         meta=PaginationMeta(total=len(data), limit=limit, offset=0),

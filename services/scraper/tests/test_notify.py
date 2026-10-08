@@ -266,11 +266,35 @@ def test_scrape_daily_success_sends_no_post(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr("main.scrape_transactions", lambda season: (9, 20))
     monkeypatch.setattr("main.scrape_injuries", lambda: 0)
     monkeypatch.setattr("main.scrape_odds", lambda: 0)
+    monkeypatch.setattr("main.scrape_broadcasts", lambda: 0)
     monkeypatch.setattr("main.scrape_contracts", lambda: (8, 2))
     monkeypatch.setattr("main.stamp_cli_success", lambda: None)
     result = CliRunner().invoke(cli, ["scrape-daily"])
     assert result.exit_code == 0
     assert posted == []
+
+
+@pytest.mark.unit
+def test_scrape_daily_survives_a_broadcasts_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    posted: list[object] = []
+    monkeypatch.setattr("notify.requests.post", lambda *args, **kwargs: posted.append(1))
+    monkeypatch.setattr(
+        "notify.settings", SimpleNamespace(slack_webhook_url="https://hooks.slack.test/x")
+    )
+    monkeypatch.setattr("main.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("main.scrape_standings", lambda season: 30)
+    monkeypatch.setattr("main.scrape_injuries", lambda: 0)
+    monkeypatch.setattr("main.scrape_odds", lambda: 0)
+    monkeypatch.setattr(
+        "main.scrape_broadcasts", lambda: (_ for _ in ()).throw(RuntimeError("ESPN down"))
+    )
+    monkeypatch.setattr("main.scrape_contracts", lambda: (8, 2))
+    monkeypatch.setattr("main.stamp_cli_success", lambda: None)
+    result = CliRunner().invoke(cli, ["scrape-daily"])
+    # Optional source: no failed exit and no alert for it.
+    assert result.exit_code == 0
+    assert posted == []
+    assert "Broadcasts:" not in result.output
 
 
 @pytest.mark.unit
@@ -295,6 +319,7 @@ def test_scrape_daily_webhook_500_still_exits_nonzero(monkeypatch: pytest.Monkey
     )
     monkeypatch.setattr("main.scrape_injuries", lambda: 0)
     monkeypatch.setattr("main.scrape_odds", lambda: 0)
+    monkeypatch.setattr("main.scrape_broadcasts", lambda: 0)
     monkeypatch.setattr("main.scrape_contracts", lambda: (0, 0))
     result = CliRunner().invoke(cli, ["scrape-daily"])
     assert result.exit_code == 1

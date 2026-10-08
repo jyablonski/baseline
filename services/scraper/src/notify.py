@@ -273,14 +273,22 @@ class SyncAlert:
         *,
         season: str | None = None,
         rows: Callable[[T], int | None] | None = None,
+        optional: bool = False,
     ) -> T | None:
+        """Run one step, recording its outcome instead of raising.
+
+        An ``optional`` step that fails is still logged and recorded as failed,
+        so source health and the degraded-streak alert see it, but it does not
+        count as a sync failure: the run goes on to dbt.
+        """
         started_at = datetime.now()
         try:
             result = fn()
         except Exception as exc:
             where = f"{step} ({season})" if season else step
             logger.exception("Scrape step %s failed", where)
-            self.record(step, exc, season=season)
+            if not optional:
+                self.record(step, exc, season=season)
             self.steps.append(
                 StepOutcome(
                     step=step,

@@ -17,6 +17,7 @@ from schemas.game import (
     BoxScoreRow,
     GameCollapse,
     GameFlow,
+    GameHighlight,
     GameResult,
     PlayByPlayEvent,
     QueryRequest,
@@ -32,6 +33,7 @@ from schemas.player import (
     PlayerDetail,
     PlayerSeasonStats,
     PlayerSummary,
+    PlayerValue,
 )
 from schemas.prediction import PredictionScorecard, ScorecardRow
 from schemas.social import (
@@ -88,6 +90,7 @@ __all__ = [
     "DbtStatus",
     "GameCollapse",
     "GameFlow",
+    "GameHighlight",
     "GameLogEntry",
     "GameResult",
     "GoldTable",
@@ -105,6 +108,7 @@ __all__ = [
     "PlayerDetail",
     "PlayerSeasonStats",
     "PlayerSummary",
+    "PlayerValue",
     "PredictionScorecard",
     "QueryRequest",
     "QueryResponse",

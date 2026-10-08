@@ -76,7 +76,10 @@ These questions use named Cube tools or query_cube (Cube query JSON only):
 13. **Upsets**: "Biggest upsets this season?" / "Did the model see any upsets coming?"
    → Use get_biggest_upsets(season, season_type, limit)
 
-14. **Schedule / Elo WP / injuries / odds / PBP / reddit**: named tools or query_cube
+14. **Highlights**: "What stood out last night?" / "Best performances on Christmas?"
+   → Use get_daily_highlights(game_date, season, all_candidates, limit)
+
+15. **Schedule / national TV / Elo WP / injuries / odds / PBP / reddit**: named tools or query_cube
 """
 
 
@@ -322,7 +325,9 @@ def get_games_schedule(
     season: str | None = None,
     status: str | None = None,
 ) -> list[dict]:
-    """All-status slate (Final and upcoming). Upcoming scores are null."""
+    """All-status slate (Final and upcoming). Upcoming scores are null.
+    national_tv lists the national TV and streaming networks from ESPN
+    ("ESPN, ABC"); null means local-only or not listed yet."""
     return get_analytics().get_games_schedule(season=season, status=status)
 
 
@@ -404,6 +409,28 @@ def get_transaction_participants(
         team_abbreviation=team_abbreviation,
         season=season,
         limit=limit,
+    )
+
+
+@mcp.tool()
+def get_daily_highlights(
+    game_date: str | None = None,
+    season: str | None = None,
+    all_candidates: bool = False,
+    limit: int | None = None,
+) -> dict:
+    """What stood out on one day of games, most notable first (default 15, max 100).
+    game_date is YYYY-MM-DD; omitting it uses the latest day with games (in
+    season, if given).
+
+    Returns each game's lead highlight: season highs, elite and 40-point games,
+    triple-doubles, opposing 30-point scorers, streaks extended or snapped, blown
+    leads, lead changes, overtime, blowouts, upsets, and meetings of two top-5
+    teams. A quiet game falls back to its top performer. score is weight *
+    (1 + magnitude) * (1 + importance); is_featured marks the day's top three.
+    all_candidates=True also returns the runners-up within each game (game_rank > 1)."""
+    return get_analytics().get_daily_highlights(
+        game_date=game_date, season=season, all_candidates=all_candidates, limit=limit
     )
 
 

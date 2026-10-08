@@ -159,6 +159,52 @@ PLAYER_BY_ID = text(
     """
 )
 
+# Every player on the season's Regular Season MVP ladder who has a salary on
+# file, for the value plot. Salary is the current contract season's, which is
+# not always the MVP season (in the offseason it is the one about to start), so
+# salary_season rides along and the page says which it is.
+#
+# A season with no scores yet falls back to the latest one that has them. The
+# site defaults to the newest season on the schedule, which before opening
+# night is one nobody has played a game in, and an empty plot helps no one.
+LIST_PLAYER_VALUE = text(
+    """
+    WITH mvp_season AS (
+        SELECT
+            coalesce(
+                max(fct_player_mvp_scores.season) FILTER (
+                    WHERE fct_player_mvp_scores.season = :season
+                ),
+                max(fct_player_mvp_scores.season)
+            ) AS season
+        FROM gold.fct_player_mvp_scores
+        WHERE fct_player_mvp_scores.season_type = 'Regular Season'
+    )
+    SELECT
+        dim_players.player_id,
+        dim_players.full_name,
+        dim_players.position,
+        dim_teams.team_id,
+        dim_teams.abbreviation AS team_abbreviation,
+        fct_player_mvp_scores.season AS mvp_season,
+        fct_player_mvp_scores.mvp_score,
+        fct_player_mvp_scores.mvp_rank,
+        fct_player_mvp_scores.games_played,
+        dim_players.current_season_salary AS salary,
+        dim_players.current_contract_season AS salary_season
+    FROM gold.fct_player_mvp_scores
+    INNER JOIN mvp_season ON fct_player_mvp_scores.season = mvp_season.season
+    INNER JOIN gold.dim_players ON fct_player_mvp_scores.player_id = dim_players.player_id
+    LEFT JOIN gold.dim_teams ON dim_players.team_id = dim_teams.team_id
+    WHERE
+        fct_player_mvp_scores.season_type = 'Regular Season'
+        AND dim_players.current_season_salary IS NOT NULL
+    ORDER BY
+        fct_player_mvp_scores.mvp_rank,
+        dim_players.full_name
+    """
+)
+
 PLAYER_NAME = text(
     """
     SELECT
