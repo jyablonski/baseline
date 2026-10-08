@@ -100,8 +100,40 @@ vi.mock("@/lib/api", () => ({
           flair_team_abbreviation: null,
           flair_team_name: null,
         },
+        {
+          reddit_id: "c3",
+          post_reddit_id: "zero1",
+          parent_id: "t3_zero1",
+          author: "bench_mob_3",
+          body: "Third on the list, first in our hearts.",
+          score: 90,
+          created_utc: "2026-09-09T06:20:00Z",
+          permalink: "https://reddit.com/c3",
+          is_top_level: true,
+          is_removed: false,
+          author_flair: null,
+          flair_scope: null,
+          flair_team_abbreviation: null,
+          flair_team_name: null,
+        },
+        {
+          reddit_id: "c4",
+          post_reddit_id: "zero1",
+          parent_id: "t3_zero1",
+          author: "bench_mob_4",
+          body: "Saving this to check back in April.",
+          score: 41,
+          created_utc: "2026-09-09T06:20:00Z",
+          permalink: "https://reddit.com/c4",
+          is_top_level: true,
+          is_removed: false,
+          author_flair: null,
+          flair_scope: null,
+          flair_team_abbreviation: null,
+          flair_team_name: null,
+        },
       ],
-      meta: { total: 2, limit: 2, offset: 0 },
+      meta: { total: 4, limit: 4, offset: 0 },
     }),
     listSocialEntities: async (entityType: string) => ({
       data: [
@@ -197,6 +229,7 @@ vi.mock("@/lib/api", () => ({
 
 import SocialPage from "@/app/social/page";
 import { Providers } from "@/components/providers";
+import { PostCard } from "@/components/social/post-card";
 
 function renderPage() {
   return render(
@@ -210,13 +243,28 @@ describe("social page", () => {
   it("shows captured comments against the real thread total", async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("402")).toBeInTheDocument());
-    expect(screen.getByText(/top-scoring per post, of 18,204 posted/i)).toBeInTheDocument();
+    expect(screen.getByText("2% of 18,204 posted")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2");
   });
 
   it("leaves the per-post ratio strip off feed cards", async () => {
     renderPage();
     const card = await screen.findByRole("article");
-    expect(within(card).getByText("Score")).toBeInTheDocument();
+    // Score and comments are labelled once, in the feed header.
+    expect(screen.getByText("Score", { selector: "span" })).toBeInTheDocument();
+    expect(within(card).getByText("132")).toBeInTheDocument();
+    expect(within(card).getByRole("link", { name: "Jaylen Brown" })).toHaveAttribute(
+      "href",
+      "/players/jaylen-brown"
+    );
+    expect(within(card).getByRole("link", { name: "Boston Celtics" })).toHaveAttribute(
+      "href",
+      "/teams/boston-celtics"
+    );
+    expect(within(card).getByRole("link", { name: "Thread ↗" })).toHaveAttribute(
+      "href",
+      "https://www.reddit.com/r/nba/comments/zero1/"
+    );
     for (const gone of ["Discussion ratio", "Top-comment leverage", "Comment concentration"]) {
       expect(within(card).queryByText(gone)).not.toBeInTheDocument();
     }
@@ -224,16 +272,40 @@ describe("social page", () => {
     expect(screen.getByText(/What r\/nba is talking about\./)).toBeInTheDocument();
   });
 
-  it("keeps comments collapsed until asked, then labels them as a sample", async () => {
+  it("names a bracket tag only when it differs from the post type", async () => {
+    const reported = { ...contestedPost, content_type: "report", tag: "Charania" };
+    const highlight = { ...contestedPost, content_type: "highlight", tag: "Highlight" };
+    const { rerender } = render(
+      <Providers>
+        <PostCard post={reported} />
+      </Providers>
+    );
+    expect(screen.getByText("Reporter")).toBeInTheDocument();
+    expect(screen.getByText("Charania")).toBeInTheDocument();
+    rerender(
+      <Providers>
+        <PostCard post={highlight} />
+      </Providers>
+    );
+    expect(screen.getAllByText("Highlight")).toHaveLength(1);
+  });
+
+  it("keeps comments collapsed until asked, then previews the top few", async () => {
     renderPage();
     // Nothing is expanded on load; the count lives on the button instead.
-    expect(screen.queryByText(/the rest of the thread is not stored/i)).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: /show top 3 of 132/i }));
-    expect(await screen.findByText(/top 3 of 132 comments/i)).toBeInTheDocument();
-    expect(screen.getByText(/the rest of the thread is not stored/i)).toBeInTheDocument();
-    expect(screen.getByText(/read all 132 on reddit/i)).toBeInTheDocument();
-    expect(await screen.findByText(/deleted or removed before collection/i)).toBeInTheDocument();
+    const toggle = await screen.findByRole("button", { name: "Top comments (3)" });
+    expect(screen.queryByText(/single conference finals run/i)).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(await screen.findByText(/single conference finals run/i)).toBeInTheDocument();
+    expect(screen.getByText(/deleted or removed before collection/i)).toBeInTheDocument();
     expect(screen.getByText("author unavailable")).toBeInTheDocument();
+    // The fourth captured row waits behind the preview.
+    expect(screen.queryByText(/check back in April/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show all 4 captured comments" }));
+    expect(screen.getByText(/check back in April/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /show all/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Hide comments" }));
+    expect(screen.queryByText(/single conference finals run/i)).not.toBeInTheDocument();
   });
 
   it("renders the rail, the boards, and the limits block", async () => {

@@ -11,12 +11,11 @@ test("social reaches from the nav and labels its sampling honestly", async ({ pa
   await expect(page.getByRole("heading", { name: "Social", level: 1 })).toBeVisible();
 
   // The gap between captured and posted comments has to stay on screen.
-  await expect(page.getByText(/top-scoring per post, of 18,204 posted/i)).toBeVisible();
+  await expect(page.getByText("2% of 18,204 posted")).toBeVisible();
   // Comments stay collapsed until asked for.
-  await expect(page.getByText(/the rest of the thread is not stored/i)).toHaveCount(0);
-  await page.getByRole("button", { name: /show top 1 of 132/i }).click();
-  await expect(page.getByText(/top 1 of 132 comments/i)).toBeVisible();
-  await expect(page.getByText(/the rest of the thread is not stored/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Hide comments" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Top comments (1)" }).click();
+  await expect(page.getByRole("button", { name: "Hide comments" })).toBeVisible();
 
   // Feed cards carry score and comments only; the per-post ratio strip is gone.
   await expect(page.getByText("132.00")).toHaveCount(0);
@@ -70,4 +69,65 @@ test("the active filter chip is legible, not paper-on-paper", async ({ page }) =
 
   await expect(page.getByRole("button", { name: "7d" })).toContainText("7d");
   await expect(page.getByRole("button", { name: /^All/ })).toContainText("All");
+});
+
+test("social summary cards carry the capture meter and the contested thread link", async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.goto("/social");
+  await expect(page.getByText("from 33 distinct posters")).toBeVisible();
+  await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2");
+  await expect(page.getByText("9 posts · 63 captured comments")).toBeVisible();
+  await expect(page.getByText("132 comments on a score of 0")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open ↗" })).toHaveAttribute(
+    "href",
+    "https://www.reddit.com/r/nba/comments/zero1/"
+  );
+});
+
+test("social feed rows link mentions and the thread, and expand comments inline", async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.goto("/social");
+  const row = page.getByRole("article");
+  await expect(row.getByRole("link", { name: "Jaylen Brown" })).toHaveAttribute(
+    "href",
+    "/players/jaylen-brown"
+  );
+  await expect(row.getByRole("link", { name: "Boston Celtics" })).toHaveAttribute(
+    "href",
+    "/teams/boston-celtics"
+  );
+  await expect(row.getByRole("link", { name: "Thread ↗" })).toHaveAttribute(
+    "href",
+    "https://www.reddit.com/r/nba/comments/zero1/"
+  );
+  await row.getByRole("button", { name: "Top comments (1)" }).click();
+  await expect(row.getByText(/single conference finals run/)).toBeVisible();
+  await expect(row.getByText("u/DeadEyeDuncan21")).toBeVisible();
+  await row.getByRole("button", { name: "Hide comments" }).click();
+  await expect(row.getByText(/single conference finals run/)).toHaveCount(0);
+});
+
+test("social columns line up: figures under their labels, sort flush with the rail", async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/social");
+  const right = async (locator: ReturnType<typeof page.locator>) => {
+    const box = await locator.boundingBox();
+    return Math.round((box?.x ?? 0) + (box?.width ?? 0));
+  };
+  const rail = page.locator("section").filter({ hasText: "Team mentions" }).last();
+  await expect(rail).toBeVisible();
+  expect(await right(page.locator("select"))).toBe(await right(rail));
+
+  const row = page.getByRole("article");
+  await expect(row).toBeVisible();
+  expect(await right(page.locator("span", { hasText: /^Comments$/ }))).toBe(
+    await right(row.getByText("132", { exact: true }))
+  );
 });

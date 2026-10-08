@@ -1,5 +1,6 @@
 "use client";
 
+import { KpiCard, KpiStrip, KpiTitle } from "@/components/ui/kpi-card";
 import {
   SOCIAL_RANGES,
   SOCIAL_SORTS,
@@ -22,83 +23,70 @@ export function SummaryStrip({
   mostContested:
     { title: string; permalink: string; score: number; num_comments: number } | undefined;
 }) {
+  const captured = summary?.captured_comment_count ?? 0;
+  const reported = summary?.reported_comment_count ?? 0;
+  const capturedShare = reported > 0 ? captured / reported : 0;
   return (
-    <div className="grid border-y border-rule-strong sm:grid-cols-2 lg:grid-cols-4">
-      <Cell label="Posts collected">
-        <span className="type-stat tabular">{formatCount(summary?.post_count ?? 0)}</span>
-        <Note>{formatCount(summary?.author_count ?? 0)} distinct posters</Note>
-      </Cell>
-      <Cell label="Comments captured">
-        <span className="type-stat tabular">
-          {formatCount(summary?.captured_comment_count ?? 0)}
-        </span>
-        {/* The gap between these two numbers is the whole honesty of the page. */}
-        <Note>
-          top-scoring per post, of {formatCount(summary?.reported_comment_count ?? 0)} posted
-        </Note>
-      </Cell>
-      <Cell label="Most discussed">
-        {topPlayer ? (
-          <>
-            <span className="type-module block leading-tight">{topPlayer.entity_name}</span>
-            <Note>
-              named in {topPlayer.post_count} posts, {topPlayer.comment_count} captured comments
-            </Note>
-          </>
-        ) : (
-          <>
-            <span className="type-module block text-ink-3">—</span>
-            <Note>no full-name matches in range</Note>
-          </>
-        )}
-      </Cell>
-      <Cell label="Most contested">
-        {mostContested ? (
-          <>
-            <a
-              className="type-module line-clamp-3 h-[3.75em] leading-tight hover:underline"
-              href={mostContested.permalink}
-              target="_blank"
-              rel="noreferrer"
-              title={mostContested.title}
-            >
-              “{mostContested.title}”
-            </a>
-            <Note>
-              {formatCount(mostContested.num_comments)} comments on a score of {mostContested.score}
-              {" · "}
+    <KpiStrip>
+      <KpiCard
+        label="Posts collected"
+        value={formatCount(summary?.post_count ?? 0)}
+        note={`from ${formatCount(summary?.author_count ?? 0)} distinct posters`}
+      />
+      {/* The gap between these two numbers is the whole honesty of the page. */}
+      <KpiCard
+        label="Comments captured"
+        value={formatCount(captured)}
+        progress={capturedShare}
+        note={`${Math.round(capturedShare * 100)}% of ${formatCount(reported)} posted`}
+      />
+      <KpiCard
+        label="Most discussed"
+        value={
+          topPlayer ? (
+            <KpiTitle>{topPlayer.entity_name}</KpiTitle>
+          ) : (
+            <KpiTitle className="text-ink-3">—</KpiTitle>
+          )
+        }
+        note={
+          topPlayer
+            ? `${formatCount(topPlayer.post_count)} posts · ${formatCount(topPlayer.comment_count)} captured comments`
+            : "no full-name matches in range"
+        }
+      />
+      <KpiCard
+        label="Most contested"
+        value={
+          mostContested ? (
+            <KpiTitle className="line-clamp-3" title={mostContested.title}>
+              {mostContested.title}
+            </KpiTitle>
+          ) : (
+            <KpiTitle className="text-ink-3">—</KpiTitle>
+          )
+        }
+        note={
+          mostContested ? (
+            <>
+              {formatCount(mostContested.num_comments)} comments on a score of{" "}
+              {formatCount(mostContested.score)}
               <a
-                className="text-foreground underline underline-offset-2"
+                className="ct-ask-tool ml-3 text-[length:inherit]"
                 href={mostContested.permalink}
                 target="_blank"
                 rel="noreferrer"
               >
-                Open post ↗
+                Open ↗
               </a>
-            </Note>
-          </>
-        ) : (
-          <>
-            <span className="type-module block text-ink-3">—</span>
-            <Note>{summary?.contested_post_count ?? 0} contested posts in range</Note>
-          </>
-        )}
-      </Cell>
-    </div>
+            </>
+          ) : (
+            `${summary?.contested_post_count ?? 0} contested posts in range`
+          )
+        }
+      />
+    </KpiStrip>
   );
-}
-
-function Cell({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="border-rule px-[var(--ct-space-4)] py-[var(--ct-space-3)] sm:border-r last:sm:border-r-0">
-      <p className="type-eyebrow">{label}</p>
-      <div className="mt-2">{children}</div>
-    </div>
-  );
-}
-
-function Note({ children }: { children: React.ReactNode }) {
-  return <p className="type-caption mt-1">{children}</p>;
 }
 
 export function SocialControls({
@@ -118,8 +106,10 @@ export function SocialControls({
   onSort: (next: string) => void;
   facets: SocialFacet[];
 }) {
+  // Padded on the left only: the labels sit over the feed's text, and the sort
+  // control ends flush with the rail panels below it.
   return (
-    <div className="flex flex-wrap items-center gap-x-[var(--ct-space-4)] gap-y-3 border-b border-rule px-[var(--ct-space-2)] py-[var(--ct-space-3)]">
+    <div className="flex flex-wrap items-center gap-x-[var(--ct-space-4)] gap-y-3 border-b border-rule py-[var(--ct-space-3)] pl-[var(--ct-space-2)]">
       <div className="flex items-center gap-2">
         <span className="type-eyebrow">Range</span>
         {SOCIAL_RANGES.map((item) => (

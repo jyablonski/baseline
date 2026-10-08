@@ -6,6 +6,19 @@ const SOURCE_URL = {
   reddit: "https://www.reddit.com/r/nba",
 };
 
+// The daily refresh is a host cron at 08:15 UTC all year, so its Eastern time
+// moves an hour with daylight saving. This page is static: the time is worked
+// out when the page is built.
+function refreshTimeET(now = new Date()) {
+  const at = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 8, 15));
+  const time = at.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/New_York",
+  });
+  return `${time} ET`;
+}
+
 export default function AboutPage() {
   const sha = shortSha();
   const href = commitUrl();
@@ -40,8 +53,9 @@ export default function AboutPage() {
 
       <Section title="How the data gets here">
         <p>
-          The sources are scraped everyday on a schedule, transformed and enriched into analytics
-          tables, and then served out over this app.
+          The sources are scraped everyday around {refreshTimeET()}, picking up the previous
+          day&apos;s games and the upcoming slate. The data is then transformed and enriched into
+          analytics tables and served out over this app.
         </p>
       </Section>
 
@@ -49,13 +63,11 @@ export default function AboutPage() {
         <p>Coverage defaults to the latest season only. Preseason games are not included.</p>
       </Section>
 
-      <Section title="Background">
+      <Section title="Built with">
         <p>
-          The app has been running in some form since 2021, originally as a handful of separate
-          services in different repos. It was rebuilt in September 2026 as a single monorepo
-          platform, keeping largely the same data on a new foundation: a Cube semantic layer over
-          the warehouse, an MCP server so AI assistants can query it directly, and Elo-based pregame
-          win probabilities.
+          Python scrapers load Postgres, dbt builds the analytics tables, and a FastAPI service and
+          Next.js frontend serve them. A Cube semantic layer sits over the warehouse and powers Ask,
+          along with an MCP server that lets AI assistants query the data directly.
         </p>
       </Section>
 

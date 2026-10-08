@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -13,7 +13,7 @@ vi.mock("@/lib/api", () => ({
       data: [{ season: "2026-27" }],
       meta: { total: 1, limit: 1, offset: 0 },
     }),
-    listSchedule: async () => ({
+    listSchedule: async (params: { from_date?: string } = {}) => ({
       data: [
         {
           game_id: "0022600100",
@@ -38,7 +38,7 @@ vi.mock("@/lib/api", () => ({
         {
           game_id: "0022600101",
           season: "2026-27",
-          game_date: "2026-10-23",
+          game_date: "2026-10-22",
           status: "Scheduled",
           home_team_id: 1610612738,
           away_team_id: 1610612752,
@@ -48,8 +48,21 @@ vi.mock("@/lib/api", () => ({
           away_team_name: "New York Knicks",
           arena: "TD Garden",
         },
-      ],
-      meta: { total: 2, limit: 50, offset: 0 },
+        {
+          game_id: "0022600102",
+          season: "2026-27",
+          game_date: "2026-10-24",
+          status: "Scheduled",
+          home_team_id: 1610612748,
+          away_team_id: 1610612749,
+          home_team_abbreviation: "MIA",
+          away_team_abbreviation: "MIL",
+          home_team_name: "Miami Heat",
+          away_team_name: "Milwaukee Bucks",
+          arena: "Kaseya Center",
+        },
+      ].filter((game) => !params.from_date || game.game_date >= params.from_date),
+      meta: { total: 3, limit: 50, offset: 0 },
     }),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
@@ -109,5 +122,28 @@ describe("schedule page", () => {
       "href",
       "/predictions"
     );
+  });
+
+  it("shows one day of games at a time and pages by game day", async () => {
+    render(
+      <Providers>
+        <SchedulePage />
+      </Providers>
+    );
+    expect(await screen.findByText("Thu, Oct 22, 2026 · 2 games")).toBeInTheDocument();
+    // The later day is fetched but held back until asked for.
+    expect(screen.queryByText("Kaseya Center")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "← Prev day" })).toBeDisabled();
+
+    // Oct 23 has no games, so Next lands on Oct 24.
+    fireEvent.click(screen.getByRole("button", { name: "Next day →" }));
+    expect(await screen.findByText("Sat, Oct 24, 2026 · 1 game")).toBeInTheDocument();
+    expect(screen.getByText("Kaseya Center")).toBeInTheDocument();
+    expect(screen.queryByText("Chase Center")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next day →" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "← Prev day" }));
+    expect(await screen.findByText("Thu, Oct 22, 2026 · 2 games")).toBeInTheDocument();
+    expect(screen.getByText("Chase Center")).toBeInTheDocument();
   });
 });

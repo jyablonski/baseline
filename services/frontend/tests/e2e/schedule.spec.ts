@@ -50,14 +50,41 @@ test("schedule empty warehouse", async ({ page }) => {
   await expect(page.getByText(/scrape-games|then dbt/i)).toHaveCount(0);
 });
 
-test("schedule reports its page range and pins both pager buttons on one page", async ({
+test("schedule names the day on screen and pins both pager buttons on the only day", async ({
   page,
 }) => {
   await mockApi(page);
   await page.goto("/schedule");
-  await expect(page.getByText("1–1 of 1 games")).toBeVisible();
-  await expect(page.getByRole("button", { name: "← Prev" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Next →" })).toBeDisabled();
+  await expect(page.getByText("Thu, Oct 22, 2026 · 1 game")).toBeVisible();
+  await expect(page.getByRole("button", { name: "← Prev day" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Next day →" })).toBeDisabled();
+});
+
+test("schedule shows one game day at a time and pages to the next one", async ({ page }) => {
+  await mockApi(page, { scheduleSecondDay: true });
+  await page.goto("/schedule");
+  await expect(page.getByText("Thu, Oct 22, 2026 · 1 game")).toBeVisible();
+  await expect(page.getByText("Chase Center")).toBeVisible();
+  // The later day is held back until asked for.
+  await expect(page.getByText("Kaseya Center")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "← Prev day" })).toBeDisabled();
+
+  // Oct 23 has no games, so Next lands on Oct 24 and asks the API from there.
+  await page.getByRole("button", { name: "Next day →" }).click();
+  await expect(page.getByText("Sat, Oct 24, 2026 · 1 game")).toBeVisible();
+  await expect(page.getByText("Kaseya Center")).toBeVisible();
+  await expect(page.getByText("Chase Center")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Next day →" })).toBeDisabled();
+  const calls = await page.evaluate(
+    () => (window as unknown as { __API_CALLS__: string[] }).__API_CALLS__
+  );
+  expect(
+    calls.some((url) => url.includes("/schedule") && url.includes("from_date=2026-10-24"))
+  ).toBe(true);
+
+  await page.getByRole("button", { name: "← Prev day" }).click();
+  await expect(page.getByText("Thu, Oct 22, 2026 · 1 game")).toBeVisible();
+  await expect(page.getByText("Chase Center")).toBeVisible();
 });
 
 test("schedule surfaces the API failure instead of the empty slate copy", async ({ page }) => {
