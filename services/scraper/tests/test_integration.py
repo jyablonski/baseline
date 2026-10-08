@@ -587,6 +587,73 @@ def test_odds_prune_keeps_started_games_as_history(db_session_factory) -> None:
 
 
 @pytest.mark.integration
+def test_contract_prune_drops_a_traded_player_from_his_old_team_only(db_session_factory) -> None:
+    from queries import DELETE_STALE_PLAYER_CONTRACTS
+
+    earlier = datetime(2026, 9, 11, 8, 0)
+    scrape = datetime(2026, 10, 2, 8, 0)
+
+    def contract(team_id: UUID, season: str, scraped_at: datetime) -> dict:
+        return {
+            "player_id": PLAYER_ONE,
+            "team_id": team_id,
+            "player_name": "Test Player",
+            "player_name_normalized": "test player",
+            "season": season,
+            "salary": 40_000_000,
+            "source_url": "https://example.test/contracts",
+            "scraped_at": scraped_at,
+        }
+
+    with db_session_factory() as session:
+        upsert_rows(session, Team, _teams(earlier), ["team_id"])
+        upsert_rows(
+            session,
+            Player,
+            [
+                {
+                    "player_id": PLAYER_ONE,
+                    "first_name": "Test",
+                    "last_name": "Player",
+                    "full_name": "Test Player",
+                    "is_active": True,
+                    "team_id": TEAM_AWAY,
+                    "scraped_at": earlier,
+                }
+            ],
+            ["player_id"],
+        )
+        session.execute(text("DELETE FROM source.player_contracts"))
+        session.commit()
+        upsert_rows(
+            session,
+            PlayerContract,
+            [
+                # Traded: last seen on the old team's page in September.
+                contract(TEAM_HOME, "2026-27", earlier),
+                # Still on the old team's page today, so it was rewritten this run.
+                contract(TEAM_HOME, "2027-28", scrape),
+                # Another team's page was not read this run; its old row is not ours to judge.
+                contract(TEAM_AWAY, "2026-27", earlier),
+            ],
+            ["player_id", "team_id", "season"],
+        )
+        session.execute(DELETE_STALE_PLAYER_CONTRACTS, {"team_id": TEAM_HOME, "scraped_at": scrape})
+        session.commit()
+        remaining = session.execute(
+            text(
+                "SELECT team_id, season FROM source.player_contracts "
+                "WHERE player_id = :player_id ORDER BY season, team_id"
+            ),
+            {"player_id": PLAYER_ONE},
+        ).all()
+        assert [(row.team_id, row.season) for row in remaining] == [
+            (TEAM_AWAY, "2026-27"),
+            (TEAM_HOME, "2027-28"),
+        ]
+
+
+@pytest.mark.integration
 def test_unhealthy_streaks_ignore_skips_and_stop_at_a_healthy_run(db_session_factory) -> None:
     """The streak SQL against a real schema: what alerts and what stays quiet."""
     from pipeline import find_unhealthy_streaks

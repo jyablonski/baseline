@@ -10,6 +10,7 @@ from queries.players import (
     COMPARE_STAT_COLUMNS,
     HEAD_TO_HEAD_LOGS,
     LIST_GAME_LOGS_COUNT,
+    LIST_PLAYER_VALUE,
     LIST_PLAYERS_COUNT,
     LIST_SEASON_STATS,
     LIST_SEASON_STATS_COUNT,
@@ -56,6 +57,10 @@ class PlayersRepository:
         total = self.db.execute(LIST_PLAYERS_COUNT, params).scalar_one()
         rows = self.db.execute(list_players_stmt(sort), params)
         return int(total), [dict(row._mapping) for row in rows]
+
+    def list_player_value(self, season: str | None = None) -> list[dict]:
+        rows = self.db.execute(LIST_PLAYER_VALUE, {"season": season})
+        return [dict(row._mapping) for row in rows]
 
     def get_player(self, player_id: UUID) -> dict | None:
         row = (

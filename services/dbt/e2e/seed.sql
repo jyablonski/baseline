@@ -2,7 +2,7 @@
 
 TRUNCATE source.reddit_comments, source.reddit_posts, source.game_predictions,
     source.model_evaluations, source.model_artifacts, source.player_injuries_history,
-    source.game_odds, source.player_injuries, source.standings,
+    source.game_odds, source.game_broadcasts, source.player_injuries, source.standings,
     source.player_game_logs, source.play_by_play, source.games,
     source.player_contracts, source.team_payroll, source.players, source.teams
     RESTART IDENTITY CASCADE;
@@ -140,6 +140,16 @@ INSERT INTO source.game_odds (
      'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'draftkings', 'h2h', 160, -190, 0.3846, 0.6552, 0.3699, 0.6301, NULL, NOW()),
     ('evt-lac-gsw', '2024-10-26 02:30:00', 'Los Angeles Clippers', 'Golden State Warriors',
      'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'draftkings', 'spreads', -110, -110, 0.5238, 0.5238, 0.5, 0.5, 4.5, NOW());
+
+INSERT INTO source.game_broadcasts (
+    espn_event_id, commence_time, home_team_name, away_team_name, game_id, national_tv, scraped_at
+) VALUES
+    ('espn-gsw-chi', '2024-10-27 19:00:00', 'Golden State Warriors', 'Chicago Bulls',
+     'dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'ESPN, ABC', NOW()),
+    -- Unmatched and local-only events must not reach the schedule.
+    ('espn-unmatched', '2024-10-28 19:00:00', 'Golden State Warriors', 'Chicago Bulls', NULL, 'TNT', NOW()),
+    ('espn-local', '2024-10-22 23:30:00', 'Golden State Warriors', 'LA Clippers',
+     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', NULL, NOW());
 
 INSERT INTO source.play_by_play (
     game_id, season, action_number, action_id, period, clock,

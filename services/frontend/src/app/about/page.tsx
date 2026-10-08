@@ -14,12 +14,11 @@ export default function AboutPage() {
     <article className="space-y-8">
       <header>
         <h1 className="type-page">About</h1>
+        <p className="type-prose mt-1">
+          An NBA analytics app covering box scores, player and team stats, contract snapshots,
+          betting odds, and Elo-based win predictions, updated daily throughout the season.
+        </p>
       </header>
-
-      <p className="type-prose">
-        An NBA analytics app covering box scores, player and team stats, contract snapshots, betting
-        odds, and Elo-based win predictions, updated daily throughout the season.
-      </p>
 
       <Section title="Sources">
         <ul className="mt-3 list-disc space-y-2 pl-5">
@@ -47,7 +46,7 @@ export default function AboutPage() {
       </Section>
 
       <Section title="Coverage">
-        <p>Coverage defaults to the latest season only.</p>
+        <p>Coverage defaults to the latest season only. Preseason games are not included.</p>
       </Section>
 
       <Section title="Background">

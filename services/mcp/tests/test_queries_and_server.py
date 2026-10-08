@@ -80,6 +80,12 @@ class FakeAnalytics:
             "upsets": [{"underdog_team_abbreviation": "LAC", "upset_rank": 1}],
         }
 
+    def get_daily_highlights(self, **kwargs) -> dict:
+        return {
+            "game_date": kwargs.get("game_date") or "2026-01-12",
+            "highlights": [{"headline": "Thunder win 15th straight", "limit": kwargs.get("limit")}],
+        }
+
     def get_play_by_play(self, game_id: str, limit: int | None = None) -> list[dict]:
         return [{"game_id": game_id, "action_number": 1, "limit": limit}]
 
@@ -210,6 +216,9 @@ def test_server_tools(monkeypatch: pytest.MonkeyPatch) -> None:
     upsets = server.get_biggest_upsets(season_type="Playoffs", limit=3)
     assert upsets["season"] == "2026-27"
     assert upsets["upsets"][0]["upset_rank"] == 1
+    highlights = server.get_daily_highlights(limit=3)
+    assert highlights["game_date"] == "2026-01-12"
+    assert highlights["highlights"][0] == {"headline": "Thunder win 15th straight", "limit": 3}
     assert server.get_play_by_play("0022400001")[0]["game_id"] == "0022400001"
     assert server.get_reddit_posts(search="thread")[0]["title"] == "thread"
     assert server.get_transactions(season="2025-26")[0]["season"] == "2025-26"
@@ -266,6 +275,7 @@ def test_examples_resource() -> None:
     assert "get_mvp_ladder" in result
     assert "get_player_mvp_scores" in result
     assert "get_biggest_upsets" in result
+    assert "get_daily_highlights" in result
 
 
 @pytest.mark.unit

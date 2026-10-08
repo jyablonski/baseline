@@ -77,6 +77,8 @@ DECLARE
   cup_log_type text;
   position_check text;
   upset_check text;
+  national_tv_check text;
+  highlight_check text;
 BEGIN
   SELECT count(*) INTO team_count FROM gold.dim_teams;
   SELECT count(*) INTO player_count FROM gold.dim_players;
@@ -161,6 +163,14 @@ BEGIN
   WHERE status = 'Scheduled';
   IF scheduled_count < 1 THEN
     RAISE EXCEPTION 'expected >= 1 Scheduled game, got %', scheduled_count;
+  END IF;
+
+  SELECT string_agg(game_date || ' ' || national_tv, ' | ' ORDER BY game_date)
+  INTO national_tv_check
+  FROM gold.fct_games_schedule
+  WHERE national_tv IS NOT NULL;
+  IF national_tv_check IS DISTINCT FROM '2024-10-27 ESPN, ABC' THEN
+    RAISE EXCEPTION 'expected one nationally televised game, got %', national_tv_check;
   END IF;
 
   SELECT count(*) INTO prediction_count FROM gold.fct_game_predictions;
@@ -369,6 +379,26 @@ BEGIN
        ' | 2024-10-25 GSW@LAC books=1 dog=LAC +170 upset=true rank=1 model=false'
   THEN
     RAISE EXCEPTION 'unexpected game upsets: %', upset_check;
+  END IF;
+
+  -- Each game's lead highlight. The seed is too short for season highs or
+  -- streaks, so most games fall back to their top performer; Kawhi's 50-point
+  -- Cup final and the playoff game with two 30-point scorers do not.
+  SELECT string_agg(
+           game_date || ' ' || highlight_type || ' ' || headline ||
+           ' featured=' || is_featured,
+           ' | ' ORDER BY game_date)
+  INTO highlight_check
+  FROM gold.fct_daily_highlights
+  WHERE game_rank = 1;
+  IF highlight_check IS DISTINCT FROM
+       '2024-10-22 top_performer Stephen Curry: 32 pts, 4 reb, 8 ast featured=true'
+       ' | 2024-10-23 top_performer Kawhi Leonard: 24 pts, 7 reb, 4 ast featured=true'
+       ' | 2024-10-25 top_performer Kawhi Leonard: 30 pts, 9 reb, 6 ast featured=true'
+       ' | 2024-12-17 triple_double Kawhi Leonard triple-double: 50 pts, 10 reb, 10 ast featured=true'
+       ' | 2025-04-20 scoring_duel Stephen Curry 35, Kawhi Leonard 30 featured=true'
+  THEN
+    RAISE EXCEPTION 'unexpected daily highlights: %', highlight_check;
   END IF;
 
   RAISE NOTICE 'dbt e2e assertions passed (teams=%, players=%, games=%, logs=%, b2b=%, standings=%, schedule=%, predictions=%, scoring=%, flow=%, reddit_posts=%, reddit_comments=%, reddit_documents=%)',

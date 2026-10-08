@@ -17,3 +17,10 @@ macros:
       - name: column
         type: string
         description: SQL expression (usually a column reference) to normalize.
+
+  - name: ordinal
+    description: SQL expression that renders an integer as an English ordinal string (1st, 2nd, 3rd, 11th, 22nd). Used for highlight headlines.
+    arguments:
+      - name: expression
+        type: string
+        description: Integer SQL expression (usually a column reference) to render.

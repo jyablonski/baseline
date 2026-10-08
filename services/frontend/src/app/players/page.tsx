@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
+import { PlayerValuePlot } from "@/components/players/value-plot";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -81,7 +82,6 @@ function PlayersDirectory() {
   });
 
   const players = playersQuery.data?.data ?? [];
-  const mvpSeason = players[0]?.mvp_season;
   const teamOptions = [...(teamsQuery.data?.data ?? [])].sort((a, b) =>
     a.abbreviation.localeCompare(b.abbreviation)
   );
@@ -98,6 +98,8 @@ function PlayersDirectory() {
           side.
         </p>
       </div>
+
+      <PlayerValuePlot season={season} enabled={!seasonLoading} />
 
       <div className="flex flex-wrap items-center gap-3">
         <input
@@ -239,13 +241,6 @@ function PlayersDirectory() {
               </tbody>
             </table>
           </div>
-          {mvpSeason ? (
-            <p className="type-caption">
-              MVP is a custom metric based on {mvpSeason} regular-season performance: box-score
-              production, scaled up in wins and down in losses, with a penalty for games missed. #
-              is league rank.
-            </p>
-          ) : null}
         </div>
       )}
 

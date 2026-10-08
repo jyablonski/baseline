@@ -87,7 +87,8 @@ test("players team filter narrows the request to one team", async ({ page }) => 
   await page.goto("/players");
   await expect(page.getByRole("link", { name: "Stephen Curry" }).first()).toBeVisible();
 
-  await page.getByRole("combobox").selectOption("1610612744");
+  // The directory's own team filter, not the plot's highlight menu above it.
+  await page.locator("select").filter({ hasText: "Team All" }).selectOption("1610612744");
   const filtered = await waitForApiCall(page, "team_id=1610612744");
   expect(filtered.some((url) => url.includes("/players"))).toBe(true);
 });
@@ -118,6 +119,58 @@ test("players directory ranks by MVP by default and can sort by name", async ({ 
 test("players directory surfaces the API failure instead of an empty table", async ({ page }) => {
   await mockApi(page, { fail: true });
   await page.goto("/players");
-  await expect(page.getByText(API_FAILURE_DETAIL)).toBeVisible();
+  // Both the plot and the directory report it.
+  await expect(page.getByText(API_FAILURE_DETAIL)).toHaveCount(2);
   await expect(page.getByText("No players yet")).toHaveCount(0);
+});
+
+test("players page plots production vs salary and highlights a picked team", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/players");
+  await expect(page.getByRole("heading", { name: "Production vs Salary" })).toBeVisible();
+  // Candidates are named on the plot without being asked for.
+  await expect(page.locator("svg text", { hasText: "Jokic" })).toBeVisible();
+  await expect(page.locator("svg text", { hasText: "Wing" })).toHaveCount(0);
+  // Legend entries carry their counts: one bargain and one overpay in the fixture.
+  await expect(page.getByText(/^Undervalued\s*1$/)).toBeVisible();
+  await expect(page.getByText(/^Overpaid\s*1$/)).toBeVisible();
+
+  await page.getByLabel("Highlight a team").selectOption("LAL");
+  await expect(page.getByRole("list", { name: "Highlighted" })).toContainText("LAL");
+  // Now the picked team is named instead.
+  await expect(page.locator("svg text", { hasText: "Wing" })).toBeVisible();
+  await expect(page.locator("svg text", { hasText: "Jokic" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page.locator("svg text", { hasText: "Jokic" })).toBeVisible();
+  // The directory table is still below the plot.
+  await expect(page.getByPlaceholder("Search players")).toBeVisible();
+});
+
+test("typing in the player highlight box does not redraw the plot", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/players");
+  await expect(page.locator("svg text", { hasText: "Jokic" })).toBeVisible();
+
+  // Count every change inside the chart while a partial name is typed. Redrawing
+  // hundreds of dots per keystroke is what made this box lag.
+  await page.evaluate(() => {
+    const chart = document.querySelector(".recharts-wrapper") as Element;
+    const state = window as unknown as { __PLOT_MUTATIONS__: number };
+    state.__PLOT_MUTATIONS__ = 0;
+    new MutationObserver((records) => {
+      state.__PLOT_MUTATIONS__ += records.length;
+    }).observe(chart, { subtree: true, childList: true, attributes: true, characterData: true });
+  });
+  await page.getByLabel("Highlight a player").pressSequentially("Bargain Gu");
+  await expect(page.getByLabel("Highlight a player")).toHaveValue("Bargain Gu");
+  const whileTyping = await page.evaluate(
+    () => (window as unknown as { __PLOT_MUTATIONS__: number }).__PLOT_MUTATIONS__
+  );
+  expect(whileTyping).toBe(0);
+
+  // Finishing the name does change the plot: that player is now the labelled one.
+  await page.getByLabel("Highlight a player").pressSequentially("ard");
+  await expect(page.locator("svg text", { hasText: "Guard" })).toBeVisible();
+  await expect(page.getByLabel("Highlight a player")).toHaveValue("");
 });

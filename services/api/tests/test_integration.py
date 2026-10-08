@@ -8,6 +8,7 @@ from ids import (
     GAME_SCHEDULE,
     GAME_SCHEDULE_TWO,
     GAME_THREE,
+    GAME_TWO,
     PLAYER_CURRY,
     PLAYER_KAWHI,
     TEAM_GSW,
@@ -136,8 +137,11 @@ def test_schedule_carries_predictions_and_consensus_odds(integration_client) -> 
     assert priced["home_spread"] == pytest.approx(-4.0)
     assert priced["odds_bookmaker_count"] == 2
 
+    assert priced["national_tv"] == "ESPN, ABC"
+
     bare = by_id[GAME_SCHEDULE_TWO]
     for key in (
+        "national_tv",
         "prediction_model_version",
         "home_win_probability",
         "away_win_probability",
@@ -148,6 +152,33 @@ def test_schedule_carries_predictions_and_consensus_odds(integration_client) -> 
         "odds_bookmaker_count",
     ):
         assert bare[key] is None
+
+
+@pytest.mark.integration
+def test_daily_highlights(integration_client) -> None:
+    latest = integration_client.get("/api/v1/games/highlights")
+    assert latest.status_code == 200
+    rows = latest.json()["data"]
+    # Undated: the newest day with highlights, and a game highlight has no subject.
+    assert [row["headline"] for row in rows] == ["Clippers beat Bulls in overtime"]
+    assert rows[0]["game_id"] == GAME_TWO
+    assert rows[0]["team_id"] is None
+    assert rows[0]["is_featured"] is True
+
+    dated = integration_client.get(
+        "/api/v1/games/highlights", params={"game_date": "2024-10-22", "season": "2024-25"}
+    )
+    assert dated.status_code == 200
+    rows = dated.json()["data"]
+    # One per game: the runner-up on the same game stays out.
+    assert [row["headline"] for row in rows] == ["Stephen Curry scores 42"]
+    assert rows[0]["game_id"] == GAME_ONE
+    assert rows[0]["stat_value"] == 42
+    assert rows[0]["score"] == pytest.approx(12.54)
+
+    other_season = integration_client.get("/api/v1/games/highlights", params={"season": "2019-20"})
+    assert other_season.status_code == 200
+    assert other_season.json()["data"] == []
 
 
 @pytest.mark.integration
@@ -291,6 +322,32 @@ def test_player_mvp_ladder(integration_client) -> None:
     top = logs.json()["data"][0]
     assert top["mvp_game_score"] == 30.5
     assert top["season_type"] == "Regular Season"
+
+
+@pytest.mark.integration
+def test_player_value(integration_client) -> None:
+    response = integration_client.get("/api/v1/players/value")
+    assert response.status_code == 200
+    rows = response.json()["data"]
+    # Ladder order, Regular Season only: the playoff row does not add a point.
+    assert [(row["full_name"], row["mvp_rank"]) for row in rows] == [
+        ("Kawhi Leonard", 1),
+        ("Stephen Curry", 2),
+    ]
+    curry = rows[1]
+    assert curry["player_id"] == PLAYER_CURRY
+    assert curry["team_abbreviation"] == "GSW"
+    assert curry["team_id"] == TEAM_GSW
+    assert curry["mvp_season"] == "2024-25"
+    assert curry["mvp_score"] == pytest.approx(22.5)
+    assert curry["games_played"] == 2
+    assert curry["salary"] == 50000000
+    assert curry["salary_season"] == "2024-25"
+
+    # A season nobody has played yet shows the latest scored one instead of nothing.
+    unplayed = integration_client.get("/api/v1/players/value", params={"season": "2026-27"})
+    assert unplayed.status_code == 200
+    assert [row["mvp_season"] for row in unplayed.json()["data"]] == ["2024-25", "2024-25"]
 
 
 @pytest.mark.integration

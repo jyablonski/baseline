@@ -509,6 +509,7 @@ GAMES_SCHEDULE_DIMENSIONS = [
     "games_schedule.away_team",
     "games_schedule.away_team_name",
     "games_schedule.away_score",
+    "games_schedule.national_tv",
 ]
 
 GAME_PREDICTIONS_DIMENSIONS = [
@@ -931,4 +932,70 @@ def biggest_upsets_query(
         # upset_rank restarts per season_type; magnitude orders across them.
         "order": {"game_upsets.upset_magnitude": "desc"},
         "limit": clamp_limit(limit, UPSETS_DEFAULT_LIMIT, UPSETS_MAX_LIMIT),
+    }
+
+
+DAILY_HIGHLIGHTS_DIMENSIONS = [
+    "daily_highlights.highlight_id",
+    "daily_highlights.game_id",
+    "daily_highlights.game_date",
+    "daily_highlights.season",
+    "daily_highlights.season_type",
+    "daily_highlights.highlight_type",
+    "daily_highlights.subject_type",
+    "daily_highlights.player_name",
+    "daily_highlights.team_abbreviation",
+    "daily_highlights.away_team_abbreviation",
+    "daily_highlights.home_team_abbreviation",
+    "daily_highlights.away_score",
+    "daily_highlights.home_score",
+    "daily_highlights.headline",
+    "daily_highlights.detail",
+    "daily_highlights.stat_name",
+    "daily_highlights.stat_value",
+    "daily_highlights.score",
+    "daily_highlights.game_rank",
+    "daily_highlights.day_rank",
+    "daily_highlights.is_featured",
+]
+
+HIGHLIGHTS_DEFAULT_LIMIT = 15
+HIGHLIGHTS_MAX_LIMIT = 100
+
+
+def latest_highlight_date_query(season: str | None = None) -> dict[str, Any]:
+    filters = [equals("daily_highlights.season", season)] if season else []
+    return {
+        "dimensions": ["daily_highlights.game_date"],
+        "filters": filters,
+        "order": {"daily_highlights.game_date": "desc"},
+        "limit": 1,
+    }
+
+
+def daily_highlights_query(
+    game_date: str,
+    *,
+    all_candidates: bool = False,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """One day's highlights, best first.
+
+    By default one lead highlight per game; all_candidates also returns the
+    runners-up that lost out within each game.
+    """
+    filters: list[dict[str, Any]] = [
+        {
+            "member": "daily_highlights.game_date",
+            "operator": "inDateRange",
+            "values": [game_date, game_date],
+        }
+    ]
+    if not all_candidates:
+        filters.append(equals("daily_highlights.game_rank", "1"))
+    return {
+        "dimensions": list(DAILY_HIGHLIGHTS_DIMENSIONS),
+        "filters": filters,
+        "order": {"daily_highlights.score": "desc"},
+        "limit": clamp_limit(limit, HIGHLIGHTS_DEFAULT_LIMIT, HIGHLIGHTS_MAX_LIMIT),
     }

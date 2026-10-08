@@ -10,6 +10,7 @@ from queries.games import (
     GET_GAME_FLOW,
     LIST_BIGGEST_COLLAPSES,
     LIST_BOX_SCORE,
+    LIST_DAILY_HIGHLIGHTS,
     LIST_GAMES,
     LIST_GAMES_COUNT,
     LIST_PLAY_BY_PLAY,
@@ -75,6 +76,15 @@ class GamesRepository:
         rows = self.db.execute(
             LIST_BIGGEST_COLLAPSES,
             {"season": season, "blown_lead_team": blown_lead_team, "limit": limit},
+        )
+        return [dict(row._mapping) for row in rows]
+
+    def list_daily_highlights(
+        self, *, season: str | None, game_date: date | None, limit: int
+    ) -> list[dict]:
+        rows = self.db.execute(
+            LIST_DAILY_HIGHLIGHTS,
+            {"season": season, "game_date": game_date, "limit": limit},
         )
         return [dict(row._mapping) for row in rows]
 

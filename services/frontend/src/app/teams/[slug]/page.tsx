@@ -46,7 +46,6 @@ function TeamProfile() {
   const { season: requestedSeason, isLoading: seasonsLoading } = useSeason();
   const [seasonOverride, setSeasonOverride] = useState<string | null>(null);
   const [opponentId, setOpponentId] = useState("");
-  const [arenaCity, setArenaCity] = useState("");
   const [location, setLocation] = useState<"all" | "home" | "away">("all");
   const [gamesPage, setGamesPage] = useState(0);
   const [schedulePage, setSchedulePage] = useState(0);
@@ -79,7 +78,6 @@ function TeamProfile() {
     season: season || undefined,
     opponent_team_id: opponentId || undefined,
     location: location === "all" ? undefined : location,
-    arena_city: arenaCity || undefined,
   };
 
   const gamesQuery = useQuery({
@@ -101,7 +99,6 @@ function TeamProfile() {
         team_id: teamId,
         opponent_team_id: opponentId || undefined,
         location: location === "all" ? undefined : location,
-        arena_city: arenaCity || undefined,
         limit: SCHEDULE_PAGE_SIZE,
         offset: schedulePage * SCHEDULE_PAGE_SIZE,
       }),
@@ -156,13 +153,6 @@ function TeamProfile() {
 
   const headerRecord = team.season_record;
   const opponents = (teamsQuery.data?.data ?? []).filter((item) => item.team_id !== teamId);
-  const arenaCities = [
-    ...new Set(
-      (teamsQuery.data?.data ?? [])
-        .map((item) => item.city)
-        .filter((city): city is string => Boolean(city))
-    ),
-  ].sort();
   const last10 = standing?.last_10 || lastTenFromGames(formQuery.data?.data ?? []);
   const streak = standing?.streak || streakFromGames(formQuery.data?.data ?? []);
   const gamesTotal = gamesQuery.data?.meta.total ?? games.length;
@@ -189,7 +179,6 @@ function TeamProfile() {
     resetPages();
     setSeasonOverride(null);
     setOpponentId("");
-    setArenaCity("");
     setLocation("all");
   }
 
@@ -290,18 +279,6 @@ function TeamProfile() {
           options={[
             { value: "", label: "Any" },
             ...opponents.map((item) => ({ value: String(item.team_id), label: item.abbreviation })),
-          ]}
-        />
-        <LabeledSelect
-          label="Arena city"
-          value={arenaCity}
-          onChange={(value) => {
-            setArenaCity(value);
-            resetPages();
-          }}
-          options={[
-            { value: "", label: "Any" },
-            ...arenaCities.map((city) => ({ value: city, label: city })),
           ]}
         />
         <div className="flex border border-input">
@@ -448,11 +425,7 @@ function TeamProfile() {
                             )}
                             className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap font-semibold hover:text-primary"
                           >
-                            <TeamLogo
-                              teamId={opponentTeamId}
-                              abbreviation={opponentAbbreviation}
-                              size={18}
-                            />
+                            <TeamLogo teamId={opponentTeamId} abbreviation={opponentAbbreviation} />
                             {opponentAbbreviation ?? "Opponent"}
                           </Link>
                         ) : (

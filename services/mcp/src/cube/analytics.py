@@ -9,10 +9,12 @@ from cube.client import CubeClient
 from cube.errors import CubeError
 from cube.queries import (
     biggest_upsets_query,
+    daily_highlights_query,
     game_odds_query,
     game_predictions_query,
     game_standings_query,
     games_schedule_query,
+    latest_highlight_date_query,
     mvp_ladder_query,
     mvp_seasons_query,
     normalize_mvp_season_type,
@@ -410,6 +412,30 @@ class CubeAnalytics:
         rows = self.client.load(upset_seasons_query())
         return rows[0].get("season") if rows else None
 
+    def get_daily_highlights(
+        self,
+        game_date: str | None = None,
+        season: str | None = None,
+        all_candidates: bool = False,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        resolved_date = (game_date or "").strip()[:10] or self._latest_highlight_date(season)
+        if resolved_date is None:
+            return {"game_date": None, "highlights": []}
+        rows = self.client.load(
+            daily_highlights_query(resolved_date, all_candidates=all_candidates, limit=limit)
+        )
+        return {
+            "game_date": resolved_date,
+            "highlights": [_highlight_row(row) for row in rows],
+        }
+
+    def _latest_highlight_date(self, season: str | None = None) -> str | None:
+        rows = self.client.load(latest_highlight_date_query(season))
+        latest = rows[0].get("game_date") if rows else None
+        # Cube returns a time dimension as an ISO timestamp.
+        return str(latest)[:10] if latest else None
+
     def get_transactions(
         self,
         season: str | None = None,
@@ -514,6 +540,33 @@ def _player_profile_row(row: dict[str, Any]) -> dict[str, Any]:
         "current_contract_season": row.get("current_contract_season"),
         "current_season_salary": _as_int(row.get("current_season_salary")),
         "current_remaining_guaranteed": _as_int(row.get("current_remaining_guaranteed")),
+    }
+
+
+def _highlight_row(row: dict[str, Any]) -> dict[str, Any]:
+    game_date = row.get("game_date")
+    return {
+        "highlight_id": row.get("highlight_id"),
+        "game_id": row.get("game_id"),
+        "game_date": str(game_date)[:10] if game_date else None,
+        "season": row.get("season"),
+        "season_type": row.get("season_type"),
+        "highlight_type": row.get("highlight_type"),
+        "subject_type": row.get("subject_type"),
+        "player_name": row.get("player_name"),
+        "team_abbreviation": row.get("team_abbreviation"),
+        "away_team_abbreviation": row.get("away_team_abbreviation"),
+        "home_team_abbreviation": row.get("home_team_abbreviation"),
+        "away_score": _as_int(row.get("away_score")),
+        "home_score": _as_int(row.get("home_score")),
+        "headline": row.get("headline"),
+        "detail": row.get("detail"),
+        "stat_name": row.get("stat_name"),
+        "stat_value": _as_float(row.get("stat_value")),
+        "score": _as_float(row.get("score")),
+        "game_rank": _as_int(row.get("game_rank")),
+        "day_rank": _as_int(row.get("day_rank")),
+        "is_featured": row.get("is_featured"),
     }
 
 

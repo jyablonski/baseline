@@ -255,6 +255,7 @@ def test_execute_scrape(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("pipeline.scrape_standings", lambda season: 30)
     monkeypatch.setattr("pipeline.scrape_injuries", lambda: 4)
     monkeypatch.setattr("pipeline.scrape_odds", lambda: 0)
+    monkeypatch.setattr("pipeline.scrape_broadcasts", lambda: 0)
     monkeypatch.setattr("pipeline.current_season", lambda: "2025-26")
     pbp_calls: list[object] = []
     monkeypatch.setattr(
@@ -266,6 +267,7 @@ def test_execute_scrape(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "standings: 30" in detail
     assert "injuries: 4" in detail
     assert "odds: 0" in detail
+    assert "broadcasts: 0" in detail
     assert "contracts" not in detail
     assert pbp_calls == []
 
@@ -305,6 +307,7 @@ def test_execute_scrape_collects_multiple_failures(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("pipeline.current_season", lambda: "2025-26")
     monkeypatch.setattr("pipeline.scrape_injuries", lambda: 0)
     monkeypatch.setattr("pipeline.scrape_odds", lambda: 0)
+    monkeypatch.setattr("pipeline.scrape_broadcasts", lambda: 0)
     monkeypatch.setattr("pipeline.scrape_contracts", lambda: (0, 0))
     alert = SyncAlert("pipeline")
     with pytest.raises(SyncFailedError, match="2 scrape step"):
@@ -331,6 +334,34 @@ def test_execute_scrape_collects_multiple_failures(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.unit
+def test_a_broadcasts_failure_does_not_fail_the_daily_scrape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ESPN is an optional extra: its outage must not stop the run before dbt."""
+    monkeypatch.setattr("pipeline.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("pipeline.scrape_standings", lambda season: 30)
+    monkeypatch.setattr("pipeline.scrape_injuries", lambda: 12)
+    monkeypatch.setattr("pipeline.scrape_odds", lambda: 0)
+    monkeypatch.setattr("pipeline.current_season", lambda: "2025-26")
+    monkeypatch.setattr(
+        "pipeline.scrape_broadcasts",
+        lambda: (_ for _ in ()).throw(RuntimeError("ESPN HTTP 503")),
+    )
+
+    alert = SyncAlert("pipeline")
+    count, detail = execute_scrape("daily", _config(), alert=alert)
+
+    assert count == 42
+    assert "broadcasts: 0" in detail
+    assert alert.failures == []
+    # Still on the record, so source health and the streak alert can see it.
+    by_step = {step.step: step for step in alert.steps}
+    assert by_step["broadcasts"].status == "failed"
+    assert by_step["broadcasts"].error_type == "RuntimeError"
+    assert "ESPN HTTP 503" in (by_step["broadcasts"].error_detail or "")
+
+
+@pytest.mark.unit
 def test_daily_records_skipped_sources_rather_than_omitting_them(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -340,6 +371,7 @@ def test_daily_records_skipped_sources_rather_than_omitting_them(
     which is the failure this table is meant to make visible.
     """
     monkeypatch.setattr("pipeline.missing_odds_env_names", lambda: ["ODDS_API_KEY"])
+    monkeypatch.setattr("pipeline.scrape_broadcasts", lambda: 9)
     monkeypatch.setattr("pipeline.scrape_todays_games", lambda: [])
     monkeypatch.setattr("pipeline.scrape_standings", lambda season: 30)
     monkeypatch.setattr("pipeline.scrape_injuries", lambda: 12)
@@ -356,6 +388,7 @@ def test_daily_records_skipped_sources_rather_than_omitting_them(
     assert "No completed games today" in (by_step["play_by_play"].error_detail or "")
     assert "contracts" not in by_step
     assert by_step["todays_games"].rows == 0
+    assert by_step["broadcasts"].rows == 9
     assert alert.failures == []
 
 

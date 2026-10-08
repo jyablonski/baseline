@@ -1,6 +1,6 @@
 -- Seeded gold mart rows for API/MCP integration tests (no dbt required).
 
-TRUNCATE gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
+TRUNCATE gold.fct_daily_highlights, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
          gold.fct_standings, gold.fct_player_mvp_scores, gold.fct_player_season_stats, gold.fct_player_game_logs,
          gold.fct_team_game_results, gold.fct_games_schedule, gold.dim_players, gold.dim_teams
          RESTART IDENTITY CASCADE;
@@ -102,16 +102,40 @@ INSERT INTO gold.fct_player_mvp_scores (
 INSERT INTO gold.fct_games_schedule (
     game_id, season, season_type, game_date, status, arena, arena_city, arena_state,
     home_team_id, home_team_abbreviation, home_team_name, home_score,
-    away_team_id, away_team_abbreviation, away_team_name, away_score
+    away_team_id, away_team_abbreviation, away_team_name, away_score, national_tv
 ) VALUES
     ('00000000-0000-4000-8000-000000000204', '2024-25', 'Regular Season', CURRENT_DATE + 14, 'Scheduled',
      'Chase Center', 'San Francisco', 'CA',
      '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Golden State Warriors', NULL,
-     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'LA Clippers', NULL),
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'LA Clippers', NULL, 'ESPN, ABC'),
     ('00000000-0000-4000-8000-000000000205', '2024-25', 'Regular Season', CURRENT_DATE + 15, 'Scheduled',
      'Intuit Dome', 'Inglewood', 'CA',
      'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'LA Clippers', NULL,
-     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Golden State Warriors', NULL);
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Golden State Warriors', NULL, NULL);
+
+-- 10/22 has a lead highlight and a runner-up for the same game; 10/23 is the
+-- newest day, so it is what an undated request returns.
+INSERT INTO gold.fct_daily_highlights (
+    highlight_id, game_date, season, season_type, game_id, highlight_type, subject_type,
+    player_id, player_name, team_id, team_abbreviation,
+    home_team_abbreviation, away_team_abbreviation, home_score, away_score,
+    headline, detail, stat_name, stat_value, base_weight, magnitude, importance, score,
+    game_rank, day_rank, is_featured
+) VALUES
+    ('hl-1022-lead', '2024-10-22', '2024-25', 'Regular Season', '00000000-0000-4000-8000-000000000201',
+     'big_scoring_night', 'player', '00000000-0000-4000-8000-000000000101', 'Stephen Curry',
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'GSW', 'LAC', 120, 110,
+     'Stephen Curry scores 42', '42 pts, 4 reb, 8 ast. GSW 120, LAC 110.', 'points', 42, 6, 0.1, 0.9, 12.54,
+     1, 1, TRUE),
+    ('hl-1022-second', '2024-10-22', '2024-25', 'Regular Season', '00000000-0000-4000-8000-000000000201',
+     'top_performer', 'player', '00000000-0000-4000-8000-000000000101', 'Stephen Curry',
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'GSW', 'LAC', 120, 110,
+     'Stephen Curry: 42 pts, 4 reb, 8 ast', 'GSW 120, LAC 110.', 'game score', 38.2, 1, 0.955, 0.9, 3.71,
+     2, NULL, FALSE),
+    ('hl-1023-lead', '2024-10-23', '2024-25', 'Regular Season', '00000000-0000-4000-8000-000000000202',
+     'overtime', 'game', NULL, NULL, NULL, NULL, 'CHI', 'LAC', 105, 112,
+     'Clippers beat Bulls in overtime', 'LAC 112, CHI 105.', 'overtime periods', 1, 5, 0, 0, 5.00,
+     1, 1, TRUE);
 
 -- GAME_SCHEDULE carries a champion prediction and two books; the second
 -- scheduled game carries neither, so the schedule must render it with nulls.

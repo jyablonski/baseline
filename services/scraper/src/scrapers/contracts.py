@@ -19,6 +19,7 @@ from identity import BREF_PROVIDER, ensure_player, resolve_team_id, seed_team_ca
 
 from db import get_session, upsert_rows
 from models import PlayerContract, TeamPayroll
+from queries.snapshots import DELETE_STALE_PLAYER_CONTRACTS
 from scrapers import BREF_BASE_URL, bref_get
 from scrapers.contracts_parse import (
     BREF_TEAM_ABBREVIATIONS,
@@ -120,6 +121,14 @@ def scrape_contracts(
             session, PlayerContract, canonical_players, ["player_id", "team_id", "season"]
         )
         n_payroll = upsert_rows(session, TeamPayroll, canonical_payroll, ["team_id", "season"])
+        # Only for teams whose page produced rows: an empty parse is a broken
+        # page or parser, not a team that released its whole roster.
+        for team_id in {row["team_id"] for row in canonical_players}:
+            session.execute(
+                DELETE_STALE_PLAYER_CONTRACTS,
+                {"team_id": team_id, "scraped_at": scraped_at},
+            )
+        session.commit()
     logger.info(
         "Upserted %s player contracts and %s team payroll rows (teams=%s)",
         n_players,

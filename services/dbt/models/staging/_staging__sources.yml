@@ -317,6 +317,26 @@ sources:
             description: Home point spread (negative when favored); spreads market only.
           - name: scraped_at
             description: When the scraper last wrote this row.
+      - name: game_broadcasts
+        description: >
+          ESPN scoreboard events for today and the two weeks ahead, one row per ESPN
+          event, refreshed each scrape. Kept for national_tv: neither
+          Basketball-Reference nor The Odds API carries a broadcaster.
+        columns:
+          - name: espn_event_id
+            description: ESPN event id.
+          - name: commence_time
+            description: Scheduled tip-off time from ESPN, in UTC.
+          - name: home_team_name
+            description: Home team name as ESPN spells it.
+          - name: away_team_name
+            description: Away team name as ESPN spells it.
+          - name: game_id
+            description: Matched game (Baseline game UUID); null when no source.games row matched by teams and date.
+          - name: national_tv
+            description: Comma-separated national TV and streaming networks, e.g. "ESPN, ABC"; null for a local-only game.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
       - name: game_predictions
         description: >
           Pregame home win probabilities written by services/ml. Grain is

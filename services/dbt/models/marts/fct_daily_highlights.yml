@@ -1,0 +1,142 @@
+version: 2
+
+models:
+  - name: fct_daily_highlights
+    description: >
+      Candidate highlights for every Final game, scored and ranked: the "what
+      stood out" feed. Grain is one row per highlight (game x highlight_type x
+      subject x stat). score = base_weight * (1 + magnitude) * (1 + importance),
+      where magnitude (0-1) is how far past its threshold the event went and
+      importance (0-1) is how much its subject matters (MVP rank for a player,
+      league rank entering the game for a team, 1 outside the Regular Season).
+      game_rank orders a game's highlights; the best one per game competes for
+      day_rank, and the top var highlight_featured_per_day are is_featured, so a
+      day never features one game twice. Season highs and streaks are as of the
+      game; MVP rank and percentiles use the season as it stands now. Thresholds
+      and weights are the highlight_* vars in dbt_project.yml.
+    columns:
+      - name: highlight_id
+        description: md5 of game_id, highlight_type, subject, and stat_name.
+        data_tests:
+          - unique
+          - not_null
+      - name: game_date
+        description: Game date in Eastern Time.
+        data_tests:
+          - not_null
+      - name: season
+        description: NBA season label, e.g. 2025-26.
+        data_tests:
+          - not_null
+      - name: season_type
+        description: Regular Season, Cup, PlayIn, or Playoffs.
+      - name: game_id
+        description: Baseline game UUID.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_team_game_results')
+                field: game_id
+      - name: highlight_type
+        description: >
+          What happened. Player: league_season_high (most of a stat by anyone
+          this season), season_high (a personal best by a top-MVP-ladder
+          player), elite_game (game score in the season's top percentile),
+          big_scoring_night, triple_double, top_performer (the game's best line;
+          every game with logs has one). Team: win_streak, win_streak_snapped,
+          losing_streak, losing_streak_snapped, blown_lead, blowout, upset.
+          Game: scoring_duel (both teams' top scorers past the bar),
+          heavyweight_clash (two top-ranked teams), lead_changes, overtime.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set:
+                  - league_season_high
+                  - season_high
+                  - elite_game
+                  - big_scoring_night
+                  - triple_double
+                  - top_performer
+                  - scoring_duel
+                  - win_streak
+                  - win_streak_snapped
+                  - losing_streak
+                  - losing_streak_snapped
+                  - blown_lead
+                  - lead_changes
+                  - overtime
+                  - blowout
+                  - upset
+                  - heavyweight_clash
+                quote_values: true
+      - name: subject_type
+        description: "Who the highlight is about: player, team, or game."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["player", "team", "game"]
+                quote_values: true
+      - name: player_id
+        description: Baseline player UUID; set for player highlights only.
+      - name: player_name
+        description: Player full name; set for player highlights only.
+      - name: team_id
+        description: Baseline team UUID of the subject (the player's team, or the team a team highlight is about); null for game highlights.
+      - name: team_abbreviation
+        description: Abbreviation of team_id; null for game highlights.
+      - name: home_team_abbreviation
+        description: Home team abbreviation.
+      - name: away_team_abbreviation
+        description: Away team abbreviation.
+      - name: home_score
+        description: Home final score.
+      - name: away_score
+        description: Away final score.
+      - name: headline
+        description: One-line summary generated from a template per highlight_type, e.g. "Thunder win 15th straight".
+        data_tests:
+          - not_null
+      - name: detail
+        description: Supporting sentence, always ending with the final score.
+        data_tests:
+          - not_null
+      - name: stat_name
+        description: What stat_value measures, e.g. points, games, lead changes.
+        data_tests:
+          - not_null
+      - name: stat_value
+        description: The number the highlight is built on (the stat total, streak length, lead blown, and so on).
+      - name: base_weight
+        description: Weight of the highlight_type from var highlight_weights.
+        data_tests:
+          - not_null
+      - name: magnitude
+        description: How far past its threshold the event went, 0 to 1, rounded to three decimals.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: importance
+        description: How much the subject matters, 0 to 1, rounded to three decimals.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: score
+        description: base_weight * (1 + magnitude) * (1 + importance), rounded to two decimals. Higher is more notable.
+        data_tests:
+          - not_null
+      - name: game_rank
+        description: Rank within the game by score, 1 being the game's lead highlight.
+        data_tests:
+          - not_null
+      - name: day_rank
+        description: Rank of the game's lead highlight among all games that day; null unless game_rank is 1.
+      - name: is_featured
+        description: True for the lead highlight of the day's top var highlight_featured_per_day games.
+        data_tests:
+          - not_null

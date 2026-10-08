@@ -26,6 +26,11 @@ cubes:
         sql: status
         type: string
 
+      - name: national_tv
+        sql: national_tv
+        type: string
+        description: National TV and streaming networks from ESPN, comma-separated (e.g. "ESPN, ABC"). Null for a local-only game or one not listed yet.
+
       - name: arena
         sql: arena
         type: string

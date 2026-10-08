@@ -35,6 +35,22 @@ export type PlayerSummary = {
   mvp_rank?: number | null;
 };
 
+/** One player on the MVP score vs salary plot. */
+export type PlayerValue = {
+  player_id: string;
+  full_name: string;
+  position?: string | null;
+  team_id?: string | null;
+  team_abbreviation?: string | null;
+  mvp_season: string;
+  mvp_score: number;
+  mvp_rank: number;
+  games_played: number;
+  salary: number;
+  // The salary's own season, which is not always mvp_season.
+  salary_season?: string | null;
+};
+
 export type PlayerSort = "mvp" | "name";
 
 export type PlayerDetail = PlayerSummary & {
@@ -382,6 +398,8 @@ export type ScheduledGame = {
   arena?: string | null;
   arena_city?: string | null;
   arena_state?: string | null;
+  // National TV and streaming networks ("ESPN, ABC"); null for a local-only game.
+  national_tv?: string | null;
   prediction_model_version?: string | null;
   home_win_probability?: number | null;
   away_win_probability?: number | null;
@@ -464,6 +482,32 @@ export type GameCollapse = {
   winner_margin_entering_fourth?: number | null;
   lead_changes?: number | null;
   overtime_periods?: number | null;
+};
+
+// A game's lead highlight for the day; the featured few are the home page cards.
+export type GameHighlight = {
+  highlight_id: string;
+  game_date: string;
+  season: string;
+  season_type?: string | null;
+  game_id: string;
+  highlight_type: string;
+  subject_type: string;
+  player_id?: string | null;
+  player_name?: string | null;
+  team_id?: string | null;
+  team_abbreviation?: string | null;
+  home_team_abbreviation?: string | null;
+  away_team_abbreviation?: string | null;
+  home_score?: number | null;
+  away_score?: number | null;
+  headline: string;
+  detail: string;
+  stat_name?: string | null;
+  stat_value?: number | null;
+  score: number;
+  day_rank?: number | null;
+  is_featured: boolean;
 };
 
 export type GameFlow = {

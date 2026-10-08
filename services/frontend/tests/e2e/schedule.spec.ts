@@ -10,7 +10,7 @@ test("schedule lists the upcoming slate without scores or 2010-11 copy", async (
     .locator("p")
     .filter({ hasText: "2025-26 schedule from today onward." });
   await expect(scheduleDescription).toContainText(
-    "2025-26 schedule from today onward. Win % is Baseline's pregame model estimate."
+    "2025-26 schedule from today onward. TV lists national broadcasts only. Win % is Baseline's pregame model estimate."
   );
   await expect(page.getByText("LAL")).toBeVisible();
   await expect(page.getByText("@")).toBeVisible();
@@ -26,6 +26,7 @@ test("schedule shows model win % and consensus odds, linking to the scorecard", 
 }) => {
   await mockApi(page);
   await page.goto("/schedule");
+  await expect(page.getByTestId("national-tv")).toHaveText("ESPN");
   await expect(page.getByTestId("win-probability")).toHaveText("38% / 62%");
   await expect(page.getByTestId("moneyline")).toHaveText("+130 / -150");
   await expect(page.getByTestId("spread")).toHaveText("GSW -3.5");

@@ -21,6 +21,7 @@ from pipeline import (
 from config import RedditConfigError
 from db import get_session
 from scrapers import current_season, parse_seasons
+from scrapers.broadcasts import scrape_broadcasts
 from scrapers.contracts import scrape_contracts
 from scrapers.games import scrape_games, scrape_todays_games
 from scrapers.injuries import scrape_injuries
@@ -224,6 +225,13 @@ def scrape_odds_cmd() -> None:
     click.echo(f"Upserted {count} current odds rows")
 
 
+@cli.command("scrape-broadcasts")
+def scrape_broadcasts_cmd() -> None:
+    """Upsert national TV listings for the next two weeks from ESPN's scoreboard."""
+    count = scrape_broadcasts()
+    click.echo(f"Upserted {count} broadcast rows")
+
+
 @cli.command("scrape-play-by-play")
 @click.option(
     "--season",
@@ -309,6 +317,9 @@ def scrape_daily_cmd() -> None:
     n_odds = alert.try_run("odds", scrape_odds)
     if n_odds is not None:
         click.echo(f"Odds: {n_odds}")
+    n_broadcasts = alert.try_run("broadcasts", scrape_broadcasts, optional=True)
+    if n_broadcasts is not None:
+        click.echo(f"Broadcasts: {n_broadcasts}")
     contracts = alert.try_run("contracts", scrape_contracts)
     if contracts is not None:
         n_contracts, n_payroll = contracts

@@ -27,6 +27,7 @@ vi.mock("@/lib/api", () => ({
           home_team_name: "Golden State Warriors",
           away_team_name: "Los Angeles Lakers",
           arena: "Chase Center",
+          national_tv: "ESPN, ABC",
           prediction_model_version: "elo-v0",
           home_win_probability: 0.62,
           away_win_probability: 0.38,
@@ -94,11 +95,15 @@ describe("schedule page", () => {
     expect(screen.getAllByTestId("win-probability")[0]).toHaveTextContent("38% / 62%");
     expect(screen.getAllByTestId("moneyline")[0]).toHaveTextContent("+130 / -150");
     expect(screen.getAllByTestId("spread")[0]).toHaveTextContent("GSW -3.5");
+    // Only nationally televised games name a network.
+    expect(screen.getByRole("columnheader", { name: "TV" })).toBeInTheDocument();
+    expect(screen.getAllByTestId("national-tv")[0]).toHaveTextContent("ESPN, ABC");
+    expect(screen.getAllByTestId("national-tv")[1]).toHaveTextContent("—");
     expect(screen.getAllByTestId("win-probability")[1]).toHaveTextContent("—");
     expect(screen.getAllByTestId("moneyline")[1]).toHaveTextContent("—");
     expect(screen.getAllByTestId("spread")[1]).toHaveTextContent("—");
     expect(screen.getByRole("heading", { name: "Schedule" }).parentElement).toHaveTextContent(
-      "2026-27 schedule from today onward. Win % is Baseline's pregame model estimate. How accurate is the model?"
+      "2026-27 schedule from today onward. TV lists national broadcasts only. Win % is Baseline's pregame model estimate. How accurate is the model?"
     );
     expect(screen.getByRole("link", { name: "How accurate is the model?" })).toHaveAttribute(
       "href",

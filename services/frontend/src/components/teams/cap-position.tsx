@@ -109,7 +109,7 @@ export function CapPosition({ team }: { team: CapPositionTeam }) {
   );
 
   return (
-    <section className="border-y border-border py-6">
+    <section className="border-t border-border py-6">
       {!hasMoney ? (
         <p className="text-sm text-ink-2">No BRef payroll snapshot for this team yet.</p>
       ) : (

@@ -18,6 +18,54 @@ vars:
   # The most availability can take off a season score.
   mvp_availability_max_penalty: 0.25
 
+  # Daily highlight knobs (fct_daily_highlights). Each candidate scores
+  # base weight * (1 + magnitude) * (1 + importance), both factors in 0-1.
+  highlight_weights:
+    league_season_high: 9
+    blown_lead: 7
+    upset: 7
+    elite_game: 6
+    big_scoring_night: 6
+    scoring_duel: 6
+    heavyweight_clash: 6
+    lead_changes: 6
+    season_high: 5
+    triple_double: 5
+    win_streak_snapped: 5
+    overtime: 5
+    win_streak: 4
+    losing_streak_snapped: 3
+    losing_streak: 3
+    blowout: 3
+    # Every game gets one, so a quiet night still has something to show.
+    top_performer: 1
+  # Top games of the day flagged is_featured, one highlight per game.
+  highlight_featured_per_day: 3
+  # A personal season high only counts for a player this high on the MVP ladder.
+  highlight_mvp_rank_cutoff: 30
+  # Early-season guards: a "season high" in week one is noise.
+  highlight_min_player_games: 10
+  highlight_min_league_dates: 10
+  highlight_min_team_games: 10
+  highlight_streak_length: 5
+  # A blown lead qualifies at this size, or in the season's top percentile
+  # as long as it clears the floor.
+  highlight_blown_lead: 20
+  highlight_blown_lead_percentile: 0.95
+  highlight_blown_lead_floor: 15
+  # fct_game_flow counts direct lead flips only, not ties, so this runs lower
+  # than a box score's lead-change count.
+  highlight_lead_changes: 20
+  highlight_blowout_margin: 30
+  highlight_big_scoring_points: 40
+  # Both teams' top scorers at or above this.
+  highlight_scoring_duel_points: 30
+  highlight_elite_percentile: 0.99
+  # Both teams inside this league rank entering the game.
+  highlight_heavyweight_rank: 5
+  # Underdog's pregame market win probability at or below this.
+  highlight_upset_max_wp: 0.30
+
 models:
   nba_analytics:
     staging:

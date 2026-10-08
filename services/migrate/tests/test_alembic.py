@@ -36,6 +36,7 @@ EXPECTED_SOURCE_TABLES = {
     "player_injuries",
     "player_injuries_history",
     "game_odds",
+    "game_broadcasts",
     "game_predictions",
     "model_artifacts",
     "model_evaluations",

@@ -316,6 +316,7 @@ LIST_SCHEDULE = text(
         fct_games_schedule.away_team_id,
         fct_games_schedule.away_team_abbreviation,
         fct_games_schedule.away_team_name,
+        fct_games_schedule.national_tv,
         fct_game_predictions.model_version AS prediction_model_version,
         fct_game_predictions.model_wp AS home_win_probability,
         fct_game_predictions.away_wp AS away_win_probability,
@@ -387,6 +388,52 @@ LIST_BIGGEST_COLLAPSES = text(
     ORDER BY
         fct_game_flow.largest_lead_blown DESC,
         fct_game_flow.game_date DESC
+    LIMIT :limit
+    """
+)
+
+
+# Each game's lead highlight for one day, best first. Defaults to the newest
+# day that has any: an off day or the offseason still has something to show.
+LIST_DAILY_HIGHLIGHTS = text(
+    """
+    WITH latest_day AS (
+        SELECT max(fct_daily_highlights.game_date) AS game_date
+        FROM gold.fct_daily_highlights
+        WHERE (:season IS NULL OR fct_daily_highlights.season = :season)
+    )
+    SELECT
+        fct_daily_highlights.highlight_id,
+        fct_daily_highlights.game_date,
+        fct_daily_highlights.season,
+        fct_daily_highlights.season_type,
+        fct_daily_highlights.game_id,
+        fct_daily_highlights.highlight_type,
+        fct_daily_highlights.subject_type,
+        fct_daily_highlights.player_id,
+        fct_daily_highlights.player_name,
+        fct_daily_highlights.team_id,
+        fct_daily_highlights.team_abbreviation,
+        fct_daily_highlights.home_team_abbreviation,
+        fct_daily_highlights.away_team_abbreviation,
+        fct_daily_highlights.home_score,
+        fct_daily_highlights.away_score,
+        fct_daily_highlights.headline,
+        fct_daily_highlights.detail,
+        fct_daily_highlights.stat_name,
+        fct_daily_highlights.stat_value,
+        fct_daily_highlights.score,
+        fct_daily_highlights.day_rank,
+        fct_daily_highlights.is_featured
+    FROM gold.fct_daily_highlights
+    CROSS JOIN latest_day
+    WHERE
+        fct_daily_highlights.game_rank = 1
+        AND fct_daily_highlights.game_date = coalesce(CAST(:game_date AS date), latest_day.game_date)
+        AND (:season IS NULL OR fct_daily_highlights.season = :season)
+    ORDER BY
+        fct_daily_highlights.day_rank,
+        fct_daily_highlights.game_id
     LIMIT :limit
     """
 )

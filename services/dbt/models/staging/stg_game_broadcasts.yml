@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: stg_game_broadcasts
+    description: >
+      ESPN scoreboard events with their national broadcasters. Grain is
+      espn_event_id. game_id is null when the event matched no scheduled game,
+      and national_tv is null for a game carried only on local networks.
+    columns:
+      - name: espn_event_id
+        description: ESPN event id.
+        data_tests:
+          - unique
+          - not_null
+      - name: game_id
+        description: Matched game (Baseline game UUID); null when unmatched.
+      - name: national_tv
+        description: Comma-separated national TV and streaming networks, e.g. "ESPN, ABC"; null for a local-only game.
