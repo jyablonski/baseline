@@ -4,8 +4,10 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
+import { PickCell, StakeEditor } from "@/components/account/pick-cell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamAbbrLink } from "@/components/team-logo";
+import { usePicks } from "@/hooks/use-picks";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import {
@@ -16,7 +18,8 @@ import {
   formatTimeET,
 } from "@/lib/format";
 import { teamHref, withSeason } from "@/lib/nav";
-import type { ScheduledGame } from "@/lib/types";
+import { formatSignedMoney } from "@/lib/picks";
+import type { ScheduledGame, UserPick } from "@/lib/types";
 
 // One request covers the day on screen and reaches the next one: a full slate
 // is 15 games, so the first row dated later is always inside this window.
@@ -50,6 +53,13 @@ function ScheduleBody() {
     enabled: !seasonIsLoading,
   });
 
+  const picks = usePicks();
+  // A sheet that will not load is reported too: without it the pick column
+  // simply is not there, which reads as "picks are broken" with no reason given.
+  const pickError = picks.save.error ?? picks.remove.error ?? picks.error;
+  // The one game whose stake editor is open.
+  const [staking, setStaking] = useState<string | null>(null);
+
   const fetched = scheduleQuery.data?.data ?? [];
   const shownDay = fetched[0]?.game_date.slice(0, 10);
   const rows = fetched.filter((game) => game.game_date.slice(0, 10) === shownDay);
@@ -67,6 +77,32 @@ function ScheduleBody() {
               How accurate is the model?
             </Link>
           </p>
+          {picks.enabled && picks.sheet ? (
+            <p className="mt-1 text-sm text-ink-2" data-testid="pick-record">
+              Pick a winner for any game before it tips. Add a stake if you like; it pays at the
+              moneyline. Your record:{" "}
+              <span className="tabular font-semibold text-foreground">
+                {picks.sheet.summary.wins}–{picks.sheet.summary.losses}
+              </span>
+              {picks.sheet.summary.net !== 0 ? (
+                <>
+                  , net{" "}
+                  <span className="tabular font-semibold text-foreground">
+                    {formatSignedMoney(picks.sheet.summary.net)}
+                  </span>
+                </>
+              ) : null}
+              .{" "}
+              <Link href="/picks" className="underline underline-offset-2">
+                Your picks
+              </Link>
+            </p>
+          ) : null}
+          {pickError ? (
+            <p className="mt-1 text-sm text-destructive" role="alert">
+              {queryErrorMessage(pickError)}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -92,11 +128,19 @@ function ScheduleBody() {
                 <th title="Consensus home spread">Spread</th>
                 <th>Status</th>
                 <th>Arena</th>
+                {picks.sheet ? <th>Your pick</th> : null}
               </tr>
             </thead>
             <tbody>
               {rows.map((game) => (
-                <ScheduleRow key={game.game_id} game={game} season={season} />
+                <ScheduleGame
+                  key={game.game_id}
+                  game={game}
+                  season={season}
+                  picks={picks}
+                  staking={staking === game.game_id}
+                  onStaking={setStaking}
+                />
               ))}
             </tbody>
           </table>
@@ -134,7 +178,71 @@ function ScheduleBody() {
   );
 }
 
-function ScheduleRow({ game, season }: { game: ScheduledGame; season: string }) {
+// Date, matchup, TV, win %, moneyline, spread, status, arena, your pick.
+const PICK_TABLE_COLUMNS = 9;
+
+function ScheduleGame({
+  game,
+  season,
+  picks,
+  staking,
+  onStaking,
+}: {
+  game: ScheduledGame;
+  season: string;
+  picks: ReturnType<typeof usePicks>;
+  staking: boolean;
+  onStaking: (gameId: string | null) => void;
+}) {
+  if (!picks.sheet) return <ScheduleRow game={game} season={season} />;
+  const pick: UserPick | undefined = picks.sheet.picks.find(
+    (item) => item.game_id === game.game_id
+  );
+  const busy = picks.save.isPending || picks.remove.isPending;
+  return (
+    <>
+      <ScheduleRow game={game} season={season}>
+        <td>
+          <PickCell
+            game={game}
+            pick={pick}
+            busy={busy}
+            editing={staking}
+            onSave={picks.save.mutate}
+            onRemove={(gameId) => {
+              onStaking(null);
+              picks.remove.mutate(gameId);
+            }}
+            onEditStake={onStaking}
+          />
+        </td>
+      </ScheduleRow>
+      {staking && pick ? (
+        <tr>
+          <td colSpan={PICK_TABLE_COLUMNS}>
+            <StakeEditor
+              game={game}
+              pick={pick}
+              busy={busy}
+              onSave={picks.save.mutate}
+              onClose={() => onStaking(null)}
+            />
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+function ScheduleRow({
+  game,
+  season,
+  children,
+}: {
+  game: ScheduledGame;
+  season: string;
+  children?: React.ReactNode;
+}) {
   const away = game.away_team_abbreviation ?? "Away";
   const home = game.home_team_abbreviation ?? "Home";
   const arena = game.arena || game.arena_city || "—";
@@ -186,6 +294,7 @@ function ScheduleRow({ game, season }: { game: ScheduledGame; season: string }) 
       </td>
       <td>{game.status || "Scheduled"}</td>
       <td>{arena}</td>
+      {children}
     </tr>
   );
 }

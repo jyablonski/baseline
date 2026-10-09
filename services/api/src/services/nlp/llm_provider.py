@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from cube.analytics import CubeAnalytics
@@ -27,6 +28,19 @@ NOT_CONFIGURED = (
 )
 
 
+# Left out of the signed-in chat: post titles and comments are text written by
+# strangers, which is the easiest way to get instructions in front of the model.
+CHAT_EXCLUDED_TOOLS = frozenset({"get_reddit_posts"})
+
+
+@dataclass(frozen=True)
+class LlmConversation:
+    response: QueryResponse
+    input_tokens: int = 0
+    output_tokens: int = 0
+    tool_rounds: int = 0
+
+
 class LlmNlpProvider:
     def __init__(
         self,
@@ -34,11 +48,15 @@ class LlmNlpProvider:
         *,
         settings: Settings,
         client: LlmClient | None = None,
+        chat: bool = False,
     ) -> None:
         self.settings = settings
         self._client = client
         self.cube = cube
         self.executor = NamedToolExecutor(cube)
+        # Chat mode: a scoped prompt, no Reddit tool, and a cap on the rows the
+        # model is handed. /ask keeps the full tool list and uncapped rows.
+        self.chat = chat
 
     def classify(self, question: str) -> str:
         if not question.strip():
@@ -55,49 +73,97 @@ class LlmNlpProvider:
                 data=[],
                 sql=None,
             )
+        return self.converse([{"role": "user", "content": text}], season=season).response
+
+    def converse(self, history: list[dict[str, str]], season: str | None = None) -> LlmConversation:
+        """Run the tool loop over a conversation ending on the user's question.
+
+        Earlier turns are plain text: the tool results behind them are not
+        resent, so a follow-up costs its own tool calls and nothing more.
+        """
+        turns = [dict(turn) for turn in history]
         if season:
-            text = f"{text}\n[Baseline header season: {season}]"
+            turns[-1]["content"] = f"{turns[-1]['content']}\n[Baseline header season: {season}]"
         try:
             client = self._resolve_client()
         except LlmNotConfiguredError:
-            return QueryResponse(answer=NOT_CONFIGURED, data=[], sql=None)
+            return LlmConversation(QueryResponse(answer=NOT_CONFIGURED, data=[], sql=None))
 
         try:
-            system = build_system_prompt(self.cube.meta_summary())
+            system = build_system_prompt(self.cube.meta_summary(), chat=self.chat)
         except CubeError as exc:
-            return QueryResponse(answer=str(exc), data=[], sql=None)
+            return LlmConversation(QueryResponse(answer=str(exc), data=[], sql=None))
 
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": text},
-        ]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system}, *turns]
+        tools = self._tool_schemas()
         last_data: list[Any] = []
         last_sql: str | None = None
+        input_tokens = output_tokens = tool_rounds = 0
         for _ in range(MAX_TOOL_ROUNDS):
-            turn = client.complete(messages=messages, tools=self.executor.schemas())
+            turn = client.complete(messages=messages, tools=tools)
+            input_tokens += turn.input_tokens
+            output_tokens += turn.output_tokens
             if turn.tool_calls:
+                tool_rounds += 1
                 messages.append(_assistant_tool_message(turn))
                 for call in turn.tool_calls:
-                    result = self.executor.execute(call.name, call.arguments)
+                    result = self._execute(call.name, call.arguments)
                     last_data, last_sql = _merge_tool_result(call.name, result, last_data, last_sql)
                     messages.append(
                         {
                             "role": "tool",
                             "tool_call_id": call.id,
-                            "content": json.dumps(result, default=str),
+                            "content": json.dumps(self._for_model(result), default=str),
                         }
                     )
                 continue
-            return QueryResponse(
-                answer=turn.content or "The model returned an empty answer.",
+            return LlmConversation(
+                QueryResponse(
+                    answer=turn.content or "The model returned an empty answer.",
+                    data=last_data,
+                    sql=last_sql,
+                ),
+                input_tokens,
+                output_tokens,
+                tool_rounds,
+            )
+        return LlmConversation(
+            QueryResponse(
+                answer="The model exceeded the tool-call limit without a final answer.",
                 data=last_data,
                 sql=last_sql,
-            )
-        return QueryResponse(
-            answer="The model exceeded the tool-call limit without a final answer.",
-            data=last_data,
-            sql=last_sql,
+            ),
+            input_tokens,
+            output_tokens,
+            tool_rounds,
         )
+
+    def _tool_schemas(self) -> list[dict[str, Any]]:
+        schemas = self.executor.schemas()
+        if not self.chat:
+            return schemas
+        return [
+            schema for schema in schemas if schema["function"]["name"] not in CHAT_EXCLUDED_TOOLS
+        ]
+
+    def _execute(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        # Withholding the schema is not enough: a model can still name a tool
+        # it was never offered.
+        if self.chat and name in CHAT_EXCLUDED_TOOLS:
+            return {"ok": False, "error": f"Unknown tool '{name}'"}
+        return self.executor.execute(name, arguments)
+
+    def _for_model(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Trim a tool result before it is carried through every later round.
+
+        Row count is the largest lever on what an ask costs. The response to
+        the browser is built from the untrimmed result.
+        """
+        cap = self.settings.chat_model_row_cap
+        rows = result.get("rows")
+        if not self.chat or not isinstance(rows, list) or len(rows) <= cap:
+            return result
+        return {**result, "rows": rows[:cap], "truncated_rows": len(rows) - cap}
 
     def _resolve_client(self) -> LlmClient:
         if self._client is not None:
@@ -106,6 +172,8 @@ class LlmNlpProvider:
             api_key=self.settings.nlp_llm_api_key,
             base_url=self.settings.nlp_llm_base_url,
             model=self.settings.nlp_llm_model,
+            max_output_tokens=self.settings.nlp_llm_max_output_tokens,
+            reasoning_effort=self.settings.nlp_llm_reasoning_effort,
         )
 
 

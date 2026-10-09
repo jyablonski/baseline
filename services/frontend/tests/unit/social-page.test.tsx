@@ -343,4 +343,13 @@ describe("social page", () => {
     fireEvent.click(screen.getByRole("button", { name: "24h" }));
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/social?range=24h"));
   });
+
+  it("pages through the feed past the first screen", async () => {
+    replace.mockClear();
+    renderPage();
+    expect(await screen.findByText("1–10 of 41 posts")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "← Prev" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Next →" }));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/social?page=2"));
+  });
 });

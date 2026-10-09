@@ -53,6 +53,10 @@ EXPECTED_SOURCE_TABLES = {
     "host_snapshots",
     "transactions",
     "transaction_participants",
+    "users",
+    "chat_usage",
+    "picks",
+    "feature_flags",
 }
 
 
@@ -388,3 +392,10 @@ def test_upgrade_head_is_idempotent(migrated_engine: Engine) -> None:
     _alembic_upgrade(url)
     tables = _tables_in_schema(migrated_engine, "source")
     assert tables >= EXPECTED_SOURCE_TABLES
+
+
+@pytest.mark.integration
+def test_upgrade_head_seeds_the_feature_flags(migrated_engine: Engine) -> None:
+    with migrated_engine.connect() as conn:
+        rows = conn.execute(text("SELECT flag_key, enabled FROM source.feature_flags")).all()
+    assert {row[0]: row[1] for row in rows} == {"chatbot": True, "picks": True}

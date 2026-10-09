@@ -1,17 +1,17 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { SocialControls, SummaryStrip } from "@/components/social/chrome";
-import { FeedHeader, PostCard } from "@/components/social/post-card";
+import { FeedHeader, FeedPager, PostCard } from "@/components/social/post-card";
 import { EntityBoard, FanbaseBoard, LeaderBoard, Panel } from "@/components/social/panels";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { useSocialFilters } from "@/hooks/use-social-filters";
 import { api, queryErrorMessage } from "@/lib/api";
 import { SOCIAL_SORTS, rangeToDates } from "@/lib/social";
 
-const FEED_LIMIT = 5;
+const FEED_PAGE_SIZE = 10;
 
 export default function SocialPage() {
   return (
@@ -22,7 +22,8 @@ export default function SocialPage() {
 }
 
 function SocialBody() {
-  const { range, contentType, sort, setRange, setContentType, setSort } = useSocialFilters();
+  const { range, contentType, sort, page, setRange, setContentType, setSort, setPage } =
+    useSocialFilters();
 
   // Ranges count back from the newest collected post, not the clock. Collection
   // is one batch a day, so a clock-anchored window slides off the data: once the
@@ -52,15 +53,19 @@ function SocialBody() {
     enabled: anchored,
   });
   const feedQuery = useQuery({
-    queryKey: ["social-posts", dateWindow, contentType, sort],
+    queryKey: ["social-posts", dateWindow, contentType, sort, page],
     queryFn: () =>
       api.listSocialPosts({
         ...dateWindow,
         content_type: contentType || undefined,
         sort,
-        limit: FEED_LIMIT,
+        limit: FEED_PAGE_SIZE,
+        offset: page * FEED_PAGE_SIZE,
       }),
     enabled: anchored,
+    // Holds the current page on screen while the next loads, so the pager's
+    // total does not drop to zero between pages.
+    placeholderData: keepPreviousData,
   });
   const contestedQuery = useQuery({
     queryKey: ["social-contested", dateWindow],
@@ -96,6 +101,7 @@ function SocialBody() {
 
   const summary = summaryQuery.data;
   const posts = feedQuery.data?.data ?? [];
+  const feedTotal = feedQuery.data?.meta.total ?? 0;
   const contested = contestedQuery.data?.data ?? [];
   const players = playersQuery.data?.data ?? [];
 
@@ -127,7 +133,7 @@ function SocialBody() {
         <div className="grid gap-[var(--ct-space-5)] lg:grid-cols-[minmax(0,1fr)_320px]">
           <section>
             <FeedHeader
-              total={feedQuery.data?.meta.total ?? 0}
+              total={feedTotal}
               sortLabel={SOCIAL_SORTS.find((item) => item.key === sort)?.label.toLowerCase()}
             />
 
@@ -147,6 +153,8 @@ function SocialBody() {
                 ))}
               </div>
             )}
+
+            <FeedPager page={page} pageSize={FEED_PAGE_SIZE} total={feedTotal} onPage={setPage} />
           </section>
 
           <aside className="space-y-[var(--ct-space-4)]">

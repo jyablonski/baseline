@@ -13,7 +13,9 @@ It answers from the warehouse through Cube. It is a bounded Q&A — one question
 | **rules** (default) | `NLP_BACKEND=rules` or unset          | In-house regex/alias engine. No API key. Each matched family runs a Cube query.                                                    |
 | **llm** (opt-in)    | `NLP_BACKEND=llm` + `NLP_LLM_API_KEY` | OpenAI-compatible chat with a tool loop over the same named Cube operations MCP uses. Missing key returns a refusal, not an error. |
 
-Optional: `NLP_LLM_BASE_URL`, `NLP_LLM_MODEL` (default `https://api.openai.com/v1`, `gpt-4o-mini`). An unknown `NLP_BACKEND` fails at startup.
+Optional: `NLP_LLM_BASE_URL`, `NLP_LLM_MODEL` (default `https://api.openai.com/v1`, `gpt-4o-mini`), `NLP_LLM_MAX_OUTPUT_TOKENS` (default 2000, sent as `max_completion_tokens`), `NLP_LLM_REASONING_EFFORT` (unset, sent only when set). An unknown `NLP_BACKEND` fails at startup.
+
+The signed-in `/chat` is a separate surface over the same adapter. It does not read `NLP_BACKEND`. It is offered only when `NLP_LLM_API_KEY` is set and the `chatbot` feature flag is on, behind sign-in and a per-user quota, and when it is offered it replaces Ask in the header: the site shows one or the other. See [operations.md](operations.md#accounts-chat-and-picks).
 
 Do not enable `llm` on the public host without a key, spend controls, and a deliberate decision to send user questions to a third party.
 

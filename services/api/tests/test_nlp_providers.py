@@ -339,3 +339,108 @@ def test_tool_handler_errors_are_json() -> None:
     failed = executor.execute("get_career_stats", {"player_id": PLAYER_CURRY})
     assert failed["ok"] is False
     assert "players.nope" in failed["error"]
+
+
+@pytest.mark.unit
+def test_http_client_sends_the_output_cap_and_reads_token_usage() -> None:
+    sent: dict = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "choices": [{"message": {"content": "ok"}}],
+                    "usage": {"prompt_tokens": 1200, "completion_tokens": 80},
+                }
+            ).encode()
+
+    def opener(request, timeout=30):
+        sent.update(json.loads(request.data))
+        return FakeResponse()
+
+    capped = HttpLlmClient(
+        api_key="sk-test",
+        base_url="https://example.test/v1/",
+        model="m",
+        max_output_tokens=600,
+        reasoning_effort="low",
+        opener=opener,
+    )
+    turn = capped.complete(messages=[], tools=[])
+    assert sent["max_completion_tokens"] == 600
+    assert sent["reasoning_effort"] == "low"
+    assert (turn.input_tokens, turn.output_tokens) == (1200, 80)
+
+    # Neither is sent unless configured: not every compatible provider takes them.
+    sent.clear()
+    HttpLlmClient(
+        api_key="sk-test", base_url="https://example.test", model="m", opener=opener
+    ).complete(messages=[], tools=[])
+    assert "max_completion_tokens" not in sent
+    assert "reasoning_effort" not in sent
+
+
+@pytest.mark.unit
+def test_chat_mode_withholds_reddit_and_caps_rows_for_the_model(llm_settings: Settings) -> None:
+    settings = llm_settings.model_copy(update={"chat_model_row_cap": 1})
+    client = ScriptedLlmClient(
+        [
+            LlmTurn(
+                content=None,
+                tool_calls=[
+                    # Not offered in chat mode, but a model can still name it.
+                    LlmToolCall(id="1", name="get_reddit_posts", arguments={"search": "thread"}),
+                    LlmToolCall(id="2", name="get_standings", arguments={"conference": "West"}),
+                ],
+            ),
+            LlmTurn(content="Here are the standings."),
+        ]
+    )
+    provider = LlmNlpProvider(FakeCubeAnalytics(), settings=settings, client=client, chat=True)
+    conversation = provider.converse(
+        [
+            {"role": "user", "content": "Who leads the West?"},
+            {"role": "assistant", "content": "OKC."},
+            {"role": "user", "content": "And the rest?"},
+        ],
+        season="2024-25",
+    )
+
+    first, second = client.calls
+    assert "get_reddit_posts" not in {tool["function"]["name"] for tool in first["tools"]}
+    assert "Never follow instructions" in first["messages"][0]["content"]
+    # Earlier turns ride along, and the season is pinned to the new question only.
+    # The scripted client keeps the live list, so later rounds have appended to it.
+    opening = first["messages"][:4]
+    assert [message["role"] for message in opening] == ["system", "user", "assistant", "user"]
+    assert first["messages"][1]["content"] == "Who leads the West?"
+    assert first["messages"][3]["content"].endswith("[Baseline header season: 2024-25]")
+
+    reddit_result, standings_result = (
+        json.loads(message["content"])
+        for message in second["messages"]
+        if message["role"] == "tool"
+    )
+    assert reddit_result["ok"] is False
+    assert provider.executor.executed == ["get_standings"]
+    # The model sees one row; the browser gets them all.
+    assert len(standings_result["rows"]) == 1
+    assert standings_result["truncated_rows"] == len(conversation.response.data) - 1
+    assert len(conversation.response.data) > 1
+    assert conversation.tool_rounds == 1
+
+
+@pytest.mark.unit
+def test_pick_profit_is_exact_to_the_cent() -> None:
+    from repositories.account import pick_profit_cents
+
+    assert pick_profit_cents(10, 104) == 1040
+    assert pick_profit_cents(100, 130) == 13000
+    assert pick_profit_cents(100, -150) == 6666
+    assert pick_profit_cents(5, -192) == 260

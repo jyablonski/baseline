@@ -3,13 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const refresh = vi.hoisted(() => vi.fn());
 const signOut = vi.hoisted(() => vi.fn());
+const signIn = vi.hoisted(() => vi.fn());
 const actionState = vi.hoisted(() => ({
   current: null as { ok: boolean; message: string } | null,
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
-vi.mock("@/auth", () => ({ signOut }));
-vi.mock("@/app/admin/actions", () => ({ requestJobAction: vi.fn() }));
+vi.mock("@/auth", () => ({ signOut, signIn }));
+vi.mock("@/app/admin/actions", () => ({ requestJobAction: vi.fn(), setFlagAction: vi.fn() }));
 // The form is never submitted here, so the real hook would always report a
 // resting state; stubbing it lets both result branches render.
 vi.mock("react", async () => {
@@ -19,6 +20,8 @@ vi.mock("react", async () => {
 
 import { AdminTable } from "@/components/admin/admin-table";
 import { DbtBuildStatus, DBT_FAILED_NODES_CAP } from "@/components/admin/dbt-build-status";
+import { SignInButtons } from "@/components/account/sign-in-buttons";
+import { FeatureFlags } from "@/components/admin/feature-flags";
 import { JobButtons } from "@/components/admin/job-buttons";
 import { RunsPager } from "@/components/admin/runs-pager";
 import { SignOutButton } from "@/components/admin/sign-out-button";
@@ -134,6 +137,18 @@ describe("SignOutButton", () => {
     await waitFor(() => {
       expect(signOut).toHaveBeenCalledWith({ redirectTo: "/admin/signin" });
     });
+  });
+});
+
+describe("SignInButtons", () => {
+  it("starts the chosen provider's sign-in and returns to the given page", async () => {
+    render(<SignInButtons redirectTo="/picks" />);
+    const github = screen.getByRole("button", { name: "Sign in with GitHub" });
+    const google = screen.getByRole("button", { name: "Sign in with Google" });
+    fireEvent.submit(google.closest("form") as HTMLFormElement);
+    await waitFor(() => expect(signIn).toHaveBeenCalledWith("google", { redirectTo: "/picks" }));
+    fireEvent.submit(github.closest("form") as HTMLFormElement);
+    await waitFor(() => expect(signIn).toHaveBeenCalledWith("github", { redirectTo: "/picks" }));
   });
 });
 
@@ -405,5 +420,65 @@ describe("VmDiagnostics", () => {
     );
     expect(screen.getByText(/stale: the admin-jobs cron/)).toBeInTheDocument();
     expect(screen.getByText("Degraded")).toBeInTheDocument();
+  });
+});
+
+describe("FeatureFlags", () => {
+  afterEach(() => {
+    actionState.current = null;
+  });
+
+  const flags = [
+    {
+      flag_key: "chatbot",
+      enabled: true,
+      description: "Signed-in chat at /chat.",
+      updated_at: new Date().toISOString(),
+      updated_by: "jyablonski",
+    },
+    {
+      flag_key: "picks",
+      enabled: false,
+      description: "Signed-in game picks.",
+      updated_at: new Date().toISOString(),
+      updated_by: null,
+    },
+  ];
+
+  it("lists each flag with its state and who last changed it", () => {
+    render(<FeatureFlags flags={flags} />);
+    const chatbot = screen.getByTestId("flag-chatbot");
+    expect(within(chatbot).getByText("On")).toBeInTheDocument();
+    expect(within(chatbot).getByText("Signed-in chat at /chat.")).toBeInTheDocument();
+    expect(within(chatbot).getByText(/Last changed .* by jyablonski/)).toBeInTheDocument();
+    const picks = screen.getByTestId("flag-picks");
+    expect(within(picks).getByText("Off")).toBeInTheDocument();
+    expect(within(picks).getByText("Never changed")).toBeInTheDocument();
+  });
+
+  it("submits the opposite of the current state for the flag that was clicked", () => {
+    render(<FeatureFlags flags={flags} />);
+    const chatbot = screen.getByTestId("flag-chatbot");
+    expect(within(chatbot).getByRole("button", { name: "Turn off" })).toBeEnabled();
+    // The server action reads these two fields; they are the contract.
+    expect(chatbot.querySelector('input[name="flag_key"]')).toHaveValue("chatbot");
+    expect(chatbot.querySelector('input[name="enabled"]')).toHaveValue("false");
+    const picks = screen.getByTestId("flag-picks");
+    expect(within(picks).getByRole("button", { name: "Turn on" })).toBeInTheDocument();
+    expect(picks.querySelector('input[name="enabled"]')).toHaveValue("true");
+  });
+
+  it("shows the outcome of the last change", () => {
+    actionState.current = { ok: true, message: "chatbot is now off." };
+    const { rerender } = render(<FeatureFlags flags={flags} />);
+    expect(screen.getByText("chatbot is now off.")).toBeInTheDocument();
+    actionState.current = { ok: false, message: "Not authorised." };
+    rerender(<FeatureFlags flags={flags} />);
+    expect(screen.getByText("Not authorised.")).toHaveClass("text-destructive");
+  });
+
+  it("says so when no flags exist", () => {
+    render(<FeatureFlags flags={[]} />);
+    expect(screen.getByText("No feature flags are defined.")).toBeInTheDocument();
   });
 });

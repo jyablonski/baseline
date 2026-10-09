@@ -11,6 +11,7 @@ import type {
   SocialSummary,
   SocialWindowParams,
   ListSocialPostsParams,
+  FeatureFlags,
   GameLogEntry,
   GameLogParams,
   GameCollapse,
@@ -366,6 +367,8 @@ export const api = {
     asPaginated<PlayerSeasonStats>(await fetchApi(`/api/v1/players/${id}/season-stats`)),
 
   getStatus: async () => asData<WarehouseStatus>(await fetchApi("/api/v1/status")),
+
+  getFeatures: async () => asData<FeatureFlags>(await fetchApi("/api/v1/features")),
 
   listGames: async (params: ListGamesParams = {}) =>
     asPaginated<LeagueGame>(

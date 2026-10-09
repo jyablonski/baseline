@@ -8,9 +8,11 @@ gated by GitHub OAuth, so the token never reaches a browser.
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from dependencies import get_admin_repository, require_admin_token
+from dependencies import get_admin_repository, get_flags_repository, require_admin_token
 from repositories.admin import AdminRepository, JobAlreadyPendingError
+from repositories.flags import FlagsRepository
 from schemas import AdminHealth, AdminJob, ItemResponse, JobRequest, PipelineRun
+from schemas.account import FeatureFlag, FlagUpdate
 
 router = APIRouter(dependencies=[Depends(require_admin_token)])
 
@@ -57,3 +59,27 @@ def enqueue_admin_job(
     except JobAlreadyPendingError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return ItemResponse(data=AdminJob.model_validate(job))
+
+
+@router.get("/flags", response_model=list[FeatureFlag])
+def list_admin_flags(
+    repo: FlagsRepository = Depends(get_flags_repository),
+) -> list[FeatureFlag]:
+    return [FeatureFlag.model_validate(flag) for flag in repo.list_flags()]
+
+
+@router.put("/flags/{flag_key}", response_model=ItemResponse[FeatureFlag])
+def set_admin_flag(
+    flag_key: str,
+    request: FlagUpdate,
+    repo: FlagsRepository = Depends(get_flags_repository),
+) -> ItemResponse[FeatureFlag]:
+    """Turn a feature on or off. Takes effect on the next request; no deploy.
+
+    Flags are created by migrations, never here: a typo in the path must be a
+    404, not a new flag nothing reads.
+    """
+    flag = repo.set_flag(flag_key, enabled=request.enabled, updated_by=request.updated_by)
+    if flag is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown feature flag.")
+    return ItemResponse(data=FeatureFlag.model_validate(flag))

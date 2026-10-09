@@ -5,12 +5,11 @@ import { primaryNav } from "./helpers";
 /**
  * The /admin gate, end to end.
  *
- * These run against the real middleware and the real NextAuth config with no
- * ADMIN_GITHUB_LOGINS set, which is the fail-closed case: the allowlist is
- * empty, so every visitor is rejected. Unlike the other specs there is no API
- * mocking, because the redirect happens in middleware before any data fetch —
- * and the admin page is a server component, so mocking window.fetch could not
- * reach it anyway.
+ * These run against the real middleware and the real NextAuth config as an
+ * anonymous visitor. Unlike the other specs there is no API mocking, because
+ * the redirect happens in middleware before any data fetch — and the admin
+ * page is a server component, so mocking window.fetch could not reach it
+ * anyway. Signed-in visitors, owner and otherwise, are in accounts.spec.ts.
  */
 
 test("unauthenticated /admin redirects to the sign-in page", async ({ page }) => {
@@ -26,7 +25,8 @@ test("the sign-in page itself is reachable without a session", async ({ page }) 
   // If this were gated too, every visitor would hit a redirect loop.
   await page.goto("/admin/signin");
   await expect(page).toHaveURL(/\/admin\/signin/);
-  await expect(page.getByRole("button", { name: /Continue with GitHub/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Sign in with GitHub/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Sign in with Google/i })).toBeVisible();
 });
 
 test("nested admin routes are gated, including signin-prefixed paths", async ({ page }) => {
@@ -43,8 +43,8 @@ test("admin is not advertised in the public navigation", async ({ page }) => {
 });
 
 test("an access-denied sign-in shows the allowlist message", async ({ page }) => {
-  // NextAuth redirects here with ?error=AccessDenied when signIn() rejects an
-  // account that is not on the allowlist.
+  // The admin gate redirects here with ?error=AccessDenied when a signed-in
+  // account is not the owner's.
   await page.goto("/admin/signin?error=AccessDenied");
   await expect(page.getByText(/not on the admin allowlist/i)).toBeVisible();
 });

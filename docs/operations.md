@@ -99,12 +99,39 @@ To replace the live database: `make prod-db-restore DUMP=<path> CONFIRM_RESTORE=
 
 ## Admin console
 
-`/admin` shows ingestion, dbt, ML, and VM health, and can re-run jobs. Two independent gates, both **fail closed**:
+`/admin` shows ingestion, dbt, ML, and VM health, can re-run jobs, and holds the feature flags. Two independent gates, both **fail closed**:
 
-- **The page** uses GitHub OAuth with an `ADMIN_GITHUB_LOGINS` allowlist. Unset means nobody gets in, including you.
+- **The page** is for the site owner only. Anyone can sign in with GitHub or Google, so a session proves nothing: the owner is whoever matches `ADMIN_GITHUB_LOGINS` (GitHub login) or `ADMIN_GOOGLE_EMAILS` (a Google address Google reports as verified). Each provider is matched on its own identifier only, so the owner's email on a GitHub profile opens nothing. Both unset means nobody gets in, including you. A signed-in account that is not the owner is redirected to `/admin/signin?error=AccessDenied`.
 - **The API** (`/api/v1/admin/*`) needs `Authorization: Bearer $ADMIN_API_TOKEN`. Unset returns 503 — never open.
 
-The token is held server-side and never reaches the browser. Setup: generate `ADMIN_API_TOKEN` and `AUTH_SECRET`, create a GitHub OAuth app with callback `<origin>/api/auth/callback/github`, then set `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `AUTH_URL`, and `ADMIN_GITHUB_LOGINS`. All are commented in `.env.example`; with none set the console is simply unreachable.
+The token is held server-side and never reaches the browser. Setup: generate `ADMIN_API_TOKEN` and `AUTH_SECRET`, create a GitHub OAuth app with callback `<origin>/api/auth/callback/github` and a Google OAuth client with redirect URI `<origin>/api/auth/callback/google`, then set `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_URL`, `ADMIN_GITHUB_LOGINS`, and `ADMIN_GOOGLE_EMAILS`. All are commented in `.env.example`; with none set the console is simply unreachable.
+
+Sessions issued before Google sign-in was added carry no provider and are refused by the admin gate. Sign in again once.
+
+## Feature flags
+
+`source.feature_flags` holds one row per switchable feature, and the Feature flags card on `/admin` turns each on or off. A change applies to the next request, with no deploy or restart. Current flags:
+
+- `chatbot` — the signed-in chat at `/chat`. Off makes `POST /api/v1/account/chat` return 503 and puts Ask back in the nav.
+- `picks` — game picks on `/schedule` and `/picks`. Off hides them and makes the picks routes return 503. Existing picks are kept.
+
+The API enforces a flag, the UI only reflects it, so a page left open after a flag is switched off still gets refused. `GET /api/v1/features` is the public read, and it reports what the UI should offer rather than the raw flags: `chatbot` is true only when the flag is on **and** `NLP_LLM_API_KEY` is set.
+
+**Chat or Ask, never both.** The header has one tab for questions. It is Chat when `/features` reports `chatbot`, and the rules-based Ask otherwise. `/ask` stays reachable by URL either way, and the Chat page links to it when chat is unavailable. Flags are created by Alembic migrations, never through the API: setting an unknown key is a 404. A flag with no row reads as off.
+
+## Accounts, chat, and picks
+
+Sign-in is open to anyone and is needed only for `/chat` and picks. User data lives in `source.users`, `source.chat_usage`, and `source.picks` (Alembic-owned, written by the API, never read by dbt or Cube). No email is stored; an account is identified by the provider and the provider's account id.
+
+The browser never calls `/api/v1/account/*`. A Next.js server action checks the session, then calls the API with `Authorization: Bearer $ACCOUNTS_API_TOKEN` and the caller's internal id in `X-Baseline-User`. The token is the only reason the API believes that header, so it is separate from `ADMIN_API_TOKEN`, server-side only, and unset returns 503. With it unset sign-in and `/admin` still work; chat and picks report that accounts are unavailable.
+
+**Chat.** `CHAT_DAILY_LIMIT` questions per user per Eastern day (default 10), `CHAT_MAX_TURNS` questions per conversation (default 6), one in-flight question per user. Every ask is a row in `source.chat_usage` with its backend, model, token counts, tool rounds, outcome, and latency; the text of the question is not stored. Chat is only offered once `NLP_LLM_API_KEY` is set, and answers through the same OpenAI-compatible adapter `/ask` uses (`NLP_LLM_BASE_URL`, `NLP_LLM_MODEL`). `NLP_BACKEND` governs only `/ask`. Once `CHAT_GLOBAL_DAILY_LIMIT` model-backed asks have been made in a day (default 250) chat answers from the rules backend for everyone until midnight. The model is not given the Reddit tool, sees at most `CHAT_MODEL_ROW_CAP` rows of a result, and a reply with no rows behind it is replaced by a fixed "I don't have that". The suggested follow-up questions under an answer are fixed text per tool (`services/frontend/src/lib/chat.ts`), not model output.
+
+**Picks.** One pick per user and game, open until tip (or until the start of game day when no tip time is on file). Picking a winner is one click and counts toward the record. A stake is optional, in whole dollars from $1 to $1,000 (`MAX_STAKE`), and settles at the consensus moneyline stored with the pick when it was saved. There is no balance: nobody is given money to start with, a stake is not checked against anything, and the only money figure is the net of what settled stakes have won and lost, kept to the cent. It has no cash value. Picks are graded at read time from `gold.fct_games_schedule`, and compared with the champion model's favourite from `gold.fct_game_predictions` for the "vs. the model" figure: +1 where the pick won and the model's favourite lost, −1 the other way round.
+
+**Stale sessions.** A session cookie carries the account id. If the API no longer has that row (the account was deleted from another device, or the table was rebuilt), the first call returns 404; the server action then re-registers the same provider identity, rewrites the cookie, and retries once. The visitor sees nothing. A pick sheet that fails for any other reason is reported on `/schedule` rather than silently dropping the pick column.
+
+To block an account: `UPDATE source.users SET status = 'blocked' WHERE user_id = '<id>'`. To review usage: `SELECT usage_day, backend, outcome, count(*), sum(input_tokens), sum(output_tokens) FROM source.chat_usage GROUP BY 1, 2, 3 ORDER BY 1 DESC`. A user can delete their own account, with its picks and usage rows, from `/account`.
 
 ## Admin jobs
 

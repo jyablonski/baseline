@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminTable } from "@/components/admin/admin-table";
-import { AdminApiError, fetchAdminHealth } from "@/lib/admin";
+import { AdminApiError, fetchAdminFlags, fetchAdminHealth, type FeatureFlag } from "@/lib/admin";
 import {
   LEVEL_BADGE,
   LEVEL_LABEL,
@@ -23,11 +23,12 @@ import {
 } from "@/lib/admin-status";
 import { SignOutButton } from "@/components/admin/sign-out-button";
 import { JobButtons } from "@/components/admin/job-buttons";
+import { FeatureFlags } from "@/components/admin/feature-flags";
 import { DbtBuildStatus } from "@/components/admin/dbt-build-status";
 import { RunsPager } from "@/components/admin/runs-pager";
 import { VmDiagnostics } from "@/components/admin/vm-diagnostics";
 import { auth } from "@/auth";
-import { adminJobsEnabled, isAllowedLogin } from "@/lib/admin-access";
+import { adminJobsEnabled, isAdminUser } from "@/lib/admin-access";
 import { redirect } from "next/navigation";
 
 // Operational data: never statically rendered, never cached.
@@ -45,7 +46,7 @@ export default async function AdminPage({
   // renders operational data should not depend on one matcher regex being
   // right. Cheap to re-check, expensive to get wrong.
   const session = await auth();
-  if (!isAllowedLogin(session?.user?.login)) {
+  if (!isAdminUser(session?.user)) {
     redirect("/admin/signin");
   }
 
@@ -77,6 +78,14 @@ export default async function AdminPage({
         </Card>
       </article>
     );
+  }
+
+  // Its own request so a flags failure cannot take the health view down with it.
+  let flags: FeatureFlag[] | null = null;
+  try {
+    flags = await fetchAdminFlags();
+  } catch {
+    flags = null;
   }
 
   const overall = overallLevel(health);
@@ -157,6 +166,19 @@ export default async function AdminPage({
       </Card>
 
       <VmDiagnostics diagnostics={diagnostics} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Feature flags</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {flags === null ? (
+            <p className="text-sm text-muted-foreground">Could not load the feature flags.</p>
+          ) : (
+            <FeatureFlags flags={flags} />
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -427,7 +449,9 @@ function AdminHeader() {
     <header className="flex items-center justify-between gap-4">
       <div>
         <h1 className="type-page">Admin</h1>
-        <p className="text-sm text-muted-foreground">Ingestion, dbt, and ML health. Read-only.</p>
+        <p className="text-sm text-muted-foreground">
+          Ingestion, dbt, and ML health, plus feature switches.
+        </p>
       </div>
       <SignOutButton />
     </header>

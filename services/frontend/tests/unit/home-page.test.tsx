@@ -38,6 +38,7 @@ const EAST = ["BOS", "NYK", "CLE", "ORL", "DET", "MIL", "IND", "ATL", "MIA", "PH
 
 vi.mock("@/lib/api", () => ({
   api: {
+    getStatus: async () => ({ last_scraped_at: "2026-10-08T02:27:00Z" }),
     listSeasons: async () => ({
       data: seasons.map((season) => ({ season })),
       meta: { total: seasons.length, limit: seasons.length, offset: 0 },
@@ -136,6 +137,11 @@ describe("home desk", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("carries the scrape stamp, which is no longer in the header", async () => {
+    renderHome();
+    expect(await screen.findByText("Scraped 8 Oct 2026, 02:27 UTC")).toBeInTheDocument();
   });
 
   it("shows last night's slate, capped, and leaves older games out", async () => {

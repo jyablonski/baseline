@@ -32,6 +32,7 @@ describe("header team profile", () => {
     );
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).getByRole("link", { name: "Teams" })).toHaveClass("ct-tab-active");
-    expect(screen.getByText(/Scraped —/)).toBeInTheDocument();
+    // The scrape stamp lives on the home page now, not in the chrome.
+    expect(screen.queryByText(/Scraped/)).not.toBeInTheDocument();
   });
 });

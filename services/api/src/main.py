@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import (
+    account,
     admin,
+    features,
     games,
     players,
     predictions,
@@ -37,6 +39,8 @@ def create_app() -> FastAPI:
     app.include_router(transactions.router, prefix="/api/v1/transactions", tags=["transactions"])
     app.include_router(status.router, prefix="/api/v1/status", tags=["status"])
     app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+    app.include_router(account.router, prefix="/api/v1/account", tags=["account"])
+    app.include_router(features.router, prefix="/api/v1/features", tags=["features"])
 
     @app.get("/health")
     def health():
