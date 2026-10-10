@@ -2,7 +2,16 @@
 
 `services/mcp` exposes NBA analytics as MCP tools for LLM hosts like Claude Desktop, so an agent can query the warehouse without writing SQL.
 
-It is a FastMCP server over the Cube semantic layer. Ask uses the same named operations — see [ask.md](ask.md).
+It is a FastMCP server over the Cube semantic layer. Ask and the signed-in chat use the same named operations — see [ask.md](ask.md).
+
+## One tool list, two surfaces
+
+The tools are not defined in `services/mcp`. They live in `lib/baseline-analytics` (`baseline_analytics.tools`): one `ToolSpec` per tool, with its name, description, JSON-schema parameters, and handler. Two things read that list:
+
+- **The MCP server** registers every entry with FastMCP, for outside clients such as Claude Desktop.
+- **The API's LLM adapter** (`services/api/src/services/nlp/llm_tools.py`) sends the same entries to the model as function tools, for `/chat` and for `/ask` when `NLP_BACKEND=llm`. Chat withholds `get_reddit_posts`.
+
+The API does not call the MCP server, and the model provider is never handed the MCP URL. The API runs each tool itself, in-process, so it can cap the rows the model sees, cap tool rounds, and show the rows under the answer. Both surfaces go through the same `CubeAnalytics` operations and the same Cube client in the same package, so a tool or filter added once reaches both.
 
 ## Running it
 
@@ -31,9 +40,10 @@ Player and career:
 
 Team and league:
 
-- `get_team_record` — W/L plus filters (opponent, home/away, arena city, season)
-- `get_standings` — conference table; falls back to Regular Season W–L when official rows are missing
-- `get_team_payroll`, `get_player_contract` — remaining-year snapshots, not a paid ledger
+- `get_team_record` — W/L plus filters (opponent, home/away, arena city, season). The game-by-game list is left out unless `include_games` is set
+- `get_standings` — conference table with `streak`, `last_10`, and games back; falls back to Regular Season W–L when official rows are missing
+- `get_team_payroll`, `get_player_contract` — remaining-year snapshots, not a paid ledger. Payroll is one team total with no players in it
+- `get_team_contracts` — every contract on a team for one season, largest first (default: the current contract season)
 
 Transactions:
 
@@ -42,7 +52,7 @@ Transactions:
 
 Games and feeds:
 
-- `get_games_schedule` — all-status slate, upcoming scores null, with `national_tv` where ESPN lists a national broadcast
+- `get_games_schedule` — games earliest first, upcoming scores null, with `national_tv` where ESPN lists a national broadcast. Filters: `team_abbreviation`, `opponent_abbreviation`, `location` (`home` / `away`, relative to the team), `status`, `season`, `from_date` / `to_date`, and `limit` (default 50, max 200). Unfiltered it is only the first 50 games, so always narrow it. There is no city filter: "Pistons in Chicago" is `team_abbreviation=DET`, `opponent_abbreviation=CHI`, `location=away`
 - `get_game_predictions` — Elo pregame WP, not a betting line
 - `get_play_by_play` — actions for one game
 - `get_player_injuries` — current snapshot
@@ -53,7 +63,10 @@ Games and feeds:
 
 Escape hatch:
 
-- `query_cube` — Cube query JSON (`measures`, `dimensions`, `filters`, `timeDimensions`, `limit`). Unknown members are rejected.
+- `get_cube_schema` — measures and dimensions, with types and any member notes, for the cubes you name; with none, the list of cubes. Call it before `query_cube`
+- `query_cube` — Cube query JSON (`measures`, `dimensions`, `filters`, `timeDimensions`, `order`, `limit`). Unknown members are rejected.
+
+Every tool rejects an argument it does not declare instead of ignoring it, so a filter that does not exist is an error, never a quietly unfiltered result.
 
 Free-form gold SQL (`query_nba_data`) was removed and is not coming back.
 
@@ -65,7 +78,13 @@ Free-form gold SQL (`query_nba_data`) was removed and is not coming back.
 
 ## Adding a tool
 
-Cube member → optional rules intent on `/ask` → the same named MCP tool (or just `query_cube`).
+Cube member → a query builder in `baseline_analytics/queries.py` → a method on `CubeAnalytics` in `operations.py` → a `ToolSpec` in `tools.py` (or just use `query_cube`). That one entry is what MCP and chat both serve; add an optional rules intent on `/ask` if the question should work without a model. Tests go in `lib/baseline-analytics/tests` (`make test-lib`).
+
+A tool's description and parameters are sent to the model on every chat question, so keep them as short as they can be while still steering the model to the right filter. The same goes for what a tool returns: every row is re-sent on each later round of the same question, so give a tool a `limit` or leave bulky fields out by default.
+
+### What a chat question costs
+
+Each round-trip to the model carries the tool definitions (about 1,750 tokens), the instructions, and an index of cube names with a one-line description each (about 725 tokens together): roughly 2,500 tokens before the question and any rows. The full member list for all cubes, about 3,000 tokens, is deliberately not in the prompt; the model fetches members with `get_cube_schema` only when it needs `query_cube`. A question answered by one named tool is two round-trips, about 5,000 to 6,500 input tokens; a `query_cube` question adds a round. The provider caches the repeated prefix, so the second and later rounds are billed mostly at its cached rate. `source.chat_usage` records total input tokens and does not separate cached ones.
 
 Do not add a gold-SQL helper to the API or MCP.
 

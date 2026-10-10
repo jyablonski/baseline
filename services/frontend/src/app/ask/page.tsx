@@ -5,15 +5,9 @@ import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
+import { ResultTable } from "@/components/result-table";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
-import {
-  askDisplayRows,
-  askTableColumns,
-  askTableLabel,
-  formatAskCell,
-  isAskNumericColumn,
-} from "@/lib/ask-table";
 import type { NlpQueryResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -174,35 +168,4 @@ function AskDeepLink({ text }: { text: string }) {
     );
   }
   return null;
-}
-
-function ResultTable({ rows }: { rows: Record<string, unknown>[] }) {
-  const display = askDisplayRows(rows);
-  const columns = askTableColumns(display);
-  if (columns.length === 0) return null;
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="data-table">
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th key={column}>{askTableLabel(column)}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {display.map((row, index) => (
-            <tr key={index}>
-              {columns.map((column) => (
-                <td key={column} className={isAskNumericColumn(column) ? "tabular" : undefined}>
-                  {formatAskCell(row[column], column)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }

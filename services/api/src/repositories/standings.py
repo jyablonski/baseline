@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
-from services.standings_rank import apply_derived_ranks
+from baseline_analytics.standings_rank import apply_derived_ranks
 from sqlalchemy.orm import Session
 
 from queries.standings import LIST_STANDINGS, LIST_STANDINGS_COUNT, TEAM_STANDING

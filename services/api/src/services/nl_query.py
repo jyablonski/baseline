@@ -10,8 +10,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from cube.analytics import CubeAnalytics
-from cube.errors import CubeError
+from baseline_analytics.errors import CubeError
+from baseline_analytics.operations import CubeAnalytics
 
 from schemas.game import QueryResponse
 

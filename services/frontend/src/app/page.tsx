@@ -11,6 +11,7 @@ import { api, queryErrorMessage } from "@/lib/api";
 import {
   formatGamesBack,
   formatRecord,
+  formatScrapedAt,
   formatSlateDate,
   formatTimeET,
   isoDateET,
@@ -66,6 +67,11 @@ function HomeDesk() {
   const standingsQuery = useQuery({
     queryKey: ["standings", season],
     queryFn: () => api.listStandings({ season: season || undefined }),
+  });
+
+  const statusQuery = useQuery({
+    queryKey: ["status"],
+    queryFn: () => api.getStatus(),
   });
 
   const results = sameDay(gamesQuery.data?.data ?? []);
@@ -162,6 +168,10 @@ function HomeDesk() {
           </section>
         </aside>
       </div>
+
+      <p className="type-timestamp border-t border-rule pt-[var(--ct-space-3)]">
+        Scraped {formatScrapedAt(statusQuery.data?.last_scraped_at)}
+      </p>
     </div>
   );
 }

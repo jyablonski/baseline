@@ -1,6 +1,6 @@
 .PHONY: up down stop logs \
 	test test-api test-scraper test-mcp test-cube test-ml test-frontend test-frontend-e2e test-dbt \
-	test-migrate \
+	test-migrate test-lib test-parity \
 	build build-multiarch ensure-buildx-builder remove-buildx-builder sync db-migrate migrate \
 	pipeline-status pipeline-enable pipeline-disable scrape dbt ml ml-train ml-snapshot ml-eval ml-backfill refresh \
 	refresh-daily refresh-daily-once seed-demo seed-demo-clean \
@@ -291,6 +291,7 @@ remove-buildx-builder: ## Remove the docker-container buildx builder (BuildKit) 
 
 sync: ## Refresh uv locks for all Python services
 	uv lock --python 3.14
+	cd lib/baseline-analytics && uv lock --python 3.14
 	cd services/migrate && uv lock --python 3.14
 	cd services/api && uv lock --python 3.14
 	cd services/scraper && uv lock --python 3.14
@@ -373,7 +374,7 @@ seed-demo-clean: ## Delete everything seed-demo inserted, then rebuild gold
 
 # Every suite runs its integration tests inline: the Testcontainers fixtures skip
 # themselves when Docker is not reachable, so there is nothing to deselect.
-test: test-api test-scraper test-mcp test-cube test-ml test-migrate test-frontend test-dbt ## Run all automated suites (unit + integration + dbt e2e)
+test: test-lib test-api test-scraper test-mcp test-cube test-ml test-migrate test-frontend test-dbt ## Run all automated suites (unit + integration + dbt e2e)
 
 test-migrate: ## Alembic unit tests + upgrade head on throwaway Postgres
 	cd services/migrate && uv sync --group dev && uv run pytest
@@ -384,8 +385,14 @@ quality: ## Repo pre-commit hooks on all files (ruff --fix fails CI if it leaves
 	fi
 	uv run --group local pre-commit run --all-files
 
+test-lib: ## Shared baseline-analytics package (Cube operations and tools used by api and mcp)
+	cd lib/baseline-analytics && uv sync --group dev && uv run pytest
+
 test-api: ## API tests with coverage (Testcontainers suites skip without Docker)
 	cd services/api && uv sync --group dev && uv run pytest
+
+test-parity: ## Only the API-vs-Cube parity checks (real Cube container; also part of test-api)
+	cd services/api && uv sync --group dev && uv run pytest tests/test_cube_parity_integration.py --no-cov
 
 test-scraper: ## Scraper tests with coverage (Testcontainers suites skip without Docker)
 	cd services/scraper && uv sync --group dev && uv run pytest

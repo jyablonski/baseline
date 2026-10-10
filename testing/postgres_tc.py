@@ -23,6 +23,9 @@ INIT_SQL = REPO_ROOT / "db" / "init.sql"
 GOLD_SCHEMA_SQL = _HERE / "analytics_integration.sql"
 GOLD_SEED_SQL = _HERE / "analytics_integration_seed.sql"
 MIGRATE_DIR = REPO_ROOT / "services" / "migrate"
+POSTGRES_USER = "nba_user"
+POSTGRES_PASSWORD = "nba_pass"
+POSTGRES_DB = "nba"
 
 
 def docker_available() -> bool:
@@ -108,16 +111,24 @@ def bootstrap_engine(
     return engine
 
 
-def start_postgres_container():
-    """Start a Postgres 16 container and return (container, sqlalchemy_url)."""
+def start_postgres_container(network=None, network_alias: str | None = None):
+    """Start a Postgres 16 container and return (container, sqlalchemy_url).
+
+    Pass a Testcontainers network and alias when another container (Cube) has
+    to reach this database by name; the returned URL is still the host's.
+    """
     from testcontainers.community.postgres import PostgresContainer
 
     container = PostgresContainer(
         image="postgres:16.15-alpine",
-        username="nba_user",
-        password="nba_pass",
-        dbname="nba",
+        username=POSTGRES_USER,
+        password=POSTGRES_PASSWORD,
+        dbname=POSTGRES_DB,
     )
+    if network is not None:
+        container = container.with_network(network)
+        if network_alias:
+            container = container.with_network_aliases(network_alias)
     container.start()
     # SQLAlchemy + psycopg2 URL (testcontainers may return psycopg driver URL).
     url = container.get_connection_url()

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cube.analytics import CubeAnalytics
+from baseline_analytics.operations import CubeAnalytics
 from services.nlp.llm_client import LlmClient
 from services.nlp.llm_provider import LlmNlpProvider
 from services.nlp.protocol import NlpProvider

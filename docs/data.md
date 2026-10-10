@@ -144,6 +144,6 @@ Salary and payroll are Basketball-Reference **remaining-year snapshots**, not a 
 
 Player `position` is a full name ("Point Guard") from `stg_players` onward. `source.players` keeps the roster code, which may be `PG`, an older `G-F`, or the `1`–`5` sort key an earlier scrape stored; all of them map to the same label.
 
-`fct_standings` is a season-to-date upsert. Joining it onto a past game does not give you the standings as of that night.
+`fct_standings` derives what the source leaves out: `streak` and `last_10` from the team's own Regular Season Finals (Basketball-Reference's standings carry no form columns), and `games_back` for a conference leader, which the source leaves empty. The pages, Cube, and MCP all read those columns, so there is one definition. `fct_standings` is a season-to-date upsert. Joining it onto a past game does not give you the standings as of that night.
 
 Transactions are keyed by `sha256(transaction_date|description)`, so a reworded Basketball-Reference entry arrives as a new row rather than an edit. Draft picks are prose with no link on the source page and never become participants; a player named inside a pick clause is linked and is kept. A transaction naming a player that `scrape-players` has not seen yet drops that participant and picks it up on a later run — transactions reference players, they never create or reactivate them.

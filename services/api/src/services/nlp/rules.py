@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cube.analytics import CubeAnalytics
+from baseline_analytics.operations import CubeAnalytics
 from services.nl_query import NaturalLanguageQueryService
 
 from schemas.game import QueryResponse

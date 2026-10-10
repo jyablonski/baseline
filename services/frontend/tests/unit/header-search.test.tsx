@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -30,9 +30,7 @@ describe("header search", () => {
         <Header />
       </Providers>
     );
-    await waitFor(() => {
-      expect(screen.getByText(/4 Sep 2026/)).toBeInTheDocument();
-    });
+    expect(screen.queryByText(/Scraped/)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Player or team")).not.toBeInTheDocument();
     expect(screen.queryByText("⌘K")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));

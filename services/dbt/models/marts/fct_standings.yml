@@ -5,6 +5,9 @@ models:
     description: >
       Season-to-date Regular Season standings joined to team attributes.
       Grain is team_id x season x season_type; as_of_date is the scrape watermark.
+      The source has no form columns and no games_back for a conference leader,
+      so streak, last_10 and the missing games_back are derived here, once, for
+      the API, Cube, and MCP alike.
     columns:
       - name: playoff_seed
         description: >
@@ -41,6 +44,20 @@ models:
                 min_value: 1
                 max_value: 15
                 row_condition: "conference_rank is not null"
+      - name: games_back
+        description: >
+          Games behind the conference leader. The scraped value when there is one;
+          otherwise ((leader wins - wins) + (losses - leader losses)) / 2, which is
+          0 for the leader.
+      - name: streak
+        description: >
+          Current run of results, e.g. W3 or L1. The scraped value when there is one;
+          otherwise counted from the team's most recent Regular Season Finals in
+          fct_team_game_results. Null before a team's first game of the season.
+      - name: last_10
+        description: >
+          Wins-losses over the last ten Regular Season Finals, e.g. 8-2. Same
+          source and fallback as streak.
       - name: wins
         description: Regular Season wins to date.
         data_tests:

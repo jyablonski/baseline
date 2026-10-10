@@ -8,6 +8,16 @@ export const PRIMARY_NAV = [
   { href: "/about", label: "About" },
 ] as const;
 
+/**
+ * The primary tabs for this visitor. Ask and Chat share one slot: Chat when
+ * the chatbot is available, the rules-based Ask otherwise. Never both.
+ */
+export function primaryNav(chatbot: boolean) {
+  return PRIMARY_NAV.map((item) =>
+    item.href === "/ask" && chatbot ? { href: "/chat", label: "Chat" } : item
+  );
+}
+
 export function isNavActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/players") return pathname === "/players" || pathname.startsWith("/players/");

@@ -39,7 +39,7 @@ To inspect production meta, ask from the API container — it shares Cube's netw
 ```bash
 docker compose exec -T api python -c '
 import os
-from cube.client import CubeClient
+from baseline_analytics import CubeClient
 meta = CubeClient(os.environ["CUBE_API_URL"], os.environ["CUBEJS_API_SECRET"]).meta()
 print([c["name"] for c in meta["cubes"]])
 '
@@ -74,7 +74,7 @@ Cube tests enforce this on every primary key. `public: true` controls semantic v
 
 1. Add the dimension or measure to the right cube YAML over a gold relation.
 2. Set `public: true` if it is a primary key used by API, MCP, or Ask.
-3. Update the named operation and its tests if you add a wrapper.
+3. Update the named operation and its tests in `lib/baseline-analytics` if you add a wrapper.
 4. Check `/meta` and run the Cube tests before publishing the image.
 
 Fix the model or the requested member list. Never add a gold-SQL fallback.

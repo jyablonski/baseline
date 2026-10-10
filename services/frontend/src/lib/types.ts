@@ -716,3 +716,79 @@ export type BoxScoreRow = {
   /** Game-level MVP score: box score scaled up in a win, down in a loss. */
   mvp_game_score?: number | null;
 };
+
+export type ChatQuota = {
+  daily_limit: number;
+  remaining: number;
+  resets_at: string;
+  /** Questions one conversation may hold. */
+  max_turns: number;
+};
+
+export type AccountProfile = {
+  user: {
+    user_id: string;
+    provider: string;
+    display_name: string | null;
+    status: string;
+    created_at: string;
+    last_seen_at: string;
+  };
+  chat: ChatQuota;
+};
+
+export type ChatTurn = { role: "user" | "assistant"; content: string };
+
+export type ChatReply = {
+  answer: string;
+  data: Record<string, unknown>[];
+  /** Which tool the rows came from. */
+  source: string | null;
+  backend: "llm" | "rules";
+  quota: ChatQuota;
+};
+
+export type PickResult = "pending" | "won" | "lost" | "void";
+
+export type UserPick = {
+  game_id: string;
+  picked_team_id: string;
+  /** Optional. Null is a pick that only counts toward the record. */
+  stake: number | null;
+  /** The consensus price when the pick was saved, which a stake settles at. */
+  moneyline: number | null;
+  result: PickResult;
+  /** Winnings, the stake as a negative, or null while open, void or unstaked. */
+  profit: number | null;
+  /** Did the model's favourite win? Null while open or when the model had no pick. */
+  model_correct: boolean | null;
+  game_date: string | null;
+  start_time_et: string | null;
+  game_status: string | null;
+  home_team_id: string | null;
+  home_team_abbreviation: string | null;
+  home_score: number | null;
+  away_team_id: string | null;
+  away_team_abbreviation: string | null;
+  away_score: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PickSummary = {
+  wins: number;
+  losses: number;
+  pending: number;
+  /** What settled stakes have won less what they lost. There is no balance. */
+  net: number;
+  /** Riding on picks that have not finished. */
+  staked_open: number;
+  /** Net picks ahead of (or behind) the model over `model_games` settled games. */
+  vs_model: number;
+  model_games: number;
+};
+
+export type PickSheet = { summary: PickSummary; picks: UserPick[] };
+
+/** Switchable features, keyed by flag. A missing key means off. */
+export type FeatureFlags = Record<string, boolean>;

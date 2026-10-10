@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
 
-import { Button } from "@/components/ui/button";
+import { SignInButtons } from "@/components/account/sign-in-buttons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { signIn } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "Admin sign-in" };
 
-// NextAuth redirects here with ?error=... when the allowlist rejects an account.
+// The admin gate redirects here with ?error=AccessDenied when a signed-in
+// account is not the owner's.
 const ERROR_COPY: Record<string, string> = {
-  AccessDenied: "That GitHub account is not on the admin allowlist.",
-  Configuration: "GitHub OAuth is not configured on this deployment.",
+  AccessDenied: "That account is not on the admin allowlist.",
+  Configuration: "Sign-in is not configured on this deployment.",
   Verification: "That sign-in link expired. Try again.",
 };
 
@@ -34,22 +34,11 @@ export default async function AdminSignInPage({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            This area is restricted to the site owner. Sign in with the allowlisted GitHub account.
-          </p>
+          <p className="text-sm text-muted-foreground">Restricted to the site owner.</p>
           {message ? (
             <p className="bg-destructive/10 px-3 py-2 text-sm text-destructive">{message}</p>
           ) : null}
-          <form
-            action={async () => {
-              "use server";
-              await signIn("github", { redirectTo: "/admin" });
-            }}
-          >
-            <Button type="submit" className="w-full">
-              Continue with GitHub
-            </Button>
-          </form>
+          <SignInButtons redirectTo="/admin" />
         </CardContent>
       </Card>
     </div>

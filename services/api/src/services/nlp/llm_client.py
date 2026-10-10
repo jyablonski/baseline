@@ -24,6 +24,9 @@ class LlmToolCall:
 class LlmTurn:
     content: str | None
     tool_calls: list[LlmToolCall] = field(default_factory=list)
+    # From the response's usage block; zero when the provider reports none.
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class LlmClient(Protocol):
@@ -59,6 +62,8 @@ class HttpLlmClient:
         api_key: str | None,
         base_url: str,
         model: str,
+        max_output_tokens: int | None = None,
+        reasoning_effort: str | None = None,
         opener: Any | None = None,
     ) -> None:
         if not api_key:
@@ -66,6 +71,8 @@ class HttpLlmClient:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.max_output_tokens = max_output_tokens
+        self.reasoning_effort = reasoning_effort
         self._opener = opener or urllib.request.urlopen
 
     def complete(
@@ -74,12 +81,16 @@ class HttpLlmClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
     ) -> LlmTurn:
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "tools": tools,
             "tool_choice": "auto",
         }
+        if self.max_output_tokens:
+            payload["max_completion_tokens"] = self.max_output_tokens
+        if self.reasoning_effort:
+            payload["reasoning_effort"] = self.reasoning_effort
         request = urllib.request.Request(
             f"{self.base_url}/chat/completions",
             data=json.dumps(payload).encode(),
@@ -97,10 +108,22 @@ class HttpLlmClient:
         return parse_chat_completion(body)
 
 
+def _token_count(raw: Any) -> int:
+    return raw if isinstance(raw, int) and raw > 0 else 0
+
+
 def parse_chat_completion(body: dict[str, Any]) -> LlmTurn:
+    usage = body.get("usage") or {}
+    input_tokens = _token_count(usage.get("prompt_tokens"))
+    output_tokens = _token_count(usage.get("completion_tokens"))
     choices = body.get("choices") or []
     if not choices:
-        return LlmTurn(content=None, tool_calls=[])
+        return LlmTurn(
+            content=None,
+            tool_calls=[],
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
     message = choices[0].get("message") or {}
     raw_calls = message.get("tool_calls") or []
     calls: list[LlmToolCall] = []
@@ -117,6 +140,8 @@ def parse_chat_completion(body: dict[str, Any]) -> LlmTurn:
     return LlmTurn(
         content=content if isinstance(content, str) else None,
         tool_calls=calls,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
     )
 
 

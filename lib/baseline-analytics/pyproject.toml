@@ -1,0 +1,44 @@
+[project]
+name = "baseline-analytics"
+version = "0.1.0"
+description = "Named analytics operations and tools over Cube, shared by the API and the MCP server."
+requires-python = ">=3.14,<3.15"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest-cov==7.1.0",
+    "pytest==9.1.1",
+    "ty==0.0.78",
+]
+
+[build-system]
+requires = ["hatchling==1.32.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/baseline_analytics"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--cov=baseline_analytics",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=90",
+    "--color=yes",
+]
+markers = [
+    "unit: Unit tests that don't require external dependencies",
+]
+
+# Anchors ty to this package so it does not walk up and type-check the whole
+# repo against this venv.
+[tool.ty.src]
+include = ["src"]

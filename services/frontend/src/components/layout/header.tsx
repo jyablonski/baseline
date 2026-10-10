@@ -3,25 +3,39 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 import { Menu, X } from "lucide-react";
 
+import { ProfileMenu } from "@/components/account/profile-menu";
 import { BaselineWordmark } from "@/components/brand/baseline-wordmark";
-import { api } from "@/lib/api";
-import { formatScrapedAt } from "@/lib/format";
-import { isNavActive, PRIMARY_NAV } from "@/lib/nav";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { useAccount, useFeatures } from "@/lib/account";
+import { isNavActive, primaryNav } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 export function Header() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const statusQuery = useQuery({
-    queryKey: ["status"],
-    queryFn: () => api.getStatus(),
-  });
-
-  const scraped = formatScrapedAt(statusQuery.data?.last_scraped_at);
+  const account = useAccount();
+  const features = useFeatures();
+  // The header hydrates late, inside its own Suspense boundary, by which time
+  // a page may already have loaded the session and the flags. The server
+  // rendered neither, so the first client render must not use them either.
+  const hydrated = useHydrated();
+  const accountIsLoading = !hydrated || account.isLoading;
+  const tabs = primaryNav(hydrated && features.chatbot);
+  const signInHref = `/signin?callbackUrl=${encodeURIComponent(pathname)}`;
+  // The narrow layout has no room for a dropdown, so the same destinations
+  // are listed flat. Empty until the session is known, so a signed-in visitor
+  // never sees "Sign in" flash past.
+  const mobileAccountLinks = accountIsLoading
+    ? []
+    : account.account
+      ? [
+          ...(features.picks ? [{ href: "/picks", label: "Your picks" }] : []),
+          { href: "/account", label: "Account" },
+        ]
+      : [{ href: signInHref, label: "Sign in" }];
 
   return (
     <header className="sticky top-0 z-20 border-b border-rule-strong bg-raised">
@@ -31,7 +45,7 @@ export function Header() {
         </Link>
 
         <nav aria-label="Primary" className="hidden h-full items-center gap-5 md:flex">
-          {PRIMARY_NAV.map((item) => {
+          {tabs.map((item) => {
             const active = isNavActive(pathname, item.href);
             return (
               <Link
@@ -54,15 +68,24 @@ export function Header() {
           {menuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
         </button>
 
-        <p className="ml-auto hidden type-timestamp shrink-0 whitespace-nowrap md:block">
-          Scraped {scraped}
-        </p>
+        <nav
+          aria-label="Account"
+          className="ml-auto hidden h-full shrink-0 items-center gap-4 md:flex"
+        >
+          {accountIsLoading ? null : account.account ? (
+            <ProfileMenu name={account.account.name} showPicks={features.picks} />
+          ) : (
+            <Link href={signInHref} className="ct-tab">
+              Sign in
+            </Link>
+          )}
+        </nav>
       </div>
 
       {menuOpen ? (
         <div className="border-t border-rule px-[14px] py-3 md:hidden">
           <nav aria-label="Primary mobile" className="flex flex-col gap-2">
-            {PRIMARY_NAV.map((item) => (
+            {tabs.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -76,7 +99,23 @@ export function Header() {
               </Link>
             ))}
           </nav>
-          <p className="type-timestamp mt-3">Scraped {scraped}</p>
+          {mobileAccountLinks.length > 0 ? (
+            <nav
+              aria-label="Account mobile"
+              className="mt-2 flex flex-col gap-2 border-t border-rule pt-2"
+            >
+              {mobileAccountLinks.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="type-nav py-1 text-ink-2"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          ) : null}
         </div>
       ) : null}
     </header>

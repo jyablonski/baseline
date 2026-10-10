@@ -4,7 +4,9 @@ import {
   AdminApiError,
   JOB_TYPES,
   enqueueAdminJob,
+  fetchAdminFlags,
   fetchAdminHealth,
+  setAdminFlag,
   isJobType,
 } from "@/lib/admin";
 
@@ -168,6 +170,92 @@ describe("enqueueAdminJob", () => {
     await expect(enqueueAdminJob("ml", "someone")).rejects.toMatchObject({
       status: 502,
       message: "Admin API returned 502 Bad Gateway",
+    });
+  });
+});
+
+describe("feature flags client", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  const flag = {
+    flag_key: "chatbot",
+    enabled: false,
+    description: "Chat.",
+    updated_at: "2026-10-09T12:00:00Z",
+    updated_by: "jyablonski",
+  };
+
+  it("fails closed with a 503 when no admin token is configured", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchAdminFlags()).rejects.toMatchObject({ status: 503 });
+    await expect(setAdminFlag("chatbot", false, "me")).rejects.toMatchObject({ status: 503 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("lists flags with the admin token", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "admin-secret");
+    vi.stubEnv("ADMIN_API_URL", "http://api:8000");
+    const fetchMock = vi.fn<FetchMock>(async () => jsonResponse([flag]));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchAdminFlags()).resolves.toEqual([flag]);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://api:8000/api/v1/admin/flags");
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer admin-secret");
+    expect(init?.cache).toBe("no-store");
+  });
+
+  it("surfaces a failed list as an AdminApiError", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "admin-secret");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<FetchMock>(async () => jsonResponse({}, 401, "Unauthorized"))
+    );
+    await expect(fetchAdminFlags()).rejects.toMatchObject({
+      message: "Admin API returned 401 Unauthorized",
+      status: 401,
+    });
+  });
+
+  it("sets a flag, naming who changed it", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "admin-secret");
+    vi.stubEnv("ADMIN_API_URL", "http://api:8000");
+    const fetchMock = vi.fn<FetchMock>(async () => jsonResponse({ data: flag }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(setAdminFlag("chat/bot", false, "jyablonski")).resolves.toEqual(flag);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://api:8000/api/v1/admin/flags/chat%2Fbot");
+    expect(init?.method).toBe("PUT");
+    expect(JSON.parse(init?.body as string)).toEqual({ enabled: false, updated_by: "jyablonski" });
+  });
+
+  it("passes a 404 message through and falls back when there is none", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "admin-secret");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<FetchMock>(async () => jsonResponse({ detail: "Unknown feature flag." }, 404))
+    );
+    await expect(setAdminFlag("nope", true, "me")).rejects.toMatchObject({
+      message: "Unknown feature flag.",
+      status: 404,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<FetchMock>(async () => new Response("nope", { status: 502, statusText: "Bad Gateway" }))
+    );
+    await expect(setAdminFlag("chatbot", true, "me")).rejects.toMatchObject({
+      message: "Admin API returned 502 Bad Gateway",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<FetchMock>(async () => jsonResponse({ detail: [{ msg: "bad" }] }, 422, "Unprocessable"))
+    );
+    await expect(setAdminFlag("chatbot", true, "me")).rejects.toMatchObject({
+      message: "Admin API returned 422 Unprocessable",
     });
   });
 });

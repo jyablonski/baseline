@@ -3,6 +3,7 @@ name = "nba-api"
 version = "0.1.0"
 requires-python = ">=3.14,<3.15"
 dependencies = [
+    "baseline-analytics",
     "fastapi==0.141.1",
     "uvicorn[standard]==0.52.4",
     "sqlalchemy==2.0.52",
@@ -23,6 +24,10 @@ dev = [
 
 [tool.uv]
 package = false
+
+# Shared with services/mcp. Editable, so a change in lib/ needs no reinstall.
+[tool.uv.sources]
+baseline-analytics = { path = "../../lib/baseline-analytics", editable = true }
 
 [build-system]
 requires = ["hatchling==1.32.0"]

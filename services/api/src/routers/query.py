@@ -1,4 +1,4 @@
-from cube.analytics import CubeAnalytics
+from baseline_analytics.operations import CubeAnalytics
 from fastapi import APIRouter, Depends
 from services.nlp.factory import build_nlp_provider
 

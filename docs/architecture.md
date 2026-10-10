@@ -39,7 +39,9 @@ A Cube outage takes out Ask and MCP alone — every page keeps working. There is
 FastAPI `/api/v1/*`, layered:
 
 - `routers/` — HTTP · `repositories/` — sessions and row mapping · `queries/` — SQL constants
-- `schemas/` — Pydantic responses · `cube/` — Cube client and named operations · `services/nlp/` — `/ask` backends
+- `schemas/` — Pydantic responses · `services/nlp/` — `/ask` and chat backends
+
+The Cube client, the named operations, and the named tools are not in the API: they live in `lib/baseline-analytics` (`baseline_analytics`), a package the API and the MCP server both install, so the two cannot drift. See [mcp-and-ai.md](mcp-and-ai.md#one-tool-list-two-surfaces).
 
 Routes cover players, teams, games, schedule (with champion win probability and consensus odds), predictions scorecard, standings, social, transactions, `GET /api/v1/status`, `POST /api/v1/query`, and `/api/v1/admin/*`. `GET /health` is liveness only — never surface it in the UI.
 

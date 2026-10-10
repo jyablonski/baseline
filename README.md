@@ -36,16 +36,17 @@ Postgres holds three schemas: `source` for ingested data, `silver` for cleaned i
 
 ## Services
 
-| Service             | Role                                                                                                                                    |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `services/scraper`  | Collects NBA stats, schedules, play-by-play, contracts, injuries, and transactions, plus optional odds and Reddit data, into Postgres.  |
-| `services/migrate`  | Uses Alembic to create and update the `source` database tables.                                                                         |
-| `services/dbt`      | Cleans and joins source data into `silver` models and `gold` analytics tables.                                                          |
-| `services/ml`       | Generates pregame win probabilities with Elo and a logit challenger, writing predictions back to `source` for dbt to publish to `gold`. |
-| `services/api`      | Serves analytics through FastAPI REST endpoints and routes Ask questions through Cube.                                                  |
-| `services/frontend` | Provides the Baseline web app with Next.js, including browsing, charts, comparisons, and an Ask page.                                   |
-| `services/cube`     | Defines shared metrics and queryable datasets over `gold` for Ask and MCP.                                                              |
-| `services/mcp`      | Exposes Cube queries as FastMCP tools for AI assistants.                                                                                |
+| Service                  | Role                                                                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `services/scraper`       | Collects NBA stats, schedules, play-by-play, contracts, injuries, and transactions, plus optional odds and Reddit data, into Postgres.  |
+| `services/migrate`       | Uses Alembic to create and update the `source` database tables.                                                                         |
+| `services/dbt`           | Cleans and joins source data into `silver` models and `gold` analytics tables.                                                          |
+| `services/ml`            | Generates pregame win probabilities with Elo and a logit challenger, writing predictions back to `source` for dbt to publish to `gold`. |
+| `services/api`           | Serves analytics through FastAPI REST endpoints and routes Ask questions through Cube.                                                  |
+| `services/frontend`      | Provides the Baseline web app with Next.js, including browsing, charts, comparisons, and an Ask page.                                   |
+| `services/cube`          | Defines shared metrics and queryable datasets over `gold` for Ask and MCP.                                                              |
+| `services/mcp`           | Exposes Cube queries as FastMCP tools for AI assistants.                                                                                |
+| `lib/baseline-analytics` | Shared Python package: the Cube client and the named tools that the API's chat and the MCP server both serve.                           |
 
 ## Documentation
 

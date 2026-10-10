@@ -272,3 +272,63 @@ export async function enqueueAdminJob(jobType: JobType, requestedBy: string): Pr
   const body = (await response.json()) as { data: AdminJob };
   return body.data;
 }
+
+export type FeatureFlag = {
+  flag_key: string;
+  enabled: boolean;
+  description: string;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+export async function fetchAdminFlags(): Promise<FeatureFlag[]> {
+  const token = process.env.ADMIN_API_TOKEN;
+  if (!token) {
+    throw new AdminApiError("ADMIN_API_TOKEN is not set.", 503);
+  }
+  const response = await fetch(`${adminApiBase()}/api/v1/admin/flags`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new AdminApiError(
+      `Admin API returned ${response.status} ${response.statusText}`,
+      response.status
+    );
+  }
+  return (await response.json()) as FeatureFlag[];
+}
+
+/** Switch a feature on or off. 404 for a flag no migration created. */
+export async function setAdminFlag(
+  flagKey: string,
+  enabled: boolean,
+  updatedBy: string
+): Promise<FeatureFlag> {
+  const token = process.env.ADMIN_API_TOKEN;
+  if (!token) {
+    throw new AdminApiError("ADMIN_API_TOKEN is not set.", 503);
+  }
+  const response = await fetch(
+    `${adminApiBase()}/api/v1/admin/flags/${encodeURIComponent(flagKey)}`,
+    {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled, updated_by: updatedBy }),
+      cache: "no-store",
+    }
+  );
+  if (!response.ok) {
+    const detail = await response
+      .json()
+      .then((body: { detail?: string }) => body.detail)
+      .catch(() => undefined);
+    throw new AdminApiError(
+      typeof detail === "string"
+        ? detail
+        : `Admin API returned ${response.status} ${response.statusText}`,
+      response.status
+    );
+  }
+  return ((await response.json()) as { data: FeatureFlag }).data;
+}

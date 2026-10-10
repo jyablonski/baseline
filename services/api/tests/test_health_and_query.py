@@ -164,7 +164,7 @@ def test_query_rejects_empty_question(client) -> None:
 
 @pytest.mark.unit
 def test_query_cube_down_is_clear(client, cube_analytics) -> None:
-    from cube.errors import CubeUnavailableError
+    from baseline_analytics.errors import CubeUnavailableError
 
     def boom(name: str):
         raise CubeUnavailableError(

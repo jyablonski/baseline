@@ -87,14 +87,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [api, scraper, mcp, cube, ml, migrate]
+        service: [lib, api, scraper, mcp, cube, ml, migrate]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.14"
           enable-cache: true
-          cache-dependency-glob: services/*/uv.lock
+          cache-dependency-glob: |
+            services/*/uv.lock
+            lib/*/uv.lock
       - run: make test-${{ matrix.service }}
 
   admin-jobs-e2e:

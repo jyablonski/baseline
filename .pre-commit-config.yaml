@@ -31,7 +31,7 @@ repos:
         name: ty
         language: system
         pass_filenames: false
-        files: ^services/(api|scraper|mcp|cube|ml|migrate)/.*\.py$
+        files: ^(services/(api|scraper|mcp|cube|ml|migrate)|lib)/.*\.py$
         entry: scripts/ty-check.sh
       # See scripts/dbt-score.sh: dbt parse (no database) then dbt-score lint.
       - id: dbt-score

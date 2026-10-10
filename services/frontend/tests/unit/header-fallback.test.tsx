@@ -32,6 +32,7 @@ describe("header fallback", () => {
     );
     expect(screen.getByRole("link", { name: "Baseline" })).toHaveAttribute("href", "/");
     expect(screen.queryByPlaceholderText("Player or team")).not.toBeInTheDocument();
-    expect(screen.getByText(/Scraped —/)).toBeInTheDocument();
+    // The scrape stamp lives on the home page now, not in the chrome.
+    expect(screen.queryByText(/Scraped/)).not.toBeInTheDocument();
   });
 });

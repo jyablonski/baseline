@@ -43,6 +43,47 @@ export function FeedHeader({ total, sortLabel }: { total: number; sortLabel?: st
   );
 }
 
+export function FeedPager({
+  page,
+  pageSize,
+  total,
+  onPage,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPage: (next: number) => void;
+}) {
+  if (total <= pageSize && page === 0) return null;
+  const from = Math.min(total, page * pageSize + 1);
+  const to = Math.min(total, (page + 1) * pageSize);
+  return (
+    <div className="flex items-center justify-between px-[var(--ct-space-2)] py-[var(--ct-space-3)] text-sm">
+      <p className="text-muted-foreground">
+        {formatCount(from)}–{formatCount(to)} of {formatCount(total)} posts
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={page === 0}
+          onClick={() => onPage(page - 1)}
+          className="btn-ghost"
+        >
+          ← Prev
+        </button>
+        <button
+          type="button"
+          disabled={to >= total}
+          onClick={() => onPage(page + 1)}
+          className="btn-ghost"
+        >
+          Next →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function PostCard({
   post,
   defaultOpen = false,

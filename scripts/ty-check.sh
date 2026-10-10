@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ty type-check, one invocation per Python service.
+# ty type-check, one invocation per Python project (each service, plus lib/).
 #
 # Per service, not repo-wide: each has its own venv and its own src on the module
 # path, so a single invocation would resolve third-party imports against the
@@ -15,7 +15,15 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-SERVICES=(api scraper mcp cube ml migrate)
+PROJECTS=(
+  lib/baseline-analytics
+  services/api
+  services/scraper
+  services/mcp
+  services/cube
+  services/ml
+  services/migrate
+)
 
 UV="${UV:-$(command -v uv || true)}"
 if [[ -z "$UV" ]]; then
@@ -33,14 +41,14 @@ if [[ -z "$UV" ]]; then
 fi
 
 status=0
-for service in "${SERVICES[@]}"; do
-  echo "-- ty $service"
+for project in "${PROJECTS[@]}"; do
+  echo "-- ty $project"
   if [[ -n "$UV" ]]; then
-    "$UV" run --directory "services/$service" ty check || status=1
-  elif [[ -x "services/$service/.venv/bin/ty" ]]; then
-    (cd "services/$service" && ./.venv/bin/ty check) || status=1
+    "$UV" run --directory "$project" ty check || status=1
+  elif [[ -x "$project/.venv/bin/ty" ]]; then
+    (cd "$project" && ./.venv/bin/ty check) || status=1
   else
-    echo "ty: uv is not on PATH and services/$service/.venv is missing." >&2
+    echo "ty: uv is not on PATH and $project/.venv is missing." >&2
     echo "    Install uv, or run 'make sync' to build the service venvs." >&2
     status=1
   fi

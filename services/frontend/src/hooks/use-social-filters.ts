@@ -28,10 +28,17 @@ export function useSocialFilters() {
     ? sortParam
     : DEFAULT_SOCIAL_SORT;
 
+  // Zero-based here, one-based in the URL, where page 1 is left off entirely.
+  const pageParam = Number(searchParams.get("page"));
+  const page = Number.isInteger(pageParam) && pageParam > 1 ? pageParam - 1 : 0;
+
   function set(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value);
     else params.delete(key);
+    // Any other filter changes what the feed holds, so a kept page would point
+    // somewhere arbitrary, or past the end.
+    if (key !== "page") params.delete("page");
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname);
   }
@@ -40,8 +47,10 @@ export function useSocialFilters() {
     range,
     contentType,
     sort,
+    page,
     setRange: (next: SocialRangeKey) => set("range", next),
     setContentType: (next: string) => set("type", next),
     setSort: (next: string) => set("sort", next),
+    setPage: (next: number) => set("page", next > 0 ? String(next + 1) : ""),
   };
 }
