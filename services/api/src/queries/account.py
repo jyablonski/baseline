@@ -20,6 +20,7 @@ USER_COLUMNS = """
     users.provider,
     users.display_name,
     users.status,
+    users.timezone,
     users.created_at,
     users.last_seen_at
 """
@@ -43,6 +44,16 @@ GET_USER = text(
         {USER_COLUMNS}
     FROM source.users
     WHERE users.user_id = :user_id
+    """
+)
+
+SET_USER_TIMEZONE = text(
+    f"""
+    UPDATE source.users
+    SET timezone = :timezone
+    WHERE users.user_id = :user_id
+    RETURNING
+        {USER_COLUMNS}
     """
 )
 

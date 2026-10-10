@@ -8,9 +8,11 @@ import {
   fetchPickSheet,
   fetchProfile,
   savePick,
+  saveTimezone,
   sendChat,
 } from "@/lib/account-api";
 import { MAX_STAKE } from "@/lib/picks";
+import { isTimezone } from "@/lib/timezones";
 import type { AccountProfile, ChatReply, ChatTurn, PickSheet } from "@/lib/types";
 
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; message: string };
@@ -66,6 +68,16 @@ async function retryAsReregistered<T>(
 
 export async function getProfileAction(): Promise<ActionResult<AccountProfile>> {
   return asUser((userId) => fetchProfile(userId));
+}
+
+/** Choose the time zone game times are shown in; null goes back to Eastern. */
+export async function setTimezoneAction(
+  timezone: string | null
+): Promise<ActionResult<AccountProfile["user"]>> {
+  if (timezone !== null && !isTimezone(timezone)) {
+    return { ok: false, message: "That time zone is not one of the choices." };
+  }
+  return asUser((userId) => saveTimezone(userId, timezone));
 }
 
 export async function getPickSheetAction(): Promise<ActionResult<PickSheet>> {

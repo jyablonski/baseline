@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -116,12 +116,19 @@ describe("schedule page", () => {
     expect(screen.getAllByTestId("moneyline")[1]).toHaveTextContent("—");
     expect(screen.getAllByTestId("spread")[1]).toHaveTextContent("—");
     expect(screen.getByRole("heading", { name: "Schedule" }).parentElement).toHaveTextContent(
-      "2026-27 schedule from today onward. TV lists national broadcasts only. Win % is Baseline's pregame model estimate. How accurate is the model?"
+      "2026-27 schedule from today onward."
     );
-    expect(screen.getByRole("link", { name: "How accurate is the model?" })).toHaveAttribute(
-      "href",
-      "/predictions"
-    );
+    // What a column means is behind its heading, not spelled out above the table.
+    expect(screen.queryByText(/pregame model estimate/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Win %" }));
+    const help = await screen.findByRole("dialog", { name: "Win %" });
+    expect(help).toHaveTextContent("pregame model estimate of each team's chance to win");
+    expect(
+      within(help).getByRole("link", { name: "How accurate is the model? →" })
+    ).toHaveAttribute("href", "/predictions");
+    for (const column of ["TV", "Moneyline", "Spread"]) {
+      expect(screen.getByRole("button", { name: column })).toBeInTheDocument();
+    }
   });
 
   it("shows one day of games at a time and pages by game day", async () => {

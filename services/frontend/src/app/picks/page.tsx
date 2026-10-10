@@ -7,9 +7,9 @@ import { SignInPrompt } from "@/components/account/sign-in-prompt";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { KpiCard, KpiStrip, KpiTitle } from "@/components/ui/kpi-card";
 import { usePicks } from "@/hooks/use-picks";
+import { useProfile } from "@/hooks/use-profile";
 import { useAccount, useFeatures } from "@/lib/account";
 import { queryErrorMessage } from "@/lib/api";
-import { formatScheduleDate, formatTimeET } from "@/lib/format";
 import {
   bestCall,
   finalScore,
@@ -17,7 +17,9 @@ import {
   formatSignedMoney,
   pickLabel,
   pickProfit,
+  picksCsv,
 } from "@/lib/picks";
+import { formatGameTime } from "@/lib/timezones";
 import type { PickSheet, UserPick } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -85,6 +87,19 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function downloadCsv(picks: UserPick[]) {
+  const url = URL.createObjectURL(new Blob([picksCsv(picks)], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "baseline-picks.csv";
+  // Attached and revoked a tick later: some browsers drop a download whose
+  // link is not in the document or whose URL is gone before it starts.
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 function Sheet({ name, sheet }: { name: string; sheet: PickSheet }) {
   const { summary, picks } = sheet;
   const settledCount = summary.wins + summary.losses;
@@ -93,7 +108,7 @@ function Sheet({ name, sheet }: { name: string; sheet: PickSheet }) {
   const settled = picks.filter((pick) => pick.result !== "pending");
   const best = bestCall(picks);
   const staked = picks.filter((pick) => pick.profit != null).length;
-  const since = picks.map((pick) => pick.created_at).sort()[0];
+  const { timezone } = useProfile();
 
   return (
     <div className="space-y-[var(--ct-space-5)]">
@@ -106,12 +121,12 @@ function Sheet({ name, sheet }: { name: string; sheet: PickSheet }) {
         </span>
         <div className="min-w-0">
           <h1 className="type-page truncate">{name}</h1>
-          <p className="mt-1 text-sm text-ink-2">
-            {since
-              ? `Picking since ${new Date(since).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
-              : "No picks yet"}
-          </p>
         </div>
+        {picks.length > 0 ? (
+          <button type="button" className="btn-ghost ml-auto" onClick={() => downloadCsv(picks)}>
+            Download CSV
+          </button>
+        ) : null}
       </header>
 
       <KpiStrip>
@@ -189,29 +204,32 @@ function Sheet({ name, sheet }: { name: string; sheet: PickSheet }) {
           <p className="type-caption py-3">Nothing open. Picks lock when a game tips.</p>
         ) : (
           <ul>
-            {open.map((pick) => (
-              <li
-                key={pick.game_id}
-                className="flex items-center gap-[var(--ct-space-4)] border-b border-rule py-3"
-                data-testid="open-pick"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">{pickLabel(pick)}</p>
-                  <p className="type-caption mt-0.5">
-                    {formatScheduleDate(pick.game_date)}
-                    {pick.start_time_et ? ` · ${formatTimeET(pick.start_time_et)}` : ""}
-                  </p>
-                </div>
-                <span className="tabular w-14 text-right">
-                  {pick.stake ? formatMoney(pick.stake) : "–"}
-                </span>
-                <span className="type-caption w-24 text-right whitespace-nowrap">
-                  {pick.stake && pick.moneyline != null
-                    ? `to win ${formatMoney(pickProfit(pick.stake, pick.moneyline))}`
-                    : "record only"}
-                </span>
-              </li>
-            ))}
+            {open.map((pick) => {
+              const tip = formatGameTime(pick.game_date, pick.start_time_et, timezone);
+              return (
+                <li
+                  key={pick.game_id}
+                  className="flex items-center gap-[var(--ct-space-4)] border-b border-rule py-3"
+                  data-testid="open-pick"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{pickLabel(pick)}</p>
+                    <p className="type-caption mt-0.5">
+                      {tip.date}
+                      {tip.zone ? ` · ${tip.time} ${tip.zone}` : ""}
+                    </p>
+                  </div>
+                  <span className="tabular w-14 text-right">
+                    {pick.stake ? formatMoney(pick.stake) : "–"}
+                  </span>
+                  <span className="type-caption w-24 text-right whitespace-nowrap">
+                    {pick.stake && pick.moneyline != null
+                      ? `to win ${formatMoney(pickProfit(pick.stake, pick.moneyline))}`
+                      : "record only"}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

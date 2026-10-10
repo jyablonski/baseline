@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PickCell, StakeEditor } from "@/components/account/pick-cell";
@@ -31,20 +31,17 @@ function pickOn(teamId: string, extra: Partial<UserPick> = {}): UserPick {
 function setup(props: Partial<Parameters<typeof PickCell>[0]> = {}) {
   const onSave = vi.fn();
   const onRemove = vi.fn();
-  const onEditStake = vi.fn();
   render(
     <PickCell
       game={game}
       pick={undefined}
       busy={false}
-      editing={false}
       onSave={onSave}
       onRemove={onRemove}
-      onEditStake={onEditStake}
       {...props}
     />
   );
-  return { onSave, onRemove, onEditStake };
+  return { onSave, onRemove };
 }
 
 describe("PickCell", () => {
@@ -65,14 +62,21 @@ describe("PickCell", () => {
     expect(onSave).toHaveBeenCalledWith({ gameId: "g-1", teamId: "home", stake: null });
   });
 
-  it("marks the saved side and offers a stake as an optional next step", () => {
-    const { onEditStake } = setup({ pick: pickOn("home") });
+  it("marks the saved side and offers a stake as an optional next step", async () => {
+    const { onSave } = setup({ pick: pickOn("home") });
     const taken = screen.getByRole("button", { name: "Pick GSW" });
     expect(taken).toHaveAttribute("aria-pressed", "true");
     // Already saved, so pressing it again would do nothing useful.
     expect(taken).toBeDisabled();
+    expect(screen.queryByTestId("stake-editor")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add stake" }));
-    expect(onEditStake).toHaveBeenCalledWith("g-1");
+    // The popover is titled with the side and its price.
+    const popover = screen.getByRole("dialog", { name: "GSW to win" });
+    expect(popover).toHaveTextContent("−150");
+    fireEvent.click(within(popover).getByRole("button", { name: "$50" }));
+    fireEvent.click(within(popover).getByRole("button", { name: "Save stake" }));
+    expect(onSave).toHaveBeenCalledWith({ gameId: "g-1", teamId: "home", stake: 50 });
+    await waitFor(() => expect(screen.queryByTestId("stake-editor")).not.toBeInTheDocument());
   });
 
   it("shows what a stake stands to win and lets it be edited", () => {
@@ -93,12 +97,6 @@ describe("PickCell", () => {
     expect(screen.queryByRole("button", { name: /stake/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Pick LAL" }));
     expect(onSave).toHaveBeenCalledWith({ gameId: "g-1", teamId: "away", stake: null });
-  });
-
-  it("hides the stake link while the editor is already open", () => {
-    setup({ pick: pickOn("home"), editing: true });
-    expect(screen.queryByRole("button", { name: "Add stake" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Clear pick/ })).toBeInTheDocument();
   });
 
   it("clears the pick", () => {
@@ -128,14 +126,25 @@ describe("PickCell", () => {
 describe("StakeEditor", () => {
   function editor(pick: UserPick, busy = false) {
     const onSave = vi.fn();
+    const onRemove = vi.fn();
     const onClose = vi.fn();
-    render(<StakeEditor game={game} pick={pick} busy={busy} onSave={onSave} onClose={onClose} />);
-    return { onSave, onClose };
+    render(
+      <StakeEditor
+        game={game}
+        pick={pick}
+        busy={busy}
+        onSave={onSave}
+        onRemove={onRemove}
+        onClose={onClose}
+      />
+    );
+    return { onSave, onRemove, onClose };
   }
 
   it("starts on None, which keeps the pick record-only", () => {
     const { onSave, onClose } = editor(pickOn("away"));
-    expect(screen.getByText("Stake on LAL +130 (optional)")).toBeInTheDocument();
+    expect(screen.getByText("· optional, pretend dollars")).toBeInTheDocument();
+    expect(screen.getByText(/Nothing is charged/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "None" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Counts toward your record only")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save stake" }));
@@ -146,8 +155,8 @@ describe("StakeEditor", () => {
   it("stakes a preset and shows what it would win first", () => {
     const { onSave } = editor(pickOn("away"));
     fireEvent.click(screen.getByRole("button", { name: "$50" }));
-    // $50 at +130 wins $65.
-    expect(screen.getByText("$50 to win $65")).toBeInTheDocument();
+    // $50 at +130 wins $65, on top of the stake coming back.
+    expect(screen.getByText("Returns $115 if LAL win · net +$65")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save stake" }));
     expect(onSave).toHaveBeenCalledWith({ gameId: "g-1", teamId: "away", stake: 50 });
   });
@@ -157,7 +166,7 @@ describe("StakeEditor", () => {
     const other = screen.getByLabelText("Other stake");
     fireEvent.change(other, { target: { value: "1000" } });
     expect(other).toHaveAttribute("aria-invalid", "false");
-    expect(screen.getByText("$1,000 to win $666.66")).toBeInTheDocument();
+    expect(screen.getByText("Returns $1,666.66 if GSW win · net +$666.66")).toBeInTheDocument();
     // Typing an amount takes the selection off the chips.
     expect(screen.getByRole("button", { name: "None" })).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(screen.getByRole("button", { name: "Save stake" }));
@@ -191,6 +200,7 @@ describe("StakeEditor", () => {
         pick={pickOn("home", { stake: 25 })}
         busy={false}
         onSave={vi.fn()}
+        onRemove={vi.fn()}
         onClose={vi.fn()}
       />
     );
@@ -201,9 +211,10 @@ describe("StakeEditor", () => {
     expect(screen.getByLabelText("Other stake")).toHaveValue("40");
   });
 
-  it("cancels without saving, and locks while a save is in flight", () => {
-    const { onSave, onClose } = editor(pickOn("home"));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  it("removes the pick from the popover without saving a stake", () => {
+    const { onSave, onRemove, onClose } = editor(pickOn("home"));
+    fireEvent.click(screen.getByRole("button", { name: "Remove pick" }));
+    expect(onRemove).toHaveBeenCalledWith("g-1");
     expect(onClose).toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
   });

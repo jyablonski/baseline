@@ -731,6 +731,8 @@ export type AccountProfile = {
     provider: string;
     display_name: string | null;
     status: string;
+    /** An IANA name from `TIMEZONES`, or null for the Eastern default. */
+    timezone: string | null;
     created_at: string;
     last_seen_at: string;
   };

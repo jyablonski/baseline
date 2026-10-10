@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 
-import { formatMoney, formatPrice, MAX_STAKE, pickProfit, STAKE_PRESETS } from "@/lib/picks";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  formatMoney,
+  formatPrice,
+  formatSignedMoney,
+  MAX_STAKE,
+  pickProfit,
+  STAKE_PRESETS,
+} from "@/lib/picks";
 import type { ScheduledGame, UserPick } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -25,26 +33,22 @@ function sidesOf(game: ScheduledGame) {
 
 /**
  * Pick a winner for one scheduled game. Choosing a side saves at once; a stake
- * is a second, optional step opened from the line underneath.
+ * is a second, optional step in a popover opened from the line underneath.
  */
 export function PickCell({
   game,
   pick,
   busy,
-  editing,
   onSave,
   onRemove,
-  onEditStake,
 }: {
   game: ScheduledGame;
   pick: UserPick | undefined;
   busy: boolean;
-  /** Whether this game's stake editor is open. */
-  editing: boolean;
   onSave: SavePick;
   onRemove: (gameId: string) => void;
-  onEditStake: (gameId: string) => void;
 }) {
+  const [staking, setStaking] = useState(false);
   const sides = sidesOf(game);
   const picked = sides.find((side) => side.teamId === pick?.picked_team_id);
 
@@ -89,15 +93,29 @@ export function PickCell({
               {formatMoney(pick.stake)} to win {formatMoney(pickProfit(pick.stake, pick.moneyline))}
             </span>
           ) : null}
-          {picked.moneyline != null && !editing ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onEditStake(game.game_id)}
-              className="underline underline-offset-2 hover:text-foreground"
-            >
-              {pick.stake ? "Edit stake" : "Add stake"}
-            </button>
+          {picked.moneyline != null ? (
+            <Popover open={staking} onOpenChange={setStaking}>
+              <PopoverTrigger
+                disabled={busy}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                {pick.stake ? "Edit stake" : "Add stake"}
+              </PopoverTrigger>
+              <PopoverContent
+                title={`${picked.label} to win`}
+                aside={<span className="tabular text-ink-2">{formatPrice(picked.moneyline)}</span>}
+                align="end"
+              >
+                <StakeEditor
+                  game={game}
+                  pick={pick}
+                  busy={busy}
+                  onSave={onSave}
+                  onRemove={onRemove}
+                  onClose={() => setStaking(false)}
+                />
+              </PopoverContent>
+            </Popover>
           ) : null}
           <button
             type="button"
@@ -114,18 +132,20 @@ export function PickCell({
   );
 }
 
-/** The optional stake for a pick that is already saved. */
+/** The optional stake for a pick that is already saved; the body of its popover. */
 export function StakeEditor({
   game,
   pick,
   busy,
   onSave,
+  onRemove,
   onClose,
 }: {
   game: ScheduledGame;
   pick: UserPick;
   busy: boolean;
   onSave: SavePick;
+  onRemove: (gameId: string) => void;
   onClose: () => void;
 }) {
   const [stake, setStake] = useState<number | null>(pick.stake);
@@ -135,6 +155,7 @@ export function StakeEditor({
   const side = sidesOf(game).find((item) => item.teamId === pick.picked_team_id);
   const moneyline = side?.moneyline ?? null;
   const valid = stake === null || (Number.isInteger(stake) && stake >= 1 && stake <= MAX_STAKE);
+  const profit = stake !== null && valid && moneyline != null ? pickProfit(stake, moneyline) : null;
 
   function chip(value: number | null, label: string) {
     const active = stake === value && other === "";
@@ -162,7 +183,7 @@ export function StakeEditor({
 
   return (
     <form
-      className="flex flex-wrap items-center justify-end gap-2 py-1"
+      className="space-y-3"
       data-testid="stake-editor"
       onSubmit={(event) => {
         event.preventDefault();
@@ -171,41 +192,61 @@ export function StakeEditor({
         onClose();
       }}
     >
-      <span className="text-sm text-ink-2">
-        Stake on {side?.label} {formatPrice(moneyline)} (optional)
-      </span>
-      {chip(null, "None")}
-      {STAKE_PRESETS.map((preset) => chip(preset, formatMoney(preset)))}
-      <input
-        value={other}
-        onChange={(event) => {
-          const text = event.target.value;
-          setOther(text);
-          setStake(text.trim() === "" ? null : Number(text));
-        }}
-        inputMode="numeric"
-        placeholder="$ Other"
-        aria-label="Other stake"
-        aria-invalid={!valid}
-        disabled={busy}
+      <p className="text-ink-2">
+        Stake <span className="text-ink-3">· optional, pretend dollars</span>
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {chip(null, "None")}
+        {STAKE_PRESETS.map((preset) => chip(preset, formatMoney(preset)))}
+        <input
+          value={other}
+          onChange={(event) => {
+            const text = event.target.value;
+            setOther(text);
+            setStake(text.trim() === "" ? null : Number(text));
+          }}
+          inputMode="numeric"
+          placeholder="$ Other"
+          aria-label="Other stake"
+          aria-invalid={!valid}
+          disabled={busy}
+          className={cn(
+            "h-[var(--ct-control-page)] w-20 border border-input bg-field px-2 text-sm tabular",
+            !valid && "border-destructive"
+          )}
+        />
+      </div>
+      <p
         className={cn(
-          "h-[var(--ct-control-page)] w-20 border border-input bg-field px-2 text-sm tabular",
-          !valid && "border-destructive"
+          "border-y border-rule py-2 tabular",
+          valid ? "text-foreground" : "text-destructive"
         )}
-      />
-      <span className={cn("min-w-[13rem] text-sm", valid ? "text-ink-2" : "text-destructive")}>
+      >
         {!valid
           ? `Whole dollars, from $1 to ${formatMoney(MAX_STAKE)}.`
-          : stake === null || moneyline == null
+          : stake === null || profit === null
             ? "Counts toward your record only"
-            : `${formatMoney(stake)} to win ${formatMoney(pickProfit(stake, moneyline))}`}
-      </span>
-      <button type="button" className="btn-ghost" disabled={busy} onClick={onClose}>
-        Cancel
-      </button>
-      <button type="submit" className="btn-fill" disabled={busy || !valid}>
-        Save stake
-      </button>
+            : `Returns ${formatMoney(stake + profit)} if ${side?.label} win · net ${formatSignedMoney(profit)}`}
+      </p>
+      <p className="text-xs text-ink-3">
+        Nothing is charged. Stakes only track how your picks would have paid. Locks at tip-off.
+      </p>
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          className="btn-ghost"
+          disabled={busy}
+          onClick={() => {
+            onClose();
+            onRemove(game.game_id);
+          }}
+        >
+          Remove pick
+        </button>
+        <button type="submit" className="btn-fill" disabled={busy || !valid}>
+          Save stake
+        </button>
+      </div>
     </form>
   );
 }

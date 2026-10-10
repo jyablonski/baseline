@@ -6,11 +6,14 @@ import Link from "next/link";
 import { deleteAccountAction } from "@/app/account/actions";
 import { SignInPrompt } from "@/components/account/sign-in-prompt";
 import { LoadingState } from "@/components/query-state";
+import { useProfile } from "@/hooks/use-profile";
 import { useAccount } from "@/lib/account";
 import { reloadHome, signOutAndReload } from "@/lib/sign-out";
+import { DEFAULT_TIMEZONE, TIMEZONES } from "@/lib/timezones";
 
 export default function AccountPage() {
   const { account, isLoading } = useAccount();
+  const { user, timezone, setTimezone } = useProfile();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +51,17 @@ export default function AccountPage() {
             <p className="text-sm">
               Signed in as <span className="font-semibold">{account.name || "your account"}</span>.
             </p>
+            {user ? (
+              <p className="text-sm text-ink-2" data-testid="member-since">
+                Member since{" "}
+                {new Date(user.created_at).toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                  timeZone: timezone ?? DEFAULT_TIMEZONE,
+                })}
+              </p>
+            ) : null}
             <button
               type="button"
               className="btn-ghost"
@@ -70,13 +84,43 @@ export default function AccountPage() {
             </section>
           ) : null}
 
+          {user ? (
+            <section className="space-y-2 border-t border-rule pt-[var(--ct-space-4)]">
+              <h2 className="type-module">
+                <label htmlFor="timezone">Time zone</label>
+              </h2>
+              <p className="text-sm text-ink-2">Game start times are shown in this time zone.</p>
+              <select
+                id="timezone"
+                className="h-[var(--ct-control-page)] border border-input bg-field px-2 text-sm"
+                value={timezone ?? DEFAULT_TIMEZONE}
+                disabled={setTimezone.isPending}
+                onChange={(event) =>
+                  // Eastern is stored as "no choice", so the default can never drift.
+                  setTimezone.mutate(
+                    event.target.value === DEFAULT_TIMEZONE ? null : event.target.value
+                  )
+                }
+              >
+                {TIMEZONES.map((zone) => (
+                  <option key={zone.value} value={zone.value}>
+                    {zone.label}
+                  </option>
+                ))}
+              </select>
+              {setTimezone.error ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {setTimezone.error.message}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+
           <section className="space-y-2 border-t border-rule pt-[var(--ct-space-4)]">
             <h2 className="type-module">What Baseline keeps</h2>
             <p className="text-sm text-ink-2">
               Your display name and an account id from the provider you signed in with, your picks,
-              and a count of the questions you ask in chat. Your email address and the text of your
-              chat questions are not stored. Chat questions may be sent to a third-party model
-              provider to be answered.
+              and your time zone setting. Your email address is not stored.
             </p>
           </section>
 

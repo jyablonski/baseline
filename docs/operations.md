@@ -70,7 +70,7 @@ A successful refresh is otherwise silent. The freshness check below covers the o
 Five cron entries on the VM. None of this starts with `make up`.
 
 ```cron
-15 8  * * * cd /opt/nba && flock -n /tmp/nba-refresh.lock make prod-refresh >> /opt/nba/logs/refresh-daily.log 2>&1
+15 8  * * * cd /opt/nba && flock -n /tmp/nba-refresh.lock make prod-refresh TRIGGER=scheduled >> /opt/nba/logs/refresh-daily.log 2>&1
 45 11 * * * cd /opt/nba && make prod-check-freshness >> /opt/nba/logs/freshness.log 2>&1
 *     * * * * cd /opt/nba && make prod-admin-jobs >> /opt/nba/logs/admin-jobs.log 2>&1
 30 7  * * * cd /opt/nba && make prod-db-backup >> /opt/nba/logs/backup.log 2>&1
@@ -78,6 +78,8 @@ Five cron entries on the VM. None of this starts with `make up`.
 ```
 
 **Always use the `make prod-*` targets, never raw `docker compose`.** Without `IMAGE_PREFIX`/`IMAGE_TAG` the overlay resolves bare `nba-*:latest`, which does not exist on the box — so Compose silently _builds_ it from the working tree instead of failing. `make refresh-daily` has the same trap. `/opt/nba/logs/` must also exist, or cron's redirect fails before `make` runs.
+
+`TRIGGER=scheduled` on the refresh entry is what makes `/admin` show that run's trigger as `scheduled`. Everything else records `manual`: a refresh or `make dbt` run by hand, and the `/admin` buttons (they reach `make` through `prod-admin-jobs`, which does not pass it).
 
 The second entry is the **absence check**. Every other signal is emitted _by_ the pipeline, so a pipeline that never starts is completely silent — which is exactly how one outage went unnoticed. It needs only Postgres and `curl`, so it survives the failures that break the refresh. It alerts when `now() - last_success_at` exceeds `STALE_HOURS` (default 26) and exits 0 when the pipeline is intentionally disabled.
 
@@ -153,7 +155,7 @@ Each row in `source.chat_usage` records which one answered in `backend` (`llm` o
 
 ## Accounts, chat, and picks
 
-Sign-in is open to anyone and is needed only for `/chat` and picks. User data lives in `source.users`, `source.chat_usage`, and `source.picks` (Alembic-owned, written by the API, never read by dbt or Cube). No email is stored; an account is identified by the provider and the provider's account id.
+Sign-in is open to anyone and is needed only for `/chat` and picks. User data lives in `source.users`, `source.chat_usage`, and `source.picks` (Alembic-owned, written by the API, never read by dbt or Cube). No email is stored; an account is identified by the provider and the provider's account id. An account may choose a time zone on `/account` (`users.timezone`, one of a fixed list the API validates; null is Eastern), which shifts game start times on the schedule, picks, team and home pages for that user only. Stored times and every date boundary stay Eastern.
 
 The browser never calls `/api/v1/account/*`. A Next.js server action checks the session, then calls the API with `Authorization: Bearer $ACCOUNTS_API_TOKEN` and the caller's internal id in `X-Baseline-User`. The token is the only reason the API believes that header, so it is separate from `ADMIN_API_TOKEN`, server-side only, and unset returns 503. With it unset sign-in and `/admin` still work; chat and picks report that accounts are unavailable.
 

@@ -104,6 +104,18 @@ export async function fetchProfile(userId: string): Promise<AccountProfile> {
   return (await accountFetch<{ data: AccountProfile }>("/me", { userId })).data;
 }
 
+export async function saveTimezone(
+  userId: string,
+  timezone: string | null
+): Promise<AccountProfile["user"]> {
+  const body = await accountFetch<{ data: AccountProfile["user"] }>("/me/timezone", {
+    userId,
+    method: "PUT",
+    body: { timezone },
+  });
+  return body.data;
+}
+
 export async function deleteAccount(userId: string): Promise<void> {
   await accountFetch<void>("/me", { userId, method: "DELETE" });
 }

@@ -64,6 +64,16 @@ const flags = new Map([
   ["chatbot", { enabled: true, description: "Signed-in chat at /chat.", updated_by: null }],
   ["picks", { enabled: true, description: "Signed-in game picks.", updated_by: null }],
 ]);
+function accountUser(userId, user) {
+  return {
+    user_id: userId,
+    display_name: user.name,
+    status: "active",
+    timezone: user.timezone,
+    created_at: "2026-10-03T12:00:00Z",
+  };
+}
+
 /** user id -> { provider, subject, name, picks: Map<gameId, pick>, asked, blocked } */
 const users = new Map();
 const subjects = new Map();
@@ -72,7 +82,7 @@ const requests = [];
 
 function userFor(id) {
   if (!users.has(id)) {
-    users.set(id, { name: null, picks: new Map(), asked: 0, blocked: false });
+    users.set(id, { name: null, timezone: null, picks: new Map(), asked: 0, blocked: false });
   }
   return users.get(id);
 }
@@ -197,7 +207,11 @@ function account(request, path, body) {
   if (user.blocked) return [403, { detail: "This account has been blocked." }];
 
   if (path === "/me" && request.method === "GET") {
-    return [200, { data: { user: { user_id: userId }, chat: quota(user) } }];
+    return [200, { data: { user: accountUser(userId, user), chat: quota(user) } }];
+  }
+  if (path === "/me/timezone" && request.method === "PUT") {
+    user.timezone = body.timezone;
+    return [200, { data: accountUser(userId, user) }];
   }
   if (path === "/me" && request.method === "DELETE") {
     users.delete(userId);

@@ -10,6 +10,7 @@ import {
   formatSignedMoney,
   pickLabel,
   pickProfit,
+  picksCsv,
 } from "@/lib/picks";
 import type { UserPick } from "@/lib/types";
 
@@ -140,5 +141,35 @@ describe("primaryNav", () => {
     expect(tabs.map((tab) => tab.label)).not.toContain("Ask");
     const askIndex = PRIMARY_NAV.findIndex((tab) => tab.href === "/ask");
     expect(tabs[askIndex]).toEqual({ href: "/chat", label: "Chat" });
+  });
+});
+
+describe("picksCsv", () => {
+  it("writes a header and one row per pick, blank where nothing is known", () => {
+    const csv = picksCsv([
+      pick({
+        game_date: "2026-10-22T00:00:00",
+        start_time_et: "19:30:00",
+        stake: 50,
+        result: "won",
+        profit: 33.33,
+        home_score: 112,
+        away_score: 108,
+        created_at: "2026-10-09T12:00:00Z",
+      }),
+      pick({ picked_team_id: "away", moneyline: null, game_date: null, start_time_et: null }),
+    ]).split("\n");
+    expect(csv[0]).toBe(
+      "game_date,start_time_et,away_team,home_team,picked_team,moneyline,stake,result,profit,away_score,home_score,picked_at"
+    );
+    expect(csv[1]).toBe(
+      "2026-10-22,19:30:00,LAL,GSW,GSW,-150,50,won,33.33,108,112,2026-10-09T12:00:00Z"
+    );
+    expect(csv[2]).toBe(",,LAL,GSW,LAL,,,pending,,,,");
+  });
+
+  it("quotes a value that would break a row", () => {
+    const csv = picksCsv([pick({ home_team_abbreviation: 'G"S,W' })]);
+    expect(csv.split("\n")[1]).toContain('"G""S,W"');
   });
 });

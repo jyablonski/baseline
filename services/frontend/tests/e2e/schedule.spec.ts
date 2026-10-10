@@ -9,9 +9,13 @@ test("schedule lists the upcoming slate without scores or 2010-11 copy", async (
   const scheduleDescription = page
     .locator("p")
     .filter({ hasText: "2025-26 schedule from today onward." });
-  await expect(scheduleDescription).toContainText(
-    "2025-26 schedule from today onward. TV lists national broadcasts only. Win % is Baseline's pregame model estimate."
+  await expect(scheduleDescription).toHaveText("2025-26 schedule from today onward.");
+  await page.getByRole("button", { name: "TV" }).click();
+  await expect(page.getByRole("dialog", { name: "TV" })).toContainText(
+    "National TV and streaming broadcasts only."
   );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText("LAL")).toBeVisible();
   await expect(page.getByText("@")).toBeVisible();
   await expect(page.getByRole("link", { name: "GSW" })).toBeVisible();
@@ -30,7 +34,11 @@ test("schedule shows model win % and consensus odds, linking to the scorecard", 
   await expect(page.getByTestId("win-probability")).toHaveText("38% / 62%");
   await expect(page.getByTestId("moneyline")).toHaveText("+130 / -150");
   await expect(page.getByTestId("spread")).toHaveText("GSW -3.5");
-  await page.getByRole("link", { name: "How accurate is the model?" }).click();
+  await page.getByRole("button", { name: "Win %" }).click();
+  await page
+    .getByRole("dialog", { name: "Win %" })
+    .getByRole("link", { name: "How accurate is the model? →" })
+    .click();
   await expect(page).toHaveURL(/\/predictions$/);
   await expect(page.getByRole("heading", { name: "Model scorecard" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Sportsbook market/ })).toBeVisible();

@@ -475,3 +475,23 @@ def test_dbt_failed_nodes_are_recorded_only_for_a_failed_build(
     # A passing build must clear the list rather than carry a stale one.
     assert marked == [["model fct_x", "test not_null_x"], None]
     assert logged == [["model fct_x", "test not_null_x"], None]
+
+
+@pytest.mark.unit
+def test_pipeline_run_once_records_who_triggered_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the crontab passes `scheduled`; a forced run is still an operator's."""
+    seen: list[tuple[bool, str]] = []
+
+    def fake_run(*, force: bool, triggered_by: str) -> dict[str, object]:
+        seen.append((force, triggered_by))
+        return {"run_id": 1, "status": "success", "action": "daily", "detail": "", "scrape_exit": 0}
+
+    monkeypatch.setattr("main.run_pipeline_scrape", fake_run)
+    runner = CliRunner()
+
+    for args in ([], ["--force"], ["--triggered-by", "scheduled"]):
+        result = runner.invoke(cli, ["pipeline", "run-once", *args])
+        assert result.exit_code == 0, result.output
+
+    assert seen == [(False, "manual"), (True, "manual"), (False, "scheduled")]
+    assert runner.invoke(cli, ["pipeline", "run-once", "--triggered-by", "cron"]).exit_code == 2

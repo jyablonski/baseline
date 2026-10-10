@@ -115,7 +115,7 @@ describe("team profile", () => {
 
     expect(screen.getByRole("link", { name: "Teams" })).toHaveAttribute("href", "/teams");
     expect(screen.getByRole("heading", { name: "Denver Nuggets" })).toBeInTheDocument();
-    expect(screen.getByText(/DEN · West · Northwest · Ball Arena, Denver/)).toBeInTheDocument();
+    expect(screen.getByText("DEN · West · Ball Arena, Denver")).toBeInTheDocument();
     const regularSeason = screen.getByTestId("team-kpi-regular-season");
     expect(regularSeason).toHaveTextContent("2025-26 Regular Season");
     expect(regularSeason.querySelector("dd")).toHaveTextContent("54–28 | 65.9%");
