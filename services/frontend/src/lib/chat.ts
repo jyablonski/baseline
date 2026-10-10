@@ -18,6 +18,7 @@ const FOLLOW_UPS: Record<string, string[]> = {
   get_player_back_to_backs: ["What are his season averages?"],
   get_player_contract: ["What is his team's payroll?", "What are his season averages?"],
   get_team_payroll: ["What is their record?"],
+  get_team_contracts: ["What is their payroll?", "What is their record?"],
   get_games_schedule: ["Who does the model favor in those games?"],
   get_game_predictions: ["What are the odds for those games?"],
   get_game_odds: ["Who does the model favor in those games?"],

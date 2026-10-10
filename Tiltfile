@@ -35,10 +35,20 @@ docker_build(
 # --- API (uvicorn --reload) -------------------------------------------------
 docker_build(
     "nba-api",
-    context="./services/api",
+    # Repo root: the image also needs lib/baseline-analytics. A change there
+    # matches no sync below, so it rebuilds the image.
+    context=".",
     dockerfile="./services/api/Dockerfile",
     target="development",
-    only=["src", "pyproject.toml", "uv.lock", "Dockerfile", "uvicorn-log-config.json", ".python-version"],
+    only=[
+        "services/api/src",
+        "services/api/pyproject.toml",
+        "services/api/uv.lock",
+        "services/api/Dockerfile",
+        "services/api/uvicorn-log-config.json",
+        "services/api/.python-version",
+        "lib/baseline-analytics",
+    ],
     ignore=["**/__pycache__", "**/.pytest_cache", "**/htmlcov", "**/.venv"],
     live_update=[
         fall_back_on([
@@ -179,10 +189,18 @@ if "tools" in profiles:
     )
 docker_build(
     "nba-mcp",
-    context="./services/mcp",
+    # Repo root, like nba-api.
+    context=".",
     dockerfile="./services/mcp/Dockerfile",
     target="development",
-    only=["src", "pyproject.toml", "uv.lock", "Dockerfile", ".python-version"],
+    only=[
+        "services/mcp/src",
+        "services/mcp/pyproject.toml",
+        "services/mcp/uv.lock",
+        "services/mcp/Dockerfile",
+        "services/mcp/.python-version",
+        "lib/baseline-analytics",
+    ],
     ignore=["**/__pycache__", "**/.pytest_cache", "**/htmlcov", "**/.venv"],
     live_update=[
         fall_back_on([

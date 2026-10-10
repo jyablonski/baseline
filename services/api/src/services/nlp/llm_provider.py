@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from cube.analytics import CubeAnalytics
-from cube.errors import CubeError
+from baseline_analytics.errors import CubeError
+from baseline_analytics.operations import CubeAnalytics
 from services.nlp.llm_client import (
     HttpLlmClient,
     LlmClient,
@@ -20,7 +22,8 @@ from services.nlp.llm_tools import NamedToolExecutor
 from config import Settings
 from schemas.game import QueryResponse
 
-MAX_TOOL_ROUNDS = 4
+# One more than a schema lookup, a query, and a retry need before the answer.
+MAX_TOOL_ROUNDS = 5
 NOT_CONFIGURED = (
     "LLM backend is not configured (NLP_LLM_API_KEY is missing). "
     "Public /ask defaults to the rules backend (NLP_BACKEND=rules). "
@@ -31,6 +34,14 @@ NOT_CONFIGURED = (
 # Left out of the signed-in chat: post titles and comments are text written by
 # strangers, which is the easiest way to get instructions in front of the model.
 CHAT_EXCLUDED_TOOLS = frozenset({"get_reddit_posts"})
+# The same text is reachable through the generic tools, so those are refused
+# too when a call names one of these cubes.
+CHAT_EXCLUDED_CUBE_PREFIXES = ("reddit_",)
+CHAT_CUBE_TOOLS = frozenset({"query_cube", "run_cube_query", "get_cube_schema"})
+REDDIT_UNAVAILABLE = "Reddit posts and comments are not available here."
+
+# Game dates and the chat quota's day are both Eastern.
+EASTERN = ZoneInfo("America/New_York")
 
 
 @dataclass(frozen=True)
@@ -90,7 +101,11 @@ class LlmNlpProvider:
             return LlmConversation(QueryResponse(answer=NOT_CONFIGURED, data=[], sql=None))
 
         try:
-            system = build_system_prompt(self.cube.meta_summary(), chat=self.chat)
+            system = build_system_prompt(
+                self.cube.meta_index(CHAT_EXCLUDED_CUBE_PREFIXES if self.chat else ()),
+                chat=self.chat,
+                today=datetime.now(EASTERN).date(),
+            )
         except CubeError as exc:
             return LlmConversation(QueryResponse(answer=str(exc), data=[], sql=None))
 
@@ -151,6 +166,8 @@ class LlmNlpProvider:
         # it was never offered.
         if self.chat and name in CHAT_EXCLUDED_TOOLS:
             return {"ok": False, "error": f"Unknown tool '{name}'"}
+        if self.chat and name in CHAT_CUBE_TOOLS and _names_excluded_cube(arguments):
+            return {"ok": False, "error": REDDIT_UNAVAILABLE}
         return self.executor.execute(name, arguments)
 
     def _for_model(self, result: dict[str, Any]) -> dict[str, Any]:
@@ -175,6 +192,21 @@ class LlmNlpProvider:
             max_output_tokens=self.settings.nlp_llm_max_output_tokens,
             reasoning_effort=self.settings.nlp_llm_reasoning_effort,
         )
+
+
+def _names_excluded_cube(value: Any) -> bool:
+    """True when any string in a tool's arguments is a member of an excluded cube.
+
+    Walks keys as well as values: Cube's `order` names its members as keys, and
+    filters nest under and/or.
+    """
+    if isinstance(value, str):
+        return value.startswith(CHAT_EXCLUDED_CUBE_PREFIXES)
+    if isinstance(value, dict):
+        return any(_names_excluded_cube(item) for pair in value.items() for item in pair)
+    if isinstance(value, list):
+        return any(_names_excluded_cube(item) for item in value)
+    return False
 
 
 def _assistant_tool_message(turn: LlmTurn) -> dict[str, Any]:
@@ -206,5 +238,7 @@ def _merge_tool_result(
             last_data = result["rows"]
         elif "row" in result:
             last_data = [result["row"]]
+        else:
+            return last_data, last_sql
         last_sql = f"cube tool {name}"
     return last_data, last_sql

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from cube.queries import fold_accents
+from baseline_analytics.queries import fold_accents
 from sqlalchemy.orm import Session
 
 from queries.players import (

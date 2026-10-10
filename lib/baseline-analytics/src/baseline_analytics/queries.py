@@ -520,6 +520,7 @@ GAME_PREDICTIONS_DIMENSIONS = [
     "game_predictions.home_team_id",
     "game_predictions.away_team_id",
     "game_predictions.model_wp",
+    "game_predictions.away_wp",
     "game_predictions.market_wp",
     "game_predictions.game_date",
     "game_predictions.season",
@@ -645,16 +646,103 @@ def team_payroll_season_query(abbreviation: str, season: str) -> dict[str, Any]:
     }
 
 
+def team_contracts_query(abbreviation: str, season: str) -> dict[str, Any]:
+    return {
+        "dimensions": list(PLAYER_CONTRACT_SEASON_DIMENSIONS),
+        "filters": [
+            equals("player_contracts.team_abbreviation", abbreviation.upper()),
+            equals("player_contracts.season", season),
+        ],
+        "order": {"player_contracts.salary": "desc"},
+        "limit": 30,
+    }
+
+
+def _schedule_team_filters(
+    team: str | None,
+    opponent: str | None,
+    location: str | None,
+) -> list[dict[str, Any]]:
+    """Filters for one team's games, optionally against one opponent.
+
+    The schedule has a home and an away column rather than a row per team, so
+    "either side" is an OR across the two.
+    """
+    team = (team or opponent or "").upper() or None
+    opponent = (opponent or "").upper() or None
+    if team is None:
+        return []
+    if opponent == team:
+        opponent = None
+    side = (location or "").lower()
+    if side not in ("home", "away"):
+        if opponent is None:
+            return [
+                {
+                    "or": [
+                        equals("games_schedule.home_team", team),
+                        equals("games_schedule.away_team", team),
+                    ]
+                }
+            ]
+        return [
+            {
+                "or": [
+                    {
+                        "and": [
+                            equals("games_schedule.home_team", team),
+                            equals("games_schedule.away_team", opponent),
+                        ]
+                    },
+                    {
+                        "and": [
+                            equals("games_schedule.home_team", opponent),
+                            equals("games_schedule.away_team", team),
+                        ]
+                    },
+                ]
+            }
+        ]
+    mine, theirs = ("home_team", "away_team") if side == "home" else ("away_team", "home_team")
+    filters = [equals(f"games_schedule.{mine}", team)]
+    if opponent:
+        filters.append(equals(f"games_schedule.{theirs}", opponent))
+    return filters
+
+
 def games_schedule_query(
     season: str | None = None,
     status: str | None = None,
-    limit: int = 50,
+    limit: int | None = None,
+    *,
+    team_abbreviation: str | None = None,
+    opponent_abbreviation: str | None = None,
+    location: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
 ) -> dict[str, Any]:
     filters: list[dict[str, Any]] = []
     if season:
         filters.append(equals("games_schedule.season", season))
     if status:
         filters.append(equals("games_schedule.status", status))
+    filters.extend(_schedule_team_filters(team_abbreviation, opponent_abbreviation, location))
+    if from_date:
+        filters.append(
+            {
+                "member": "games_schedule.game_date",
+                "operator": "afterOrOnDate",
+                "values": [from_date],
+            }
+        )
+    if to_date:
+        filters.append(
+            {
+                "member": "games_schedule.game_date",
+                "operator": "beforeOrOnDate",
+                "values": [to_date],
+            }
+        )
     return {
         "dimensions": list(GAMES_SCHEDULE_DIMENSIONS),
         "filters": filters,
@@ -999,3 +1087,36 @@ def daily_highlights_query(
         "order": {"daily_highlights.score": "desc"},
         "limit": clamp_limit(limit, HIGHLIGHTS_DEFAULT_LIMIT, HIGHLIGHTS_MAX_LIMIT),
     }
+
+
+TEAM_FLOW_MEASURES = [
+    "team_game_flow.games",
+    "team_game_flow.blown_leads",
+    "team_game_flow.biggest_lead_blown",
+    "team_game_flow.comeback_wins",
+    "team_game_flow.biggest_comeback",
+]
+
+
+def team_flow_query(
+    team_abbreviation: str,
+    *,
+    season: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Blown leads and comeback wins for one team, from the flow cube.
+
+    Game-grain flow cannot say who blew a lead, so the cube unpivots to one row
+    per team per game and splits largest_lead_blown into lead_blown for the
+    loser and comeback_from for the winner.
+    """
+    filters: list[dict[str, Any]] = [
+        equals("team_game_flow.team_abbreviation", team_abbreviation.upper()),
+    ]
+    if season:
+        filters.append(equals("team_game_flow.season", season))
+    query = {
+        "measures": list(TEAM_FLOW_MEASURES),
+        "filters": filters,
+    }
+    applied = {"team_abbreviation": team_abbreviation.upper(), "season": season}
+    return query, applied

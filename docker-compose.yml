@@ -40,7 +40,9 @@ services:
   api:
     image: nba-api
     build:
-      context: ./services/api
+      # Repo root, not the service folder: the image also needs lib/baseline-analytics.
+      context: .
+      dockerfile: services/api/Dockerfile
       target: ${DOCKER_TARGET:-runtime}
     env_file: .env
     environment:
@@ -173,7 +175,9 @@ services:
   mcp:
     image: nba-mcp
     build:
-      context: ./services/mcp
+      # Repo root, not the service folder: the image also needs lib/baseline-analytics.
+      context: .
+      dockerfile: services/mcp/Dockerfile
       target: ${DOCKER_TARGET:-runtime}
     env_file: .env
     environment:

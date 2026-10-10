@@ -4,8 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import (
     account,
     admin,
+    chat,
     features,
     games,
+    picks,
     players,
     predictions,
     query,
@@ -40,6 +42,8 @@ def create_app() -> FastAPI:
     app.include_router(status.router, prefix="/api/v1/status", tags=["status"])
     app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
     app.include_router(account.router, prefix="/api/v1/account", tags=["account"])
+    app.include_router(chat.router, prefix="/api/v1/account", tags=["account"])
+    app.include_router(picks.router, prefix="/api/v1/account", tags=["account"])
     app.include_router(features.router, prefix="/api/v1/features", tags=["features"])
 
     @app.get("/health")

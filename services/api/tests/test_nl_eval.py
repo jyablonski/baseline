@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from cube.errors import CubeUnavailableError
+from baseline_analytics.errors import CubeUnavailableError
 from ids import (
     GAME_ONE,
     PLAYER_CURRY,
@@ -56,6 +56,7 @@ class FakeCubeAnalytics:
 
     def get_back_to_back_stats(self, player_id: str, season: str | None) -> dict:
         return {
+            "player_name": "Kawhi Leonard",
             "total_back_to_backs": 10,
             "games_played_in_b2b": 8,
             "games_sat_in_b2b": 2,
@@ -206,6 +207,11 @@ class FakeCubeAnalytics:
     def get_team_payroll(self, abbreviation: str, season: str | None = None) -> dict | None:
         return self.find_team(abbreviation)
 
+    def get_team_contracts(self, abbreviation: str, season: str | None = None) -> list[dict] | None:
+        if self.find_team(abbreviation) is None:
+            return None
+        return [{"full_name": "Stephen Curry", "current_season_salary": 59606817}]
+
     def get_player_season_stats(self, player_id: str) -> list[dict]:
         if str(player_id) != PLAYER_CURRY:
             return []
@@ -215,6 +221,7 @@ class FakeCubeAnalytics:
         ]
 
     def get_games_schedule(self, **kwargs) -> list[dict]:
+        self.schedule_kwargs = kwargs
         return [{"game_id": GAME_ONE, "status": "Scheduled"}]
 
     def get_game_predictions(self, **kwargs) -> list[dict]:
@@ -232,14 +239,16 @@ class FakeCubeAnalytics:
     def get_reddit_posts(self, **kwargs) -> list[dict]:
         return [{"reddit_id": "abc", "title": "Game thread"}]
 
-    def meta_summary(self) -> str:
+    def meta_index(self, exclude_prefixes: tuple[str, ...] = ()) -> str:
+        self.index_excludes = exclude_prefixes
         return "## players\nMeasures: players.count\nDimensions: players.full_name\n"
 
     def run_cube_query(self, query: dict) -> list[dict]:
         if "mystery.ppg" in (query.get("measures") or []):
-            from cube.errors import UnknownMemberError
+            from baseline_analytics.errors import UnknownMemberError
 
             raise UnknownMemberError("Unknown Cube member(s): mystery.ppg")
+        self.cube_query = query
         return [{"ok": True}]
 
 

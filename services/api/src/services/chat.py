@@ -5,18 +5,15 @@ from __future__ import annotations
 import time
 from datetime import datetime, timedelta
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
-from cube.analytics import CubeAnalytics
+from baseline_analytics.operations import CubeAnalytics
 from services.nlp.llm_client import LlmClient
-from services.nlp.llm_provider import LlmNlpProvider
+from services.nlp.llm_provider import EASTERN, LlmNlpProvider
 from services.nlp.rules import RulesNlpProvider
 
 from config import Settings
 from repositories.account import AccountRepository
 from schemas.account import ChatMessage, ChatQuota, ChatResponse
-
-EASTERN = ZoneInfo("America/New_York")
 
 # Written here, not by the model: an answer with no rows behind it is replaced
 # rather than trusted.

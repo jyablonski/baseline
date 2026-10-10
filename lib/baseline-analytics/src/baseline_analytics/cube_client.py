@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from cube.errors import (
+from baseline_analytics.errors import (
     CUBE_DOWN,
     CubeQueryError,
     CubeUnavailableError,
@@ -119,6 +119,69 @@ def _filter_members(filters: Any) -> list[str]:
     return found
 
 
+def _brief(description: Any, limit: int = 100) -> str:
+    """First sentence of a cube description, capped: the index is sent on every ask."""
+    text = " ".join(str(description or "").split())
+    first = text.split(". ")[0].rstrip(".")
+    return first if len(first) <= limit else first[: limit - 1].rstrip() + "…"
+
+
+def format_meta_index(meta: dict[str, Any], exclude_prefixes: tuple[str, ...] = ()) -> str:
+    """Cube names with a one-line description each, and no members.
+
+    A fraction of format_meta_summary's size. Members come from
+    describe_cubes, for the cubes a question actually needs. Cubes whose name
+    starts with one of exclude_prefixes are left out.
+    """
+    lines = ["# Cubes", ""]
+    for cube in meta.get("cubes") or []:
+        name = cube.get("name") or "unknown"
+        if name.startswith(exclude_prefixes):
+            continue
+        brief = _brief(cube.get("description"))
+        lines.append(f"- {name}: {brief}" if brief else f"- {name}")
+    return "\n".join(lines) + "\n"
+
+
+def describe_cubes(meta: dict[str, Any], names: list[str]) -> str:
+    """Measures and dimensions, with types and any member notes, for the named cubes."""
+    cubes = {str(cube.get("name")): cube for cube in meta.get("cubes") or []}
+    wanted = [str(name).strip() for name in names if str(name).strip()]
+    unknown = [name for name in wanted if name not in cubes]
+    if unknown:
+        raise UnknownMemberError(
+            "Unknown cube(s): " + ", ".join(unknown) + ". Cubes: " + ", ".join(sorted(cubes)) + "."
+        )
+    lines: list[str] = []
+    for name in wanted:
+        cube = cubes[name]
+        lines.append(f"## {name}")
+        description = " ".join(str(cube.get("description") or "").split())
+        if description:
+            lines.append(description)
+        notes: list[str] = []
+        for label, key in (("Measures", "measures"), ("Dimensions", "dimensions")):
+            members = [item for item in (cube.get(key) or []) if item.get("name")]
+            if members:
+                lines.append(
+                    f"{label}: "
+                    + ", ".join(
+                        f"{item['name']} ({item['type']})" if item.get("type") else item["name"]
+                        for item in members
+                    )
+                )
+            notes.extend(
+                f"- {item['name']}: {' '.join(str(item['description']).split())}"
+                for item in members
+                if item.get("description")
+            )
+        if notes:
+            lines.append("Notes:")
+            lines.extend(notes)
+        lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
 class CubeClient:
     def __init__(
         self,
@@ -164,6 +227,12 @@ class CubeClient:
 
     def meta_summary(self) -> str:
         return format_meta_summary(self.meta())
+
+    def meta_index(self, exclude_prefixes: tuple[str, ...] = ()) -> str:
+        return format_meta_index(self.meta(), exclude_prefixes)
+
+    def describe_cubes(self, names: list[str]) -> str:
+        return describe_cubes(self.meta(), names)
 
     def validate(self, query: dict[str, Any]) -> None:
         allowed = self.members()

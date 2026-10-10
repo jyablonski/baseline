@@ -11,13 +11,20 @@ inside the container. HTTP clients must send Authorization: Bearer $MCP_API_TOKE
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from functools import lru_cache
 from pathlib import Path
-from uuid import UUID
+from typing import Any
 
+from baseline_analytics.cube_client import CubeClient
+from baseline_analytics.errors import CubeError
+from baseline_analytics.operations import CubeAnalytics
+from baseline_analytics.tools import TOOLS, call_tool
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from fastmcp.tools import Tool, ToolResult
+from pydantic_core import to_jsonable_python
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _SRC_DIR = Path(__file__).resolve().parent
@@ -25,9 +32,6 @@ if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
 from auth import ApiTokenVerifier
-from cube.analytics import CubeAnalytics
-from cube.client import CubeClient
-from cube.errors import CubeError
 
 load_dotenv()
 for parent in _SRC_DIR.parents:
@@ -59,7 +63,7 @@ These questions use named Cube tools or query_cube (Cube query JSON only):
    → Use get_player_contract(player_uuid)
 
 8. **Payroll**: "What is the Warriors payroll?"
-   → Use get_team_payroll("GSW")
+   → Use get_team_payroll("GSW") for the total, get_team_contracts("GSW") for each player
 
 9. **Standings**: "Who leads the West?" / "How many games back are the Lakers?"
    → Use get_standings(conference="West")
@@ -79,7 +83,10 @@ These questions use named Cube tools or query_cube (Cube query JSON only):
 14. **Highlights**: "What stood out last night?" / "Best performances on Christmas?"
    → Use get_daily_highlights(game_date, season, all_candidates, limit)
 
-15. **Schedule / national TV / Elo WP / injuries / odds / PBP / reddit**: named tools or query_cube
+15. **Schedule**: "When do the Pistons play in Chicago?" / "Who do the Celtics play next?"
+   → Use get_games_schedule(team_abbreviation, opponent_abbreviation, location, from_date, limit)
+
+16. **National TV / Elo WP / injuries / odds / PBP / reddit**: named tools or query_cube
 """
 
 
@@ -132,6 +139,7 @@ mcp = FastMCP(
         "Query NBA player and team stats through Cube (measures, dimensions, filters). "
         "Use named tools (search_players, get_player_game_log, etc.) for structured questions. "
         "Fall back to query_cube with Cube query JSON when named tools do not cover the question. "
+        "Cube members are listed in the nba://schema resource. "
         "Do not write SQL. Gold tables are not queryable directly."
     ),
     auth=mcp_auth(settings),
@@ -190,298 +198,28 @@ def team_performance(team_name: str, city: str | None = None) -> str:
     return base
 
 
-@mcp.tool()
-def search_players(name: str) -> list[dict]:
-    """Fuzzy search for NBA players by name. Returns player_id, full_name,
-    position, team, is_active."""
-    return get_analytics().search_players(name)
+class NamedTool(Tool):
+    """One shared tool, served under the schema baseline_analytics declares."""
+
+    async def run(self, arguments: dict[str, Any]) -> ToolResult:
+        # call_tool blocks on Cube HTTP; a thread keeps the server answering
+        # other clients meanwhile, as FastMCP does for a sync function tool.
+        result = await asyncio.to_thread(call_tool, get_analytics(), self.name, arguments)
+        converted = self.convert_result(result)
+        if isinstance(result, list):
+            # A bare list has no structured form; wrap it the way FastMCP wraps
+            # a function tool that returns one.
+            return ToolResult(
+                content=converted.content,
+                structured_content={"result": to_jsonable_python(result)},
+            )
+        return converted
 
 
-@mcp.tool()
-def get_player_game_log(
-    player_id: UUID,
-    season: str | None = None,
-) -> list[dict]:
-    """Get game-by-game stats for a player. If season is omitted, returns
-    current season. Returns date, opponent, minutes, pts, reb, ast, season_type,
-    and mvp_game_score (the game-level MVP score; null for a DNP), etc."""
-    return get_analytics().get_player_game_log(player_id, season)
-
-
-@mcp.tool()
-def get_player_back_to_backs(
-    player_id: UUID,
-    season: str | None = None,
-) -> dict:
-    """Get back-to-back game stats: total_back_to_backs, games_played_in_b2b,
-    games_sat_in_b2b, avg_pts_in_b2b vs avg_pts_overall."""
-    row = get_analytics().get_back_to_back_stats(player_id, season)
-    if row.get("player_name") is None:
-        raise ValueError(f"Player not found: {player_id}")
-    return row
-
-
-@mcp.tool()
-def get_career_stats(player_id: UUID) -> dict:
-    """Career totals and averages: total_games, total_points, ppg, rpg, apg,
-    seasons_played, teams_played_for."""
-    row = get_analytics().get_career_stats(player_id)
-    if row is None:
-        raise ValueError(f"Player not found: {player_id}")
-    return row
-
-
-@mcp.tool()
-def compare_players(
-    player_ids: list[UUID],
-    stats: list[str] | None = None,
-) -> list[dict]:
-    """Compare career stats for 2+ players side by side."""
-    return get_analytics().compare_players(player_ids, stats)
-
-
-@mcp.tool()
-def get_team_record(
-    team_abbreviation: str,
-    opponent_abbreviation: str | None = None,
-    location: str | None = None,
-    since_season: str | None = None,
-    season: str | None = None,
-    arena_city: str | None = None,
-) -> dict:
-    """Get a team's W/L record with optional filters. Returns wins, losses,
-    win_pct, and the filtered game list.
-
-    location may be 'home'/'away' or a city name (e.g. Chicago). Prefer
-    arena_city for city filters such as Warriors games in Chicago.
-    """
-    team = get_analytics().find_team(team_abbreviation)
-    if team is None:
-        raise ValueError(f"Team not found: {team_abbreviation}")
-    return get_analytics().get_team_record(
-        team_abbreviation,
-        opponent_abbreviation=opponent_abbreviation,
-        location=location,
-        since_season=since_season,
-        season=season,
-        arena_city=arena_city,
+for _spec in TOOLS:
+    mcp.add_tool(
+        NamedTool(name=_spec.name, description=_spec.description, parameters=_spec.parameters)
     )
-
-
-@mcp.tool()
-def get_player_contract(player_id: UUID, season: str | None = None) -> dict:
-    """Remaining-contract snapshot. Without season this is the dim remaining-year
-    row. With season it reads player_contracts for that remaining-year slice
-    (BRef snapshot, not a paid ledger)."""
-    row = get_analytics().get_player_contract(player_id, season)
-    if row is None:
-        raise ValueError(f"Player not found: {player_id}")
-    return row
-
-
-@mcp.tool()
-def get_team_payroll(team_abbreviation: str, season: str | None = None) -> dict:
-    """Team payroll snapshot. Without season this is the dim remaining-year
-    row. With season it reads team_payroll (BRef Team Totals, not a ledger)."""
-    row = get_analytics().get_team_payroll(team_abbreviation, season)
-    if row is None:
-        raise ValueError(f"Team not found: {team_abbreviation}")
-    return row
-
-
-@mcp.tool()
-def get_player_season_stats(player_id: UUID) -> list[dict]:
-    """Per-season PPG / RPG / APG from Cube player_season_stats."""
-    return get_analytics().get_player_season_stats(player_id)
-
-
-@mcp.tool()
-def get_mvp_ladder(
-    season: str | None = None,
-    season_type: str | None = None,
-    limit: int | None = None,
-) -> dict:
-    """Baseline MVP score ladder for one season, best rank first (default 25, max 100).
-
-    season_type is 'Regular Season' (default) or 'Playoffs'; play-in games and the
-    Cup final are not scored. Omitting season uses the latest scored season.
-
-    mvp_score = avg_game_score x availability_multiplier. A game score is a Game
-    Score-style box score scaled up 20% in a win and down 20% in a loss. The
-    multiplier is 1.0 through the first 10% of team games missed, then ramps down
-    to 0.75 at half missed and never lower. A house metric, not the official award vote."""
-    return get_analytics().get_mvp_ladder(season=season, season_type=season_type, limit=limit)
-
-
-@mcp.tool()
-def get_player_mvp_scores(player_id: UUID, season: str | None = None) -> list[dict]:
-    """A player's Baseline MVP score and league rank by season, newest first.
-    Regular Season and Playoffs are separate rows. See get_mvp_ladder for the formula."""
-    return get_analytics().get_player_mvp_scores(player_id, season)
-
-
-@mcp.tool()
-def get_games_schedule(
-    season: str | None = None,
-    status: str | None = None,
-) -> list[dict]:
-    """All-status slate (Final and upcoming). Upcoming scores are null.
-    national_tv lists the national TV and streaming networks from ESPN
-    ("ESPN, ABC"); null means local-only or not listed yet."""
-    return get_analytics().get_games_schedule(season=season, status=status)
-
-
-@mcp.tool()
-def get_game_predictions(
-    game_id: UUID | None = None,
-    upcoming: bool = False,
-) -> list[dict]:
-    """Elo pregame home win probability (model_wp, as_of, model_version).
-    Not a betting line and not live WP."""
-    return get_analytics().get_game_predictions(game_id=game_id, upcoming=upcoming)
-
-
-@mcp.tool()
-def get_player_injuries(
-    player_id: UUID | None = None,
-    team_abbreviation: str | None = None,
-) -> list[dict]:
-    """Current Basketball-Reference injury snapshot. Optional player or team filter."""
-    return get_analytics().get_player_injuries(
-        player_id=player_id,
-        team_abbreviation=team_abbreviation,
-    )
-
-
-@mcp.tool()
-def get_game_odds(game_id: UUID | None = None) -> list[dict]:
-    """Odds API moneylines and spreads for games that have not tipped yet.
-    With game_id, that game's lines, including the last pregame line of a
-    game already played. Market snapshot, not a book."""
-    return get_analytics().get_game_odds(game_id=game_id)
-
-
-@mcp.tool()
-def get_biggest_upsets(
-    season: str | None = None,
-    season_type: str | None = None,
-    limit: int | None = None,
-) -> dict:
-    """Biggest upsets by pregame moneyline: games the market underdog won, most
-    surprising first (default 10, max 50). Omitting season uses the latest season
-    with an upset; season_type ('Regular Season', 'Playoffs', ...) is optional.
-
-    underdog_market_wp is the bookmaker-average de-vigged win probability from the
-    last odds scrape before tip-off (a morning line, not a true close);
-    upset_magnitude is -ln(winner's market WP). model_called_upset is true when the
-    champion Elo/logit model had the underdog above 50%. Odds history starts with
-    2026-27; there is no backfill, so earlier seasons return no upsets."""
-    return get_analytics().get_biggest_upsets(season=season, season_type=season_type, limit=limit)
-
-
-@mcp.tool()
-def get_transactions(
-    season: str | None = None,
-    search: str | None = None,
-    limit: int | None = None,
-) -> list[dict]:
-    """Basketball-Reference transactions log: trades, signings, waivers, conversions.
-
-    Optional season ("2025-26") and free-text description search. Use
-    get_transaction_participants to filter by which player or team moved."""
-    return get_analytics().get_transactions(season=season, search=search, limit=limit)
-
-
-@mcp.tool()
-def get_transaction_participants(
-    player_id: UUID | None = None,
-    team_abbreviation: str | None = None,
-    season: str | None = None,
-    limit: int | None = None,
-) -> list[dict]:
-    """Teams and players named by each transaction, one row per participant.
-
-    direction is 'from' or 'to' for teams and 'none' for players; a team that
-    both sends and receives in one trade appears twice. Draft picks are prose
-    on the source page with no link, so they are not participants."""
-    return get_analytics().get_transaction_participants(
-        player_id=player_id,
-        team_abbreviation=team_abbreviation,
-        season=season,
-        limit=limit,
-    )
-
-
-@mcp.tool()
-def get_daily_highlights(
-    game_date: str | None = None,
-    season: str | None = None,
-    all_candidates: bool = False,
-    limit: int | None = None,
-) -> dict:
-    """What stood out on one day of games, most notable first (default 15, max 100).
-    game_date is YYYY-MM-DD; omitting it uses the latest day with games (in
-    season, if given).
-
-    Returns each game's lead highlight: season highs, elite and 40-point games,
-    triple-doubles, opposing 30-point scorers, streaks extended or snapped, blown
-    leads, lead changes, overtime, blowouts, upsets, and meetings of two top-5
-    teams. A quiet game falls back to its top performer. score is weight *
-    (1 + magnitude) * (1 + importance); is_featured marks the day's top three.
-    all_candidates=True also returns the runners-up within each game (game_rank > 1)."""
-    return get_analytics().get_daily_highlights(
-        game_date=game_date, season=season, all_candidates=all_candidates, limit=limit
-    )
-
-
-@mcp.tool()
-def get_play_by_play(game_id: UUID, limit: int | None = None) -> list[dict]:
-    """Play-by-play actions for one game. Season-scoped ingest; default limit 200."""
-    return get_analytics().get_play_by_play(game_id, limit)
-
-
-@mcp.tool()
-def get_reddit_posts(
-    search: str | None = None,
-    limit: int | None = None,
-) -> list[dict]:
-    """Reddit submissions. Optional title search."""
-    return get_analytics().get_reddit_posts(search=search, limit=limit)
-
-
-@mcp.tool()
-def get_standings(
-    season: str | None = None,
-    conference: str | None = None,
-) -> list[dict]:
-    """Conference standings. Omitting season uses the latest official season, else latest Regular Season games.
-    Official Cube standings first; empty → Regular Season team_games W–L ranks.
-    conference may be East or West."""
-    return get_analytics().list_standings(season=season, conference=conference)
-
-
-@mcp.tool()
-def query_cube(
-    measures: list[str] | None = None,
-    dimensions: list[str] | None = None,
-    filters: list[dict] | None = None,
-    time_dimensions: list[dict] | None = None,
-    limit: int | None = None,
-) -> list[dict]:
-    """Load a Cube query (measures, dimensions, filters). Members must exist
-    in Cube meta (nba://schema). This is not SQL."""
-    query: dict = {}
-    if measures:
-        query["measures"] = measures
-    if dimensions:
-        query["dimensions"] = dimensions
-    if filters:
-        query["filters"] = filters
-    if time_dimensions:
-        query["timeDimensions"] = time_dimensions
-    if limit is not None:
-        query["limit"] = limit
-    return get_analytics().run_cube_query(query)
 
 
 if __name__ == "__main__":

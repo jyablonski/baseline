@@ -1,11 +1,11 @@
-from cube.analytics import CubeAnalytics
-from cube.client import CubeClient
-from cube.errors import (
+from baseline_analytics.cube_client import CubeClient
+from baseline_analytics.errors import (
     CubeError,
     CubeQueryError,
     CubeUnavailableError,
     UnknownMemberError,
 )
+from baseline_analytics.operations import CubeAnalytics
 
 __all__ = [
     "CubeAnalytics",

@@ -34,6 +34,20 @@ wheels = [
 ]
 
 [[package]]
+name = "baseline-analytics"
+version = "0.1.0"
+source = { editable = "../../lib/baseline-analytics" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = "==9.1.1" },
+    { name = "pytest-cov", specifier = "==7.1.0" },
+    { name = "ty", specifier = "==0.0.78" },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.7.22"
 source = { registry = "https://pypi.org/simple" }
@@ -306,6 +320,7 @@ name = "nba-api"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "baseline-analytics" },
     { name = "fastapi" },
     { name = "psycopg2-binary" },
     { name = "pydantic" },
@@ -326,6 +341,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "baseline-analytics", editable = "../../lib/baseline-analytics" },
     { name = "fastapi", specifier = "==0.141.1" },
     { name = "psycopg2-binary", specifier = "==2.9.12" },
     { name = "pydantic", specifier = "==2.13.5" },

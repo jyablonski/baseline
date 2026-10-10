@@ -66,8 +66,10 @@ target "migrate" {
 
 target "api" {
   inherits = ["_common"]
-  context  = "./services/api"
-  tags     = tags("nba-api")
+  # Repo root: the image also needs lib/baseline-analytics.
+  context    = "."
+  dockerfile = "services/api/Dockerfile"
+  tags       = tags("nba-api")
 }
 
 target "frontend" {
@@ -100,8 +102,10 @@ target "ml" {
 
 target "mcp" {
   inherits = ["_common"]
-  context  = "./services/mcp"
-  tags     = tags("nba-mcp")
+  # Repo root: the image also needs lib/baseline-analytics.
+  context    = "."
+  dockerfile = "services/mcp/Dockerfile"
+  tags       = tags("nba-mcp")
 }
 
 target "cube" {

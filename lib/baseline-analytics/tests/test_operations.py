@@ -6,21 +6,27 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 import pytest
-from cube.analytics import CubeAnalytics
-from cube.errors import UnknownMemberError
-from cube.queries import (
+from baseline_analytics.errors import UnknownMemberError
+from baseline_analytics.operations import CubeAnalytics
+from baseline_analytics.queries import (
     PLAYER_COMPARE_DIMENSIONS,
     PLAYER_SALARY_DIMENSIONS,
+    biggest_upsets_query,
     current_nba_season,
+    daily_highlights_query,
     game_odds_query,
     game_predictions_query,
     game_standings_query,
     games_schedule_query,
+    mvp_ladder_query,
     normalize_conference,
+    normalize_mvp_season_type,
     play_by_play_query,
     player_back_to_backs_query,
+    player_game_log_query,
     player_ids_query,
     player_injuries_query,
+    player_mvp_scores_query,
     player_salary_query,
     player_season_stats_query,
     project_compare_stats,
@@ -28,8 +34,11 @@ from cube.queries import (
     resolve_location_filters,
     search_players_query,
     standings_query,
+    team_contracts_query,
     team_games_seasons_query,
     team_record_query,
+    transaction_participants_query,
+    transactions_query,
 )
 
 
@@ -472,3 +481,349 @@ def test_list_standings_resolves_season_from_team_games() -> None:
     assert client.queries[0]["dimensions"] == ["standings.season"]
     assert client.queries[1]["dimensions"] == ["team_games.season"]
     assert client.queries[2]["filters"][0]["values"] == ["2026-27"]
+
+
+def equals_filter(member: str, value: str) -> dict:
+    return {"member": member, "operator": "equals", "values": [value]}
+
+
+@pytest.mark.unit
+def test_games_schedule_query_team_filters() -> None:
+    home = equals_filter("games_schedule.home_team", "DET")
+    away = equals_filter("games_schedule.away_team", "DET")
+    assert games_schedule_query(team_abbreviation="det")["filters"] == [{"or": [home, away]}]
+    # "In Chicago" is the team's away game against the Bulls.
+    assert games_schedule_query(
+        team_abbreviation="DET", opponent_abbreviation="CHI", location="away"
+    )["filters"] == [away, equals_filter("games_schedule.home_team", "CHI")]
+    assert games_schedule_query(
+        team_abbreviation="DET", opponent_abbreviation="CHI", location="home"
+    )["filters"] == [home, equals_filter("games_schedule.away_team", "CHI")]
+    either = games_schedule_query(team_abbreviation="DET", opponent_abbreviation="CHI")["filters"]
+    assert either == [
+        {
+            "or": [
+                {"and": [home, equals_filter("games_schedule.away_team", "CHI")]},
+                {"and": [equals_filter("games_schedule.home_team", "CHI"), away]},
+            ]
+        }
+    ]
+    # An opponent alone is that team's schedule; a team against itself is too.
+    assert games_schedule_query(opponent_abbreviation="DET")["filters"] == [{"or": [home, away]}]
+    assert games_schedule_query(team_abbreviation="DET", opponent_abbreviation="DET")[
+        "filters"
+    ] == [{"or": [home, away]}]
+    assert games_schedule_query(team_abbreviation="DET", limit=1)["limit"] == 1
+    assert games_schedule_query(team_abbreviation="DET")["limit"] == 50
+    dated = games_schedule_query(from_date="2026-10-09", to_date="2026-10-31")["filters"]
+    assert [item["operator"] for item in dated] == ["afterOrOnDate", "beforeOrOnDate"]
+    assert dated[0]["values"] == ["2026-10-09"]
+
+
+@pytest.mark.unit
+def test_team_contracts_default_to_the_current_contract_season() -> None:
+    team = {"team_id": TEAM_GSW, "abbreviation": "GSW", "current_contract_season": "2026-27"}
+    contract = {
+        "player_id": PLAYER_CURRY,
+        "player_name": "Stephen Curry",
+        "team_abbreviation": "GSW",
+        "season": "2026-27",
+        "salary": "62587158",
+        "remaining_guaranteed": "62587158",
+    }
+    client = ScriptedCubeClient([[team], [contract], [team], [], [], [{"team_id": TEAM_GSW}]])
+    analytics = CubeAnalytics(client)
+
+    rows = analytics.get_team_contracts("gsw")
+    assert rows == [
+        {
+            "player_id": PLAYER_CURRY,
+            "full_name": "Stephen Curry",
+            "team_abbreviation": "GSW",
+            "current_contract_season": "2026-27",
+            "current_season_salary": 62587158,
+            "current_remaining_guaranteed": 62587158,
+        }
+    ]
+    assert client.queries[1] == team_contracts_query("GSW", "2026-27")
+    assert client.queries[1]["order"] == {"player_contracts.salary": "desc"}
+
+    assert analytics.get_team_contracts("GSW", "2030-31") == []
+    assert client.queries[3]["filters"][1]["values"] == ["2030-31"]
+    # Unknown team, then a team with no contract season on file.
+    assert analytics.get_team_contracts("ZZZ") is None
+    assert analytics.get_team_contracts("GSW") == []
+
+
+@pytest.mark.unit
+def test_transactions_queries_build_optional_filters() -> None:
+    bare = transactions_query()
+    assert bare["filters"] == []
+    assert bare["order"] == {"transactions.transaction_date": "desc"}
+
+    filtered = transactions_query(season="2025-26", search=" traded ", limit=500)
+    members = [item["member"] for item in filtered["filters"]]
+    assert members == ["transactions.season", "transactions.description"]
+    # Whitespace-only input is not a filter, and the limit is clamped.
+    assert filtered["filters"][1]["values"] == ["traded"]
+    assert filtered["limit"] == 200
+    assert transactions_query(season="   ", search="  ")["filters"] == []
+
+    participants = transaction_participants_query(
+        player_id=PLAYER_CURRY,
+        team_abbreviation="atl",
+        season="2025-26",
+    )
+    assert [item["member"] for item in participants["filters"]] == [
+        "transaction_participants.player_id",
+        "transaction_participants.team_abbreviation",
+        "transaction_participants.season",
+    ]
+    # Abbreviations are upper-cased so a lowercase tool argument still matches.
+    assert participants["filters"][1]["values"] == ["ATL"]
+    assert transaction_participants_query()["filters"] == []
+
+
+@pytest.mark.unit
+def test_mvp_queries_and_season_types() -> None:
+    assert normalize_mvp_season_type(None) == "Regular Season"
+    assert normalize_mvp_season_type(" regular ") == "Regular Season"
+    assert normalize_mvp_season_type("Playoffs") == "Playoffs"
+    assert normalize_mvp_season_type("postseason") == "Playoffs"
+    # Play-in and the Cup final are never scored, so asking for them is an error, not [].
+    with pytest.raises(ValueError, match="not scored"):
+        normalize_mvp_season_type("PlayIn")
+
+    ladder = mvp_ladder_query("2025-26", "Playoffs", limit=500)
+    assert ladder["filters"] == [
+        {"member": "player_mvp_scores.season", "operator": "equals", "values": ["2025-26"]},
+        {"member": "player_mvp_scores.season_type", "operator": "equals", "values": ["Playoffs"]},
+    ]
+    assert ladder["order"] == {"player_mvp_scores.mvp_rank": "asc"}
+    assert ladder["limit"] == 100
+    assert mvp_ladder_query("2025-26")["limit"] == 25
+
+    history = player_mvp_scores_query(PLAYER_CURRY)
+    assert [item["member"] for item in history["filters"]] == ["player_mvp_scores.player_id"]
+    assert list(history["order"]) == ["player_mvp_scores.season", "player_mvp_scores.season_type"]
+    assert len(player_mvp_scores_query(PLAYER_CURRY, "2024-25")["filters"]) == 2
+
+    log_dims = player_game_log_query(PLAYER_CURRY, "2025-26")["dimensions"]
+    assert "player_game_logs.mvp_game_score" in log_dims
+    assert "player_game_logs.season_type" in log_dims
+
+
+@pytest.mark.unit
+def test_mvp_ladder_resolves_latest_season() -> None:
+    client = ScriptedCubeClient(
+        [
+            [{"season": "2025-26", "count": "450"}],
+            [
+                {
+                    "player_id": str(PLAYER_CURRY),
+                    "full_name": "Stephen Curry",
+                    "abbreviation": "GSW",
+                    "season": "2025-26",
+                    "season_type": "Regular Season",
+                    "mvp_rank": "1",
+                    "mvp_score": "27.4",
+                    "availability_multiplier": "0.994",
+                    "games_played": "70",
+                    "team_games": "82",
+                    "win_pct": "0.643",
+                }
+            ],
+            [
+                {
+                    "player_id": str(PLAYER_CURRY),
+                    "full_name": "Stephen Curry",
+                    "season": "2024-25",
+                    "season_type": "Playoffs",
+                    "mvp_rank": 3,
+                    "mvp_score": 25.0,
+                }
+            ],
+        ]
+    )
+    analytics = CubeAnalytics(client)
+
+    ladder = analytics.get_mvp_ladder(season_type="regular")
+    assert ladder["season"] == "2025-26"
+    assert ladder["season_type"] == "Regular Season"
+    leader = ladder["players"][0]
+    assert leader["player_id"] == PLAYER_CURRY
+    assert leader["team_abbreviation"] == "GSW"
+    assert leader["mvp_rank"] == 1
+    assert leader["mvp_score"] == 27.4
+    assert leader["team_games"] == 82
+    assert leader["wins"] is None
+    assert client.queries[1]["filters"][0]["values"] == ["2025-26"]
+
+    history = analytics.get_player_mvp_scores(PLAYER_CURRY, "2024-25")
+    assert history[0]["season_type"] == "Playoffs"
+    assert history[0]["mvp_rank"] == 3
+
+    empty = CubeAnalytics(ScriptedCubeClient([]))
+    assert empty.get_mvp_ladder() == {
+        "season": None,
+        "season_type": "Regular Season",
+        "players": [],
+    }
+    explicit = ScriptedCubeClient([[]])
+    CubeAnalytics(explicit).get_mvp_ladder(season="2023-24", season_type="Playoffs")
+    # An explicit season skips the latest-season lookup.
+    assert len(explicit.queries) == 1
+
+
+@pytest.mark.unit
+def test_biggest_upsets_resolves_latest_season() -> None:
+    client = ScriptedCubeClient(
+        [
+            [{"season": "2026-27", "upsets": "12"}],
+            [
+                {
+                    "game_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                    "season": "2026-27",
+                    "season_type": "Regular Season",
+                    "game_date": "2026-10-25T00:00:00.000",
+                    "away_team_abbreviation": "GSW",
+                    "home_team_abbreviation": "LAC",
+                    "away_score": "115",
+                    "home_score": "118",
+                    "underdog_team_abbreviation": "LAC",
+                    "underdog_market_wp": "0.3699",
+                    "underdog_fair_moneyline": "170",
+                    "underdog_best_moneyline": "160",
+                    "bookmaker_count": "1",
+                    "upset_magnitude": "0.9945",
+                    "upset_rank": "1",
+                    "model_winner_wp": "0.47",
+                    "model_called_upset": False,
+                }
+            ],
+        ]
+    )
+    result = CubeAnalytics(client).get_biggest_upsets(limit=500)
+    assert result["season"] == "2026-27"
+    top = result["upsets"][0]
+    assert top["underdog_team_abbreviation"] == "LAC"
+    assert top["underdog_fair_moneyline"] == 170
+    assert top["upset_rank"] == 1
+    assert top["model_called_upset"] is False
+    assert client.queries[0]["filters"][0]["member"] == "game_upsets.is_upset"
+    ladder = client.queries[1]
+    assert ladder["limit"] == 50
+    assert ladder["order"] == {"game_upsets.upset_magnitude": "desc"}
+    assert {"member": "game_upsets.season", "operator": "equals", "values": ["2026-27"]} in ladder[
+        "filters"
+    ]
+
+    empty = CubeAnalytics(ScriptedCubeClient([]))
+    assert empty.get_biggest_upsets() == {"season": None, "season_type": None, "upsets": []}
+
+    explicit = ScriptedCubeClient([[{"model_called_upset": None}]])
+    rows = CubeAnalytics(explicit).get_biggest_upsets(season="2026-27", season_type=" Playoffs ")
+    assert rows["upsets"][0]["model_called_upset"] is None
+    assert len(explicit.queries) == 1
+    assert biggest_upsets_query("2026-27", "Playoffs")["filters"][-1]["values"] == ["Playoffs"]
+    assert biggest_upsets_query("2026-27")["limit"] == 10
+
+
+@pytest.mark.unit
+def test_daily_highlights_resolves_latest_day() -> None:
+    client = ScriptedCubeClient(
+        [
+            [{"game_date": "2026-01-12T00:00:00.000"}],
+            [
+                {
+                    "highlight_id": "abc",
+                    "game_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                    "game_date": "2026-01-12T00:00:00.000",
+                    "season": "2025-26",
+                    "season_type": "Regular Season",
+                    "highlight_type": "win_streak",
+                    "subject_type": "team",
+                    "player_name": None,
+                    "team_abbreviation": "OKC",
+                    "away_team_abbreviation": "OKC",
+                    "home_team_abbreviation": "UTA",
+                    "away_score": "131",
+                    "home_score": "101",
+                    "headline": "Thunder win 15th straight",
+                    "detail": "OKC 131, UTA 101.",
+                    "stat_name": "games",
+                    "stat_value": "15",
+                    "score": "16.00",
+                    "game_rank": "1",
+                    "day_rank": "1",
+                    "is_featured": True,
+                }
+            ],
+        ]
+    )
+    result = CubeAnalytics(client).get_daily_highlights(season="2025-26", limit=500)
+    assert result["game_date"] == "2026-01-12"
+    top = result["highlights"][0]
+    assert top["headline"] == "Thunder win 15th straight"
+    assert top["game_date"] == "2026-01-12"
+    assert top["stat_value"] == 15.0
+    assert top["score"] == 16.0
+    assert top["day_rank"] == 1
+    assert top["away_score"] == 131
+    assert top["is_featured"] is True
+
+    latest, day = client.queries
+    assert latest["order"] == {"daily_highlights.game_date": "desc"}
+    assert latest["limit"] == 1
+    assert latest["filters"] == [
+        {"member": "daily_highlights.season", "operator": "equals", "values": ["2025-26"]}
+    ]
+    assert day["limit"] == 100
+    assert day["order"] == {"daily_highlights.score": "desc"}
+    assert day["filters"] == [
+        {
+            "member": "daily_highlights.game_date",
+            "operator": "inDateRange",
+            "values": ["2026-01-12", "2026-01-12"],
+        },
+        {"member": "daily_highlights.game_rank", "operator": "equals", "values": ["1"]},
+    ]
+
+
+@pytest.mark.unit
+def test_daily_highlights_explicit_date_and_empty_warehouse() -> None:
+    # An explicit date skips the lookup, and a timestamp is cut to its day.
+    explicit = ScriptedCubeClient([[{"game_date": None, "headline": "x"}]])
+    result = CubeAnalytics(explicit).get_daily_highlights(
+        game_date="2025-12-25T00:00:00.000", all_candidates=True
+    )
+    assert result["game_date"] == "2025-12-25"
+    assert result["highlights"][0]["game_date"] is None
+    assert len(explicit.queries) == 1
+    # Runners-up included: no game_rank filter.
+    assert [item["member"] for item in explicit.queries[0]["filters"]] == [
+        "daily_highlights.game_date"
+    ]
+
+    empty = CubeAnalytics(ScriptedCubeClient([[]]))
+    assert empty.get_daily_highlights() == {"game_date": None, "highlights": []}
+    assert empty.client.queries[0]["filters"] == []
+
+    assert daily_highlights_query("2026-01-12")["limit"] == 15
+
+
+@pytest.mark.unit
+def test_team_flow_reads_blown_leads_and_comebacks() -> None:
+    client = ScriptedCubeClient(
+        [
+            [{"games": "82", "blown_leads": "9", "biggest_lead_blown": "21", "comeback_wins": "7"}],
+            [{"team_id": TEAM_GSW, "abbreviation": "GSW", "team_name": "Warriors"}],
+        ]
+    )
+    flow = CubeAnalytics(client).get_team_flow("gsw", "2025-26")
+    assert flow["abbreviation"] == "GSW"
+    assert flow["team_name"] == "Warriors"
+    assert (flow["games"], flow["blown_leads"], flow["comeback_wins"]) == (82, 9, 7)
+    assert flow["biggest_comeback"] is None
+    assert flow["filters_applied"] == {"team_abbreviation": "GSW", "season": "2025-26"}
+    assert client.queries[0]["filters"][1]["values"] == ["2025-26"]

@@ -3,6 +3,7 @@ name = "nba-mcp"
 version = "0.1.0"
 requires-python = ">=3.14,<3.15"
 dependencies = [
+    "baseline-analytics",
     "fastmcp==4.0.2",
     "python-dotenv==1.2.3",
     "pydantic-settings==2.15.0",
@@ -18,6 +19,10 @@ dev = [
 
 [tool.uv]
 package = false
+
+# Shared with services/api. Editable, so a change in lib/ needs no reinstall.
+[tool.uv.sources]
+baseline-analytics = { path = "../../lib/baseline-analytics", editable = true }
 
 [build-system]
 requires = ["hatchling==1.32.0"]

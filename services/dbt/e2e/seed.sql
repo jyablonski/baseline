@@ -91,17 +91,19 @@ INSERT INTO source.player_contracts (
      '2026-27', 52000000, TRUE, 52000000, 38,
      'https://www.basketball-reference.com/contracts/GSW.html', NOW());
 
+-- Shaped like the real feed: no games_back for a conference leader (GSW), and
+-- no form columns at all for CHI. fct_standings derives all three.
 INSERT INTO source.standings (
     team_id, season, season_type, as_of_date, conference, division,
     conference_rank, division_rank, wins, losses, win_pct, games_back,
     conf_games_back, streak, last_10, scraped_at
 ) VALUES
     ('7bf8726a-a852-452d-b81f-14839127c5fb', '2024-25', 'Regular Season', '2024-10-25', 'West', 'Pacific',
-     1, 1, 3, 0, 1.000, 0.0, 0.0, 'W 3', '3-0', NOW()),
+     1, 1, 3, 0, 1.000, NULL, 0.0, 'W 3', '3-0', NOW()),
     ('a79dabb2-26c5-443c-bbb4-cabdd8db5958', '2024-25', 'Regular Season', '2024-10-25', 'West', 'Pacific',
      2, 2, 2, 1, 0.667, 1.5, 1.5, 'W 1', '2-1', NOW()),
     ('a96f53b4-0f5c-4cb6-8b88-21ba05224cae', '2024-25', 'Regular Season', '2024-10-25', 'East', 'Central',
-     5, 3, 1, 2, 0.333, 4.0, 4.0, 'L 2', '1-2', NOW());
+     5, 3, 1, 2, 0.333, 4.0, 4.0, NULL, NULL, NOW());
 
 INSERT INTO source.team_payroll (
     team_id, season, total_salary,

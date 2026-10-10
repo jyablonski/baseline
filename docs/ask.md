@@ -13,9 +13,11 @@ It answers from the warehouse through Cube. It is a bounded Q&A — one question
 | **rules** (default) | `NLP_BACKEND=rules` or unset          | In-house regex/alias engine. No API key. Each matched family runs a Cube query.                                                    |
 | **llm** (opt-in)    | `NLP_BACKEND=llm` + `NLP_LLM_API_KEY` | OpenAI-compatible chat with a tool loop over the same named Cube operations MCP uses. Missing key returns a refusal, not an error. |
 
-Optional: `NLP_LLM_BASE_URL`, `NLP_LLM_MODEL` (default `https://api.openai.com/v1`, `gpt-4o-mini`), `NLP_LLM_MAX_OUTPUT_TOKENS` (default 2000, sent as `max_completion_tokens`), `NLP_LLM_REASONING_EFFORT` (unset, sent only when set). An unknown `NLP_BACKEND` fails at startup.
+Optional: `NLP_LLM_BASE_URL`, `NLP_LLM_MODEL` (default `https://api.openai.com/v1`, `gpt-4o-mini`), `NLP_LLM_MAX_OUTPUT_TOKENS` (default 2000, sent as `max_completion_tokens`), `NLP_LLM_REASONING_EFFORT` (unset, sent only when set). An unknown `NLP_BACKEND` fails at startup. The adapter speaks `/chat/completions` with function tools, and some models put conditions on that: `gpt-6-luna` rejects tool calls unless `NLP_LLM_REASONING_EFFORT=none`.
 
-The signed-in `/chat` is a separate surface over the same adapter. It does not read `NLP_BACKEND`. It is offered only when `NLP_LLM_API_KEY` is set and the `chatbot` feature flag is on, behind sign-in and a per-user quota, and when it is offered it replaces Ask in the header: the site shows one or the other. See [operations.md](operations.md#accounts-chat-and-picks).
+The signed-in `/chat` is a separate surface over the same adapter. It does not read `NLP_BACKEND`. It is offered only when `NLP_LLM_API_KEY` is set and the `chatbot` feature flag is on, behind sign-in and a per-user quota, and when it is offered it replaces Ask in the header: the site shows one or the other. The exact conditions, and when Chat itself answers from the rules engine, are in [operations.md](operations.md#chat-or-ask).
+
+The tools the model is offered are the shared list in `lib/baseline-analytics` (`baseline_analytics.tools`), the same one the MCP server registers. The system prompt lists cubes by name only; the model calls `get_cube_schema` for a cube's members when it needs `query_cube`. See [mcp-and-ai.md](mcp-and-ai.md#one-tool-list-two-surfaces).
 
 Do not enable `llm` on the public host without a key, spend controls, and a deliberate decision to send user questions to a third party.
 
@@ -49,7 +51,7 @@ Never add a gold-SQL string to the API or MCP.
 - `services/nl_query.py` — rules classification and prose
 - `services/nlp/` — provider protocol, rules wrapper, LLM client and tools
 
-The LLM backend gets a maximum of four tool rounds and cannot emit SQL. `query_cube` accepts Cube query JSON only, validated against Cube meta.
+The LLM backend gets a maximum of five tool rounds and cannot emit SQL. `query_cube` accepts Cube query JSON only, validated against Cube meta.
 
 The `sql` field on a rules answer is a provenance string (`cube:…`), not something a client can run.
 

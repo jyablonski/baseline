@@ -133,11 +133,25 @@ def client(session: ScriptedSession, cube_analytics) -> TestClient:
     return TestClient(app)
 
 
+# The name other containers on postgres_network (Cube) use to reach Postgres.
+POSTGRES_NETWORK_ALIAS = "postgres"
+
+
 @pytest.fixture(scope="session")
-def postgres_engine():
+def postgres_network():
     if not docker_available():
         pytest.skip("Docker is not available for Testcontainers Postgres")
-    container, url = start_postgres_container()
+    from testcontainers.core.network import Network
+
+    with Network() as network:
+        yield network
+
+
+@pytest.fixture(scope="session")
+def postgres_engine(postgres_network):
+    container, url = start_postgres_container(
+        network=postgres_network, network_alias=POSTGRES_NETWORK_ALIAS
+    )
     engine = bootstrap_engine(
         url,
         with_gold_schema=True,

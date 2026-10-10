@@ -117,7 +117,39 @@ Sessions issued before Google sign-in was added carry no provider and are refuse
 
 The API enforces a flag, the UI only reflects it, so a page left open after a flag is switched off still gets refused. `GET /api/v1/features` is the public read, and it reports what the UI should offer rather than the raw flags: `chatbot` is true only when the flag is on **and** `NLP_LLM_API_KEY` is set.
 
-**Chat or Ask, never both.** The header has one tab for questions. It is Chat when `/features` reports `chatbot`, and the rules-based Ask otherwise. `/ask` stays reachable by URL either way, and the Chat page links to it when chat is unavailable. Flags are created by Alembic migrations, never through the API: setting an unknown key is a 404. A flag with no row reads as off.
+Flags are created by Alembic migrations, never through the API: setting an unknown key is a 404. A flag with no row reads as off.
+
+### Chat or Ask
+
+The header has one tab for questions, never both. Which one it is, and what answers a question once you are in Chat, are two separate decisions.
+
+**1. Which tab the site shows.** The header shows **Chat** only when `GET /api/v1/features` reports `chatbot: true`, and that takes both of these:
+
+- the `chatbot` flag is on in `source.feature_flags` (the migration creates it on; `/admin` toggles it), and
+- `NLP_LLM_API_KEY` is set to a non-empty value on the API.
+
+If either is missing, or the features request fails or has not loaded yet, the header shows **Ask**. `NLP_BACKEND` plays no part in this: it only chooses the engine behind `/ask`. `/ask` stays reachable by URL either way, and the Chat page links to it when chat is unavailable.
+
+**2. Whether a visitor can use Chat.** Showing the tab is not enough. A question is refused, with nothing sent to the model, when:
+
+| Condition                                                                     | Result                                          |
+| ----------------------------------------------------------------------------- | ----------------------------------------------- |
+| `ACCOUNTS_API_TOKEN` unset                                                    | 503, accounts unavailable (sign-in still works) |
+| Not signed in                                                                 | the page asks them to sign in                   |
+| `chatbot` flag switched off after the page loaded                             | 503, "Chat is turned off right now"             |
+| Their `CHAT_DAILY_LIMIT` is spent, or one of their questions is still running | 429 / 409                                       |
+| The conversation already holds `CHAT_MAX_TURNS` questions                     | 400, start a new conversation                   |
+
+**3. What answers inside Chat.** Chat stays in the header, but one question at a time it can fall back to the same rules engine Ask uses:
+
+| Situation                                                                                  | Answered by                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Key set, and fewer than `CHAT_GLOBAL_DAILY_LIMIT` model-backed questions today (all users) | the model, through the named Cube tools                                                                                                                                                 |
+| `CHAT_GLOBAL_DAILY_LIMIT` reached                                                          | the rules engine, for everyone, until midnight Eastern                                                                                                                                  |
+| The model call fails or times out                                                          | nobody: 502, "The answer service did not respond" (no silent fallback)                                                                                                                  |
+| Cube is down                                                                               | nobody. On the rules engine the reply says the semantic layer is down; on the model path it is the fixed "I don't have that", because a reply with no rows behind it is always replaced |
+
+Each row in `source.chat_usage` records which one answered in `backend` (`llm` or `rules`).
 
 ## Accounts, chat, and picks
 
@@ -125,7 +157,7 @@ Sign-in is open to anyone and is needed only for `/chat` and picks. User data li
 
 The browser never calls `/api/v1/account/*`. A Next.js server action checks the session, then calls the API with `Authorization: Bearer $ACCOUNTS_API_TOKEN` and the caller's internal id in `X-Baseline-User`. The token is the only reason the API believes that header, so it is separate from `ADMIN_API_TOKEN`, server-side only, and unset returns 503. With it unset sign-in and `/admin` still work; chat and picks report that accounts are unavailable.
 
-**Chat.** `CHAT_DAILY_LIMIT` questions per user per Eastern day (default 10), `CHAT_MAX_TURNS` questions per conversation (default 6), one in-flight question per user. Every ask is a row in `source.chat_usage` with its backend, model, token counts, tool rounds, outcome, and latency; the text of the question is not stored. Chat is only offered once `NLP_LLM_API_KEY` is set, and answers through the same OpenAI-compatible adapter `/ask` uses (`NLP_LLM_BASE_URL`, `NLP_LLM_MODEL`). `NLP_BACKEND` governs only `/ask`. Once `CHAT_GLOBAL_DAILY_LIMIT` model-backed asks have been made in a day (default 250) chat answers from the rules backend for everyone until midnight. The model is not given the Reddit tool, sees at most `CHAT_MODEL_ROW_CAP` rows of a result, and a reply with no rows behind it is replaced by a fixed "I don't have that". The suggested follow-up questions under an answer are fixed text per tool (`services/frontend/src/lib/chat.ts`), not model output.
+**Chat.** `CHAT_DAILY_LIMIT` questions per user per Eastern day (default 10), `CHAT_MAX_TURNS` questions per conversation (default 6), one in-flight question per user. Every ask is a row in `source.chat_usage` with its backend, model, token counts, tool rounds, outcome, and latency; the text of the question is not stored. Chat answers through the same OpenAI-compatible adapter `/ask` uses (`NLP_LLM_BASE_URL`, `NLP_LLM_MODEL`); when it is offered and when it falls back to the rules engine is set out under [Chat or Ask](#chat-or-ask) (`CHAT_GLOBAL_DAILY_LIMIT` defaults to 250). The model is offered the shared named tools from `lib/baseline-analytics` minus the Reddit one, is told today's date, sees at most `CHAT_MODEL_ROW_CAP` rows of a result, and a reply with no rows behind it is replaced by a fixed "I don't have that". Answers are plain text; the page does not render Markdown. The suggested follow-up questions under an answer are fixed text per tool (`services/frontend/src/lib/chat.ts`), not model output.
 
 **Picks.** One pick per user and game, open until tip (or until the start of game day when no tip time is on file). Picking a winner is one click and counts toward the record. A stake is optional, in whole dollars from $1 to $1,000 (`MAX_STAKE`), and settles at the consensus moneyline stored with the pick when it was saved. There is no balance: nobody is given money to start with, a stake is not checked against anything, and the only money figure is the net of what settled stakes have won and lost, kept to the cent. It has no cash value. Picks are graded at read time from `gold.fct_games_schedule`, and compared with the champion model's favourite from `gold.fct_game_predictions` for the "vs. the model" figure: +1 where the pick won and the model's favourite lost, −1 the other way round.
 

@@ -5,14 +5,20 @@ from __future__ import annotations
 import json
 
 import pytest
-from cube.client import (
+from baseline_analytics.cube_client import (
     CubeClient,
     cube_api_token,
+    describe_cubes,
     flatten_row,
+    format_meta_index,
     format_meta_summary,
 )
-from cube.errors import CUBE_DOWN, CubeQueryError, CubeUnavailableError, UnknownMemberError
-from ids import PLAYER_CURRY
+from baseline_analytics.errors import (
+    CUBE_DOWN,
+    CubeQueryError,
+    CubeUnavailableError,
+    UnknownMemberError,
+)
 
 SAMPLE_META = {
     "cubes": [
@@ -137,12 +143,12 @@ def test_flatten_collisions_and_meta_summary() -> None:
     row = {
         "players.full_name": "A",
         "teams.full_name": "B",
-        "players.player_id": PLAYER_CURRY,
+        "players.player_id": 1,
     }
     flat = flatten_row(row)
     assert flat["players.full_name"] == "A"
     assert flat["teams.full_name"] == "B"
-    assert flat["player_id"] == PLAYER_CURRY
+    assert flat["player_id"] == 1
     summary = format_meta_summary(SAMPLE_META)
     assert "## players" in summary
     assert "players.count" in summary
@@ -229,3 +235,50 @@ def test_http_400_and_bad_json() -> None:
             "timeDimensions": [{"dimension": "players.full_name"}],
         }
     )
+
+
+@pytest.mark.unit
+def test_meta_index_and_describe_cubes() -> None:
+    meta = {
+        "cubes": [
+            {
+                "name": "games_schedule",
+                "description": "All-status slate (Final and upcoming). Upcoming scores are null.",
+                "measures": [{"name": "games_schedule.count", "type": "number"}],
+                "dimensions": [
+                    {"name": "games_schedule.game_date", "type": "time"},
+                    {
+                        "name": "games_schedule.national_tv",
+                        "type": "string",
+                        "description": "National TV networks,\n comma-separated.",
+                    },
+                ],
+            },
+            {"name": "team_games", "description": "x" * 150, "dimensions": []},
+            {"name": "games", "measures": [{"name": "games.count"}]},
+            {"name": "reddit_posts", "description": "PRAW submission ingest."},
+        ]
+    }
+    index = format_meta_index(meta)
+    assert "- games_schedule: All-status slate (Final and upcoming)\n" in index
+    assert "- games\n" in index
+    # No members in the index, and a long description is cut.
+    assert "game_date" not in index
+    assert "- team_games: " + "x" * 99 + "…\n" in index
+
+    described = describe_cubes(meta, ["games_schedule"])
+    assert "Upcoming scores are null." in described
+    assert "Measures: games_schedule.count (number)" in described
+    assert "games_schedule.game_date (time)" in described
+    assert "- games_schedule.national_tv: National TV networks, comma-separated." in described
+    assert "team_games" not in described
+    with pytest.raises(UnknownMemberError, match="Unknown cube\\(s\\): nope. Cubes: games,"):
+        describe_cubes(meta, ["games", "nope"])
+
+    client = CubeClient("http://cube:4000", meta=meta)
+    assert client.meta_index() == index
+    # A member with no type is listed bare.
+    assert client.describe_cubes(["games"]) == "## games\nMeasures: games.count\n"
+    assert "reddit_posts" in index
+    assert "reddit_posts" not in client.meta_index(("reddit_",))
+    assert "- games\n" in client.meta_index(("reddit_",))

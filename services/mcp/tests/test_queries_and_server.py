@@ -1,112 +1,29 @@
 import asyncio
-from datetime import date
+from uuid import UUID
 
 import pytest
-from cube.errors import CubeUnavailableError, UnknownMemberError
-from cube.queries import current_nba_season, normalize_conference, project_compare_stats
+from baseline_analytics.errors import CubeUnavailableError, UnknownMemberError
+from baseline_analytics.tools import TOOLS, TOOLS_BY_NAME
+from fastmcp import Client
+from fastmcp.exceptions import ToolError
 
 import server
 
+PLAYER = "00000000-0000-4000-8000-000000000001"
+MISSING = "00000000-0000-4000-8000-000000000099"
+
 
 class FakeAnalytics:
-    def search_players(self, name: str) -> list[dict]:
-        return [{"player_id": 1, "full_name": name}]
-
-    def get_player_game_log(self, player_id: int, season: str | None = None) -> list[dict]:
-        return [{"player_id": player_id, "season": season}]
-
-    def get_back_to_back_stats(self, player_id: int, season: str | None = None) -> dict:
-        if player_id == 99:
-            return {"player_name": None}
-        return {"player_id": player_id, "player_name": "A", "total_back_to_backs": 1}
-
-    def get_career_stats(self, player_id: int) -> dict | None:
-        if player_id == 99:
+    def get_career_stats(self, player_id: UUID) -> dict | None:
+        if str(player_id) == MISSING:
             return None
-        return {"player_id": player_id}
-
-    def compare_players(self, player_ids: list[int], stats: list[str] | None = None) -> list[dict]:
-        if len(player_ids) < 2:
-            raise ValueError("compare_players requires at least 2 player_ids")
-        return [{"player_id": player_ids[0]}]
-
-    def find_team(self, abbreviation: str) -> dict | None:
-        if abbreviation.upper() == "XXX":
-            return None
-        return {"abbreviation": abbreviation.upper(), "team_id": 1}
-
-    def get_team_record(self, team_abbreviation: str, **kwargs) -> dict:
-        return {"wins": 1, "losses": 0, "win_pct": 1.0, "games": []}
-
-    def get_player_contract(self, player_id: int, season: str | None = None) -> dict | None:
-        if player_id == 99:
-            return None
-        return {"player_id": player_id, "season": season}
-
-    def get_team_payroll(self, abbreviation: str, season: str | None = None) -> dict | None:
-        if abbreviation.upper() == "XXX":
-            return None
-        return {"abbreviation": abbreviation, "season": season}
-
-    def get_player_season_stats(self, player_id: int) -> list[dict]:
-        return [{"player_id": player_id, "season": "2024-25", "ppg": 24.5}]
-
-    def get_mvp_ladder(self, **kwargs) -> dict:
-        return {
-            "season": kwargs.get("season") or "2025-26",
-            "season_type": kwargs.get("season_type") or "Regular Season",
-            "players": [{"full_name": "A", "mvp_rank": 1}],
-        }
-
-    def get_player_mvp_scores(self, player_id: int, season: str | None = None) -> list[dict]:
-        return [{"player_id": player_id, "season": season, "mvp_rank": 3}]
+        return {"player_id": player_id, "career_ppg": 24.7}
 
     def get_games_schedule(self, **kwargs) -> list[dict]:
-        return [{"game_id": "1", "status": kwargs.get("status")}]
+        return [{"game_id": "1", "home_team": kwargs.get("team_abbreviation")}]
 
-    def get_game_predictions(self, **kwargs) -> list[dict]:
-        return [{"game_id": kwargs.get("game_id") or "1", "model_wp": 0.58}]
-
-    def get_player_injuries(self, **kwargs) -> list[dict]:
-        return [{"player_id": kwargs.get("player_id"), "description": "knee"}]
-
-    def get_game_odds(self, **kwargs) -> list[dict]:
-        return [{"game_id": kwargs.get("game_id"), "market": "h2h"}]
-
-    def get_biggest_upsets(self, **kwargs) -> dict:
-        return {
-            "season": kwargs.get("season") or "2026-27",
-            "season_type": kwargs.get("season_type"),
-            "upsets": [{"underdog_team_abbreviation": "LAC", "upset_rank": 1}],
-        }
-
-    def get_daily_highlights(self, **kwargs) -> dict:
-        return {
-            "game_date": kwargs.get("game_date") or "2026-01-12",
-            "highlights": [{"headline": "Thunder win 15th straight", "limit": kwargs.get("limit")}],
-        }
-
-    def get_play_by_play(self, game_id: str, limit: int | None = None) -> list[dict]:
-        return [{"game_id": game_id, "action_number": 1, "limit": limit}]
-
-    def get_transactions(self, **kwargs) -> list[dict]:
-        return [{"season": kwargs.get("season"), "description": "signed a guy"}]
-
-    def get_transaction_participants(self, **kwargs) -> list[dict]:
-        return [
-            {
-                "team_abbreviation": kwargs.get("team_abbreviation"),
-                "direction": "to",
-            }
-        ]
-
-    def get_reddit_posts(self, **kwargs) -> list[dict]:
-        return [{"reddit_id": "abc", "title": kwargs.get("search") or "thread"}]
-
-    def list_standings(
-        self, season: str | None = None, conference: str | None = None
-    ) -> list[dict]:
-        return [{"abbreviation": "OKC", "conference": conference}]
+    def get_mvp_ladder(self, **kwargs) -> dict:
+        return {"season": "2025-26", "players": [{"full_name": "A", "mvp_rank": 1}]}
 
     def meta_summary(self) -> str:
         return "## players\nMeasures: players.count\nDimensions: players.full_name\n"
@@ -120,36 +37,6 @@ class FakeAnalytics:
 class DownAnalytics(FakeAnalytics):
     def meta_summary(self) -> str:
         raise CubeUnavailableError("Ask is unavailable because the Cube semantic layer is down.")
-
-
-@pytest.mark.unit
-def test_current_nba_season() -> None:
-    assert current_nba_season(date(2025, 10, 1)) == "2025-26"
-    assert current_nba_season(date(2026, 2, 1)) == "2025-26"
-
-
-@pytest.mark.unit
-def test_project_compare_stats() -> None:
-    rows = [
-        {
-            "player_id": 1,
-            "full_name": "A",
-            "career_games_played": 10,
-            "career_ppg": 20,
-        }
-    ]
-    defaulted = project_compare_stats(rows)
-    assert defaulted[0]["player_id"] == 1
-    projected = project_compare_stats(rows, ["ppg", "games", "ppg"])
-    assert "career_ppg" in projected[0]
-    assert "career_games_played" in projected[0]
-
-
-@pytest.mark.unit
-def test_normalize_conference() -> None:
-    assert normalize_conference("east") == "East"
-    assert normalize_conference("  ") is None
-    assert normalize_conference("Central") == "Central"
 
 
 @pytest.mark.unit
@@ -185,70 +72,36 @@ def test_mcp_transport_auth() -> None:
 
 
 @pytest.mark.unit
-def test_server_tools(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = FakeAnalytics()
-    monkeypatch.setattr(server, "get_analytics", lambda: fake)
+def test_server_registers_the_shared_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server, "get_analytics", lambda: FakeAnalytics())
 
-    assert server.search_players("kawhi") == [{"player_id": 1, "full_name": "kawhi"}]
-    assert server.get_player_game_log(1) == [{"player_id": 1, "season": None}]
-    assert server.get_player_back_to_backs(1)["player_id"] == 1
-    assert server.get_career_stats(1)["player_id"] == 1
-    assert server.compare_players([1, 2]) == [{"player_id": 1}]
-    with pytest.raises(ValueError):
-        server.compare_players([1])
-    assert server.get_team_record("GSW")["wins"] == 1
-    assert server.get_player_contract(1)["player_id"] == 1
-    assert server.get_team_payroll("GSW")["abbreviation"] == "GSW"
-    assert server.get_standings(conference="West") == [
-        {"abbreviation": "OKC", "conference": "West"}
-    ]
-    assert server.get_player_season_stats(1)[0]["ppg"] == 24.5
-    ladder = server.get_mvp_ladder(season_type="Playoffs", limit=5)
-    assert ladder["season_type"] == "Playoffs"
-    assert ladder["players"][0]["mvp_rank"] == 1
-    assert server.get_player_mvp_scores(1, season="2024-25") == [
-        {"player_id": 1, "season": "2024-25", "mvp_rank": 3}
-    ]
-    assert server.get_games_schedule(season="2024-25")[0]["game_id"] == "1"
-    assert server.get_game_predictions(upcoming=True)[0]["model_wp"] == 0.58
-    assert server.get_player_injuries(team_abbreviation="LAC")[0]["description"] == "knee"
-    assert server.get_game_odds()[0]["market"] == "h2h"
-    upsets = server.get_biggest_upsets(season_type="Playoffs", limit=3)
-    assert upsets["season"] == "2026-27"
-    assert upsets["upsets"][0]["upset_rank"] == 1
-    highlights = server.get_daily_highlights(limit=3)
-    assert highlights["game_date"] == "2026-01-12"
-    assert highlights["highlights"][0] == {"headline": "Thunder win 15th straight", "limit": 3}
-    assert server.get_play_by_play("0022400001")[0]["game_id"] == "0022400001"
-    assert server.get_reddit_posts(search="thread")[0]["title"] == "thread"
-    assert server.get_transactions(season="2025-26")[0]["season"] == "2025-26"
-    assert server.get_transaction_participants(team_abbreviation="ATL")[0]["direction"] == "to"
-    assert server.get_player_contract(1, season="2024-25")["season"] == "2024-25"
-    assert server.query_cube(measures=["players.count"]) == [
-        {"x": 1, "query": {"measures": ["players.count"]}}
-    ]
-    assert (
-        server.query_cube(
-            dimensions=["players.full_name"],
-            filters=[{"member": "players.full_name", "operator": "contains", "values": ["a"]}],
-            time_dimensions=[{"dimension": "player_game_logs.game_date"}],
-            limit=5,
-        )[0]["query"]["limit"]
-        == 5
-    )
+    async def scenario() -> None:
+        async with Client(server.mcp) as client:
+            listed = {tool.name: tool for tool in await client.list_tools()}
+            assert set(listed) == {tool.name for tool in TOOLS}
+            schedule = listed["get_games_schedule"]
+            assert schedule.description == TOOLS_BY_NAME["get_games_schedule"].description
+            assert "opponent_abbreviation" in schedule.input_schema["properties"]
+            assert listed["get_career_stats"].input_schema["required"] == ["player_id"]
 
-    with pytest.raises(ValueError):
-        server.get_player_back_to_backs(99)
-    with pytest.raises(ValueError):
-        server.get_career_stats(99)
-    with pytest.raises(ValueError):
-        server.get_player_contract(99)
-    with pytest.raises(ValueError):
-        server.get_team_payroll("XXX")
-    with pytest.raises(ValueError):
-        server.get_team_record("XXX")
-    with pytest.raises(UnknownMemberError):
-        server.query_cube(measures=["mystery.ppg"])
+            # A dict comes back as is; a list is wrapped the way FastMCP wraps one.
+            career = await client.call_tool("get_career_stats", {"player_id": PLAYER})
+            assert career.structured_content == {"player_id": PLAYER, "career_ppg": 24.7}
+            games = await client.call_tool("get_games_schedule", {"team_abbreviation": "DET"})
+            assert games.structured_content == {"result": [{"game_id": "1", "home_team": "DET"}]}
+            ladder = await client.call_tool("get_mvp_ladder", {})
+            assert ladder.structured_content["players"][0]["mvp_rank"] == 1
+            rows = await client.call_tool("query_cube", {"measures": ["players.count"]})
+            assert rows.structured_content["result"][0]["query"] == {"measures": ["players.count"]}
+
+            with pytest.raises(ToolError, match="Player not found"):
+                await client.call_tool("get_career_stats", {"player_id": MISSING})
+            with pytest.raises(ToolError, match="requires player_id"):
+                await client.call_tool("get_career_stats", {})
+            with pytest.raises(ToolError, match="mystery.ppg"):
+                await client.call_tool("query_cube", {"measures": ["mystery.ppg"]})
+
+    asyncio.run(scenario())
 
 
 @pytest.mark.unit
@@ -276,6 +129,8 @@ def test_examples_resource() -> None:
     assert "get_player_mvp_scores" in result
     assert "get_biggest_upsets" in result
     assert "get_daily_highlights" in result
+    assert "get_team_contracts" in result
+    assert "get_games_schedule" in result
 
 
 @pytest.mark.unit

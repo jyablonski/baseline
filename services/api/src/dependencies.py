@@ -2,8 +2,8 @@ import secrets
 from collections.abc import Generator
 from uuid import UUID
 
-from cube.analytics import CubeAnalytics
-from cube.client import CubeClient
+from baseline_analytics.cube_client import CubeClient
+from baseline_analytics.operations import CubeAnalytics
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -73,6 +73,14 @@ def get_account_repository(db: Session = Depends(get_db)) -> AccountRepository:
 
 def get_flags_repository(db: Session = Depends(get_db)) -> FlagsRepository:
     return FlagsRepository(db)
+
+
+def require_flag(flags: FlagsRepository, flag_key: str, label: str) -> None:
+    if not flags.is_enabled(flag_key):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"{label} is turned off right now.",
+        )
 
 
 # auto_error=False so a missing header reaches our handler and returns the same

@@ -162,7 +162,7 @@ def test_list_standings_game_record_overlay(client, session, mapping_row, query_
 
 @pytest.mark.unit
 def test_apply_derived_ranks_orders_by_record() -> None:
-    from services.standings_rank import apply_derived_ranks
+    from baseline_analytics.standings_rank import apply_derived_ranks
 
     rows = apply_derived_ranks(
         [
@@ -218,14 +218,14 @@ def test_apply_derived_ranks_orders_by_record() -> None:
 
 @pytest.mark.unit
 def test_apply_derived_ranks_empty() -> None:
-    from services.standings_rank import apply_derived_ranks
+    from baseline_analytics.standings_rank import apply_derived_ranks
 
     assert apply_derived_ranks([]) == []
 
 
 @pytest.mark.unit
 def test_apply_derived_ranks_keeps_official_values() -> None:
-    from services.standings_rank import apply_derived_ranks
+    from baseline_analytics.standings_rank import apply_derived_ranks
 
     rows = apply_derived_ranks(
         [

@@ -51,6 +51,8 @@ DECLARE
   standings_count integer;
   gsw_rank integer;
   gsw_gb numeric;
+  chi_streak text;
+  chi_last_10 text;
   schedule_count integer;
   scheduled_count integer;
   prediction_count integer;
@@ -151,6 +153,16 @@ BEGIN
   END IF;
   IF gsw_gb IS DISTINCT FROM 0 THEN
     RAISE EXCEPTION 'expected GSW games_back=0, got %', gsw_gb;
+  END IF;
+
+  -- CHI has no form in source.standings and lost both Regular Season Finals.
+  SELECT streak, last_10 INTO chi_streak, chi_last_10
+  FROM gold.fct_standings
+  WHERE team_id = 'a96f53b4-0f5c-4cb6-8b88-21ba05224cae'
+    AND season = '2024-25'
+    AND season_type = 'Regular Season';
+  IF chi_streak IS DISTINCT FROM 'L2' OR chi_last_10 IS DISTINCT FROM '0-2' THEN
+    RAISE EXCEPTION 'expected CHI streak=L2 last_10=0-2, got % %', chi_streak, chi_last_10;
   END IF;
 
   SELECT count(*) INTO schedule_count FROM gold.fct_games_schedule;
