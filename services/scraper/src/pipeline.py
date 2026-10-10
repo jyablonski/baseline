@@ -512,7 +512,7 @@ def run_pipeline_scrape(
 ) -> dict[str, Any]:
     """Gate + scrape. Does not run dbt (orchestrator / Make target does)."""
     day = today or date.today()
-    by = triggered_by or ("force" if force else "manual")
+    by = triggered_by or "manual"
 
     with get_session() as session:
         config = load_config(session)
@@ -646,7 +646,7 @@ def record_dbt_only_run(
             session.execute(
                 INSERT_DBT_ONLY_RUN,
                 {
-                    "triggered_by": "dbt",
+                    "triggered_by": "manual",
                     "dbt_exit": dbt_exit,
                     "detail": detail,
                     "failed_nodes": failed_nodes,

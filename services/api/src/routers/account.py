@@ -17,7 +17,7 @@ from dependencies import (
 )
 from repositories.account import AccountRepository
 from schemas import ItemResponse
-from schemas.account import AccountProfile, AccountUser, UserUpsert
+from schemas.account import AccountProfile, AccountUser, TimezoneUpdate, UserUpsert
 
 router = APIRouter(dependencies=[Depends(require_accounts_token)])
 
@@ -48,6 +48,17 @@ def get_me(
             chat=chat_quota(repo, user["user_id"], settings),
         )
     )
+
+
+@router.put("/me/timezone", response_model=ItemResponse[AccountUser])
+def set_my_timezone(
+    body: TimezoneUpdate,
+    user: dict = Depends(get_current_user),
+    repo: AccountRepository = Depends(get_account_repository),
+) -> ItemResponse[AccountUser]:
+    """Choose the time zone game times are shown in; null is the Eastern default."""
+    updated = repo.set_timezone(user["user_id"], body.timezone)
+    return ItemResponse(data=AccountUser.model_validate(updated))
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)

@@ -11,6 +11,29 @@ MAX_CHAT_MESSAGE_CHARS = 500
 MAX_CHAT_MESSAGES = 40
 
 
+# The time zones an account may show game times in. `services/frontend/src/lib/
+# timezones.ts` offers the same list; a name missing here is refused with a 422.
+Timezone = Literal[
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Phoenix",
+    "America/Los_Angeles",
+    "America/Anchorage",
+    "Pacific/Honolulu",
+    "America/Sao_Paulo",
+    "UTC",
+    "Europe/London",
+    "Europe/Paris",
+    "Europe/Athens",
+    "Asia/Kolkata",
+    "Asia/Shanghai",
+    "Asia/Manila",
+    "Asia/Tokyo",
+    "Australia/Sydney",
+]
+
+
 class UserUpsert(BaseModel):
     provider: Literal["github", "google"]
     # The provider's stable account id, never an email or a login name.
@@ -25,8 +48,15 @@ class AccountUser(BaseModel):
     provider: str
     display_name: str | None = None
     status: str
+    # Null is the site default, Eastern.
+    timezone: str | None = None
     created_at: datetime
     last_seen_at: datetime
+
+
+class TimezoneUpdate(BaseModel):
+    # Null goes back to the site default.
+    timezone: Timezone | None
 
 
 class ChatQuota(BaseModel):

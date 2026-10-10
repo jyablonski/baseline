@@ -52,6 +52,10 @@ else
   SKIP_BUILD="${SKIP_BUILD:-1}"
 fi
 RUN_DBT_TEST="${RUN_DBT_TEST:-1}"
+# Shown as the run's trigger on /admin. Only the crontab entry sets
+# TRIGGER=scheduled; an /admin button press also runs under cron (via
+# admin-job-runner.sh) but is an operator action, so it stays manual.
+TRIGGER="${TRIGGER:-manual}"
 
 # Never start/reconcile depends_on (postgres). `compose run` without
 # --no-deps recreates Tilt-managed nba-postgres-1 when labels/config differ.
@@ -86,7 +90,7 @@ fi
 echo "==> alembic upgrade head (source schema)"
 $COMPOSE run --rm --no-deps migrate alembic upgrade head
 
-SCRAPER_ARGS=(pipeline run-once)
+SCRAPER_ARGS=(pipeline run-once --triggered-by "$TRIGGER")
 if [[ "$FORCE" == "1" ]]; then
   SCRAPER_ARGS+=(--force)
 fi

@@ -67,3 +67,48 @@ export function bestCall(picks: UserPick[]) {
   if (paid.length > 0) return paid.sort((a, b) => (b.profit ?? 0) - (a.profit ?? 0))[0];
   return wins.sort((a, b) => (b.moneyline ?? 0) - (a.moneyline ?? 0))[0];
 }
+
+const CSV_COLUMNS = [
+  "game_date",
+  "start_time_et",
+  "away_team",
+  "home_team",
+  "picked_team",
+  "moneyline",
+  "stake",
+  "result",
+  "profit",
+  "away_score",
+  "home_score",
+  "picked_at",
+];
+
+/** Every pick as CSV, one row per game, for the visitor to keep. */
+export function picksCsv(picks: UserPick[]) {
+  const rows = picks.map((pick) => [
+    pick.game_date?.slice(0, 10),
+    pick.start_time_et,
+    pick.away_team_abbreviation,
+    pick.home_team_abbreviation,
+    pick.picked_team_id === pick.home_team_id
+      ? pick.home_team_abbreviation
+      : pick.away_team_abbreviation,
+    pick.moneyline,
+    pick.stake,
+    pick.result,
+    pick.profit,
+    pick.away_score,
+    pick.home_score,
+    pick.created_at,
+  ]);
+  return [CSV_COLUMNS, ...rows]
+    .map((row) =>
+      row
+        .map((value) => {
+          const text = value == null ? "" : String(value);
+          return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+        })
+        .join(",")
+    )
+    .join("\n");
+}

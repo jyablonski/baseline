@@ -14,6 +14,7 @@ const accountApi = vi.hoisted(() => ({
   fetchProfile: vi.fn(),
   fetchPickSheet: vi.fn(),
   savePick: vi.fn(),
+  saveTimezone: vi.fn(),
   deletePick: vi.fn(),
   sendChat: vi.fn(),
   deleteAccount: vi.fn(),
@@ -33,6 +34,7 @@ import {
   getProfileAction,
   removePickAction,
   savePickAction,
+  setTimezoneAction,
   signOutAction,
 } from "@/app/account/actions";
 import { AccountApiError } from "@/lib/account-api";
@@ -75,6 +77,27 @@ describe("who may call", () => {
     expect(accountApi.fetchPickSheet).toHaveBeenCalledWith("u-1");
     expect(accountApi.fetchProfile).toHaveBeenCalledWith("u-1");
     expect(accountApi.deletePick).toHaveBeenCalledWith("u-1", "g-1");
+  });
+
+  it("saves only a time zone from the offered list, as the session's user", async () => {
+    accountApi.saveTimezone.mockResolvedValue({ timezone: "Asia/Tokyo" });
+    await expect(setTimezoneAction("Asia/Tokyo")).resolves.toEqual({
+      ok: true,
+      data: { timezone: "Asia/Tokyo" },
+    });
+    expect(accountApi.saveTimezone).toHaveBeenCalledWith("u-1", "Asia/Tokyo");
+    await setTimezoneAction(null);
+    expect(accountApi.saveTimezone).toHaveBeenLastCalledWith("u-1", null);
+
+    for (const refused of ["Mars/Olympus_Mons", "", 7 as unknown as string]) {
+      await expect(setTimezoneAction(refused)).resolves.toEqual({
+        ok: false,
+        message: "That time zone is not one of the choices.",
+      });
+    }
+    expect(accountApi.saveTimezone).toHaveBeenCalledTimes(2);
+    session.current = null;
+    await expect(setTimezoneAction("UTC")).resolves.toEqual(SIGNED_OUT);
   });
 });
 

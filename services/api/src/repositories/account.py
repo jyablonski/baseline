@@ -15,6 +15,7 @@ from queries.account import (
     LIST_PICKS,
     PICK_GAME,
     RESERVE_CHAT,
+    SET_USER_TIMEZONE,
     SETTLE_CHAT,
     UPSERT_PICK,
     UPSERT_USER,
@@ -97,6 +98,15 @@ class AccountRepository:
     def get_user(self, user_id: UUID) -> dict | None:
         row = self.db.execute(GET_USER, {"user_id": user_id}).mappings().one_or_none()
         return dict(row) if row is not None else None
+
+    def set_timezone(self, user_id: UUID, timezone: str | None) -> dict:
+        row = (
+            self.db.execute(SET_USER_TIMEZONE, {"user_id": user_id, "timezone": timezone})
+            .mappings()
+            .one()
+        )
+        self.db.commit()
+        return dict(row)
 
     def delete_user(self, user_id: UUID) -> None:
         # chat_usage and picks go with it: both reference users ON DELETE CASCADE.

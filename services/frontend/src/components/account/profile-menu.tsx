@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { usePicks } from "@/hooks/use-picks";
 import { signOutAndReload } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
 
@@ -17,10 +16,7 @@ export function ProfileMenu({ name, showPicks }: { name: string | null; showPick
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const root = useRef<HTMLDivElement>(null);
-  // The header is on every page; the record is only read once the menu opens.
-  const picks = usePicks({ fetch: open });
   const label = name || "Account";
-  const summary = showPicks ? picks.sheet?.summary : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -75,12 +71,6 @@ export function ProfileMenu({ name, showPicks }: { name: string | null; showPick
         >
           <div className="border-b border-rule px-[var(--ct-space-3)] py-3">
             <p className="truncate font-semibold">{label}</p>
-            {summary ? (
-              <p className="type-caption mt-0.5" data-testid="profile-record">
-                {summary.wins}–{summary.losses} · {summary.pending} open{" "}
-                {summary.pending === 1 ? "pick" : "picks"}
-              </p>
-            ) : null}
           </div>
           {showPicks ? (
             <Link href="/picks" role="menuitem" className={ITEM} onClick={() => setOpen(false)}>

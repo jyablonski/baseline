@@ -197,6 +197,7 @@ def test_account_routes_fail_closed_without_a_configured_token(make_client) -> N
     for method, path in [
         ("post", "/api/v1/account/users"),
         ("get", "/api/v1/account/me"),
+        ("put", "/api/v1/account/me/timezone"),
         ("post", "/api/v1/account/chat"),
         ("get", "/api/v1/account/picks"),
     ]:
@@ -240,6 +241,40 @@ def test_signing_in_twice_returns_the_same_account(client) -> None:
         "/api/v1/account/users", headers=_server_headers(), json={**body, "provider": "github"}
     ).json()["data"]
     assert other["user_id"] != first["user_id"]
+
+
+def test_a_time_zone_is_chosen_from_a_fixed_list_and_survives_signing_in_again(client) -> None:
+    body = {"provider": "github", "provider_subject": uuid4().hex, "display_name": "Pat"}
+    user_id = client.post("/api/v1/account/users", headers=_server_headers(), json=body).json()[
+        "data"
+    ]["user_id"]
+    headers = _server_headers(user_id)
+    # Unset is the site default, Eastern.
+    assert (
+        client.get("/api/v1/account/me", headers=headers).json()["data"]["user"]["timezone"] is None
+    )
+
+    saved = client.put(
+        "/api/v1/account/me/timezone", headers=headers, json={"timezone": "America/Los_Angeles"}
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["data"]["timezone"] == "America/Los_Angeles"
+
+    # Sign-in rewrites the display name, and must leave the setting alone.
+    again = client.post("/api/v1/account/users", headers=_server_headers(), json=body).json()[
+        "data"
+    ]
+    assert again["timezone"] == "America/Los_Angeles"
+
+    for refused in ("Mars/Olympus_Mons", "PST", ""):
+        response = client.put(
+            "/api/v1/account/me/timezone", headers=headers, json={"timezone": refused}
+        )
+        assert response.status_code == 422, refused
+    assert client.put("/api/v1/account/me/timezone", headers=headers, json={}).status_code == 422
+
+    cleared = client.put("/api/v1/account/me/timezone", headers=headers, json={"timezone": None})
+    assert cleared.json()["data"]["timezone"] is None
 
 
 def test_user_upsert_rejects_an_unknown_provider(client) -> None:

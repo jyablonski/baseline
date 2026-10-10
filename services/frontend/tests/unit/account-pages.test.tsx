@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
 }));
 const actions = vi.hoisted(() => ({
   getProfileAction: vi.fn(),
+  setTimezoneAction: vi.fn(),
   getPickSheetAction: vi.fn(),
   savePickAction: vi.fn(),
   removePickAction: vi.fn(),
@@ -120,6 +121,13 @@ function reply(answer: string, extra: Record<string, unknown> = {}) {
   };
 }
 
+function profile(timezone: string | null = null, chat = quota(10)) {
+  return {
+    ok: true,
+    data: { user: { created_at: "2026-10-03T12:00:00Z", timezone }, chat },
+  };
+}
+
 function page(node: React.ReactNode) {
   return render(<Providers>{node}</Providers>);
 }
@@ -130,7 +138,7 @@ beforeEach(() => {
   state.flags = { chatbot: true, picks: true, isLoading: false };
   state.pathname = "/schedule";
   actions.getPickSheetAction.mockResolvedValue(sheet());
-  actions.getProfileAction.mockResolvedValue({ ok: true, data: { chat: quota(10) } });
+  actions.getProfileAction.mockResolvedValue(profile());
 });
 
 describe("header", () => {
@@ -163,10 +171,7 @@ describe("header", () => {
     expect(screen.queryByRole("link", { name: "Chat" })).not.toBeInTheDocument();
   });
 
-  it("gives a signed-in visitor a profile menu with their record, pages and sign-out", async () => {
-    actions.getPickSheetAction.mockResolvedValue(
-      sheet([], { ...emptySummary, wins: 12, losses: 7, pending: 2 })
-    );
+  it("gives a signed-in visitor a profile menu with their pages and sign-out", () => {
     page(<Header />);
     const nav = screen.getByRole("navigation", { name: "Account" });
     expect(within(nav).queryByRole("link", { name: "Sign in" })).not.toBeInTheDocument();
@@ -174,14 +179,11 @@ describe("header", () => {
     const trigger = within(nav).getByRole("button", { name: /Pat/ });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    // The header is on every page, so the record is not fetched until it is wanted.
-    expect(actions.getPickSheetAction).not.toHaveBeenCalled();
 
     fireEvent.click(trigger);
     const menu = screen.getByRole("menu", { name: "Your account" });
-    expect(await within(menu).findByTestId("profile-record")).toHaveTextContent(
-      "12–7 · 2 open picks"
-    );
+    // The header is on every page, so the menu never loads the pick sheet.
+    expect(actions.getPickSheetAction).not.toHaveBeenCalled();
     expect(within(menu).getByRole("menuitem", { name: "Your picks" })).toHaveAttribute(
       "href",
       "/picks"
@@ -227,13 +229,6 @@ describe("header", () => {
     expect(actions.signOutAction).toHaveBeenCalledTimes(1);
   });
 
-  it("says singular for one open pick", async () => {
-    actions.getPickSheetAction.mockResolvedValue(sheet([], { ...emptySummary, pending: 1 }));
-    page(<Header />);
-    fireEvent.click(screen.getByRole("button", { name: /Pat/ }));
-    expect(await screen.findByTestId("profile-record")).toHaveTextContent("0–0 · 1 open pick");
-  });
-
   it("drops picks from the menu when its flag is off", () => {
     state.flags = { chatbot: false, picks: false, isLoading: false };
     state.account = { name: null, hasAccount: true };
@@ -242,7 +237,6 @@ describe("header", () => {
     fireEvent.click(screen.getByRole("button", { name: /Account/ }));
     const menu = screen.getByRole("menu");
     expect(within(menu).queryByRole("menuitem", { name: "Your picks" })).not.toBeInTheDocument();
-    expect(within(menu).queryByTestId("profile-record")).not.toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Account" })).toBeInTheDocument();
     expect(actions.getPickSheetAction).not.toHaveBeenCalled();
   });
@@ -269,12 +263,24 @@ describe("header", () => {
 });
 
 describe("schedule picks", () => {
-  it("shows no pick column to an anonymous visitor", async () => {
+  it("shows an anonymous visitor the pick buttons, which lead to sign-in", async () => {
     state.account = null;
     page(<SchedulePage />);
     expect(await screen.findByText("Chase Center")).toBeInTheDocument();
-    expect(screen.queryByText("Your pick")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("pick-cell")).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Your pick" })).toBeInTheDocument();
+    // The steps stay out of the way until asked for.
+    expect(screen.queryByText("Pick a winner")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Your picks" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Pick GSW" }));
+    const steps = await screen.findByRole("dialog", { name: "How picks work" });
+    expect(steps).toHaveTextContent("Pretend dollars, paid at the moneyline. Nothing is charged.");
+    // Back to the same season after signing in.
+    expect(within(steps).getByRole("link", { name: "Sign in to start" })).toHaveAttribute(
+      "href",
+      "/signin?callbackUrl=%2Fschedule%3Fseason%3D2026-27"
+    );
+    expect(actions.savePickAction).not.toHaveBeenCalled();
     expect(actions.getPickSheetAction).not.toHaveBeenCalled();
   });
 
@@ -283,7 +289,24 @@ describe("schedule picks", () => {
     page(<SchedulePage />);
     expect(await screen.findByText("Chase Center")).toBeInTheDocument();
     expect(screen.queryByText("Your pick")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "How picks work" })).not.toBeInTheDocument();
     expect(actions.getPickSheetAction).not.toHaveBeenCalled();
+
+    // Nor to an anonymous visitor: there is nothing to sign in for.
+    state.account = null;
+    page(<SchedulePage />);
+    await waitFor(() => expect(screen.getAllByText("Chase Center")).toHaveLength(2));
+    expect(screen.queryByRole("button", { name: "How picks work" })).not.toBeInTheDocument();
+  });
+
+  it("shows start times in the account's time zone, Eastern unless one is chosen", async () => {
+    const { unmount } = page(<SchedulePage />);
+    expect(await screen.findByText("7:30 PM ET")).toBeInTheDocument();
+    unmount();
+    actions.getProfileAction.mockResolvedValue(profile("America/Los_Angeles"));
+    page(<SchedulePage />);
+    expect(await screen.findByText("4:30 PM PDT")).toBeInTheDocument();
+    expect(screen.queryByText("7:30 PM ET")).not.toBeInTheDocument();
   });
 
   it("lets a signed-in visitor pick a side with one click", async () => {
@@ -293,7 +316,15 @@ describe("schedule picks", () => {
     actions.savePickAction.mockResolvedValue(sheet([pick()], { ...emptySummary, pending: 1 }));
     page(<SchedulePage />);
     expect(await screen.findByText("Your pick")).toBeInTheDocument();
-    expect(screen.getByTestId("pick-record")).toHaveTextContent("Your record: 12–7, net +$37.15.");
+    // The record and net live on the picks page, not here.
+    expect(screen.getByTestId("pick-intro")).toHaveTextContent("Your picksHow picks work");
+    fireEvent.click(screen.getByRole("button", { name: "How picks work" }));
+    const steps = await screen.findByRole("dialog", { name: "How picks work" });
+    expect(steps).toHaveTextContent("Track your net");
+    // Already signed in, so there is nothing to start.
+    expect(within(steps).queryByRole("link")).not.toBeInTheDocument();
+    fireEvent.click(within(steps).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     // No balance is given to anyone, so none is shown.
     expect(screen.queryByText(/balance|available/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Pick GSW" }));
@@ -304,11 +335,9 @@ describe("schedule picks", () => {
       )
     );
     expect(actions.savePickAction).toHaveBeenCalledWith("g-1", "home", null);
-    // With nothing settled the net is left out rather than shown as zero.
-    expect(screen.getByTestId("pick-record")).toHaveTextContent("Your record: 0–0.");
   });
 
-  it("adds a stake to a saved pick from a row under the game", async () => {
+  it("adds a stake to a saved pick from a popover on the game", async () => {
     actions.getPickSheetAction.mockResolvedValue(sheet([pick()]));
     actions.savePickAction.mockResolvedValue(
       sheet([pick({ stake: 50 })], { ...emptySummary, pending: 1, staked_open: 50 })
@@ -316,7 +345,7 @@ describe("schedule picks", () => {
     page(<SchedulePage />);
     fireEvent.click(await screen.findByRole("button", { name: "Add stake" }));
     const editor = screen.getByTestId("stake-editor");
-    expect(within(editor).getByText("Stake on GSW −150 (optional)")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "GSW to win" })).toHaveTextContent("−150");
     fireEvent.click(within(editor).getByRole("button", { name: "$50" }));
     fireEvent.click(within(editor).getByRole("button", { name: "Save stake" }));
     // The editor closes, and the cell shows what is riding.
@@ -326,19 +355,19 @@ describe("schedule picks", () => {
     expect(screen.getByRole("button", { name: "Edit stake" })).toBeInTheDocument();
   });
 
-  it("closes the stake row on Cancel or when the pick is cleared", async () => {
+  it("closes the stake popover on Escape or when the pick is removed", async () => {
     actions.getPickSheetAction.mockResolvedValue(sheet([pick()]));
     actions.removePickAction.mockResolvedValue(sheet());
     page(<SchedulePage />);
     fireEvent.click(await screen.findByRole("button", { name: "Add stake" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByTestId("stake-editor")).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByTestId("stake-editor"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByTestId("stake-editor")).not.toBeInTheDocument());
     expect(actions.savePickAction).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Add stake" }));
-    fireEvent.click(screen.getByRole("button", { name: /Clear pick/ }));
-    expect(screen.queryByTestId("stake-editor")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove pick" }));
     await waitFor(() => expect(actions.removePickAction).toHaveBeenCalledWith("g-1"));
+    await waitFor(() => expect(screen.queryByTestId("stake-editor")).not.toBeInTheDocument());
   });
 
   it("says why when the picks cannot be loaded, instead of just hiding them", async () => {
@@ -468,7 +497,6 @@ describe("picks page", () => {
     );
     page(<PicksPage />);
     expect(await screen.findByRole("heading", { name: "Pat", level: 1 })).toBeInTheDocument();
-    expect(screen.getByText("Picking since Oct 2026")).toBeInTheDocument();
 
     expect(screen.getByText("2–1")).toBeInTheDocument();
     expect(screen.getByText("67% correct")).toBeInTheDocument();
@@ -484,7 +512,7 @@ describe("picks page", () => {
 
     const [staked, plain] = screen.getAllByTestId("open-pick");
     expect(within(staked).getByText("LAL +104 at GSW")).toBeInTheDocument();
-    expect(staked).toHaveTextContent("7:30 PM ET");
+    expect(staked).toHaveTextContent("Thu, Oct 22, 2026 · 7:30 PM ET");
     expect(within(staked).getByText("to win $104")).toBeInTheDocument();
     expect(within(plain).getByText("record only")).toBeInTheDocument();
 
@@ -729,7 +757,7 @@ describe("chat page", () => {
   });
 
   it("closes the field when the conversation is full, until a new one starts", async () => {
-    actions.getProfileAction.mockResolvedValue({ ok: true, data: { chat: quota(10, 1) } });
+    actions.getProfileAction.mockResolvedValue(profile(null, quota(10, 1)));
     actions.chatAction.mockResolvedValue(
       reply("OKC.", { quota: quota(9, 1), source: "cube tool get_standings" })
     );
@@ -745,7 +773,7 @@ describe("chat page", () => {
   });
 
   it("stops taking questions once the day's are used", async () => {
-    actions.getProfileAction.mockResolvedValue({ ok: true, data: { chat: quota(0) } });
+    actions.getProfileAction.mockResolvedValue(profile(null, quota(0)));
     page(<ChatPage />);
     const input = await screen.findByPlaceholderText("No questions left today");
     expect(input).toBeDisabled();
@@ -764,7 +792,7 @@ describe("chat page", () => {
     expect(actions.chatAction).not.toHaveBeenCalled();
 
     await waitFor(() => expect(actions.getProfileAction).toHaveBeenCalledTimes(1));
-    actions.getProfileAction.mockResolvedValue({ ok: true, data: { chat: quota(0) } });
+    actions.getProfileAction.mockResolvedValue(profile(null, quota(0)));
     await ask("One more?");
     expect(await screen.findByRole("alert")).toHaveTextContent("used all of today's questions");
     await waitFor(() => expect(screen.getByTestId("chat-quota")).toHaveTextContent("0 of 10"));
@@ -785,13 +813,35 @@ describe("account page", () => {
     expect(screen.getByText("You are not signed in.")).toBeInTheDocument();
   });
 
-  it("names the account, says what is kept, and offers sign-out", () => {
+  it("names the account, says what is kept, and offers sign-out", async () => {
     page(<AccountPage />);
     expect(screen.getByText("Pat")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Your email address and the text of your chat questions are not stored/)
-    ).toBeInTheDocument();
+    expect(await screen.findByTestId("member-since")).toHaveTextContent(
+      "Member since October 3, 2026"
+    );
+    expect(screen.getByText(/Your email address is not stored/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+  });
+
+  it("lets the visitor choose the time zone game times are shown in", async () => {
+    actions.setTimezoneAction.mockResolvedValue({
+      ok: true,
+      data: { created_at: "2026-10-03T12:00:00Z", timezone: "America/Los_Angeles" },
+    });
+    page(<AccountPage />);
+    const select = await screen.findByLabelText("Time zone");
+    // Nothing chosen reads as Eastern.
+    expect(select).toHaveValue("America/New_York");
+    fireEvent.change(select, { target: { value: "America/Los_Angeles" } });
+    await waitFor(() => expect(select).toHaveValue("America/Los_Angeles"));
+    expect(actions.setTimezoneAction).toHaveBeenCalledWith("America/Los_Angeles");
+
+    // Choosing Eastern again clears the setting rather than storing it.
+    actions.setTimezoneAction.mockResolvedValue({ ok: false, message: "Try again." });
+    fireEvent.change(select, { target: { value: "America/New_York" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Try again.");
+    expect(actions.setTimezoneAction).toHaveBeenLastCalledWith(null);
+    expect(select).toHaveValue("America/Los_Angeles");
   });
 
   it("links to admin for the owner and for nobody else", () => {

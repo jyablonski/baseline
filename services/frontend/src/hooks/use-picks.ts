@@ -19,13 +19,8 @@ function unwrap<T>(result: ActionResult<T>): T {
   return result.data;
 }
 
-/**
- * The signed-in visitor's picks and record.
- *
- * `fetch: false` shares whatever is already cached without asking for it, for
- * a caller that is on every page and usually has nothing to show.
- */
-export function usePicks({ fetch = true }: { fetch?: boolean } = {}) {
+/** The signed-in visitor's picks and record. */
+export function usePicks() {
   const { account, isLoading: accountIsLoading } = useAccount();
   const features = useFeatures();
   const queryClient = useQueryClient();
@@ -34,7 +29,7 @@ export function usePicks({ fetch = true }: { fetch?: boolean } = {}) {
   const sheetQuery = useQuery({
     queryKey: PICK_SHEET_KEY,
     queryFn: async () => unwrap(await getPickSheetAction()),
-    enabled: enabled && fetch,
+    enabled,
     retry: false,
   });
 
@@ -54,7 +49,7 @@ export function usePicks({ fetch = true }: { fetch?: boolean } = {}) {
 
   return {
     enabled,
-    isLoading: accountIsLoading || features.isLoading || (enabled && fetch && sheetQuery.isPending),
+    isLoading: accountIsLoading || features.isLoading || (enabled && sheetQuery.isPending),
     error: sheetQuery.error,
     sheet: sheetQuery.data,
     save,

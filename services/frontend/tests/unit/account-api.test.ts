@@ -8,6 +8,7 @@ import {
   fetchProfile,
   registerAccount,
   savePick,
+  saveTimezone,
   sendChat,
 } from "@/lib/account-api";
 
@@ -108,6 +109,16 @@ describe("user-scoped calls", () => {
     await expect(deleteAccount("u-7")).resolves.toBeUndefined();
     expect(lastCall().url).toBe("http://api:8000/api/v1/account/me");
     expect(lastCall().init.method).toBe("DELETE");
+  });
+
+  it("saves a time zone, or null to clear it", async () => {
+    fetchMock.mockImplementation(async () => jsonResponse({ data: { timezone: "UTC" } }));
+    await expect(saveTimezone("u-7", "UTC")).resolves.toEqual({ timezone: "UTC" });
+    expect(lastCall().url).toBe("http://api:8000/api/v1/account/me/timezone");
+    expect(lastCall().init.method).toBe("PUT");
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({ timezone: "UTC" });
+    await saveTimezone("u-7", null);
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({ timezone: null });
   });
 
   it("sends the conversation and season to chat", async () => {

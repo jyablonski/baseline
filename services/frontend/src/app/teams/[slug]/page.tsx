@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CapPosition } from "@/components/teams/cap-position";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamLogo } from "@/components/team-logo";
+import { useProfile } from "@/hooks/use-profile";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import { isLegacyEntityId, slugifyName, teamHref, withSeason } from "@/lib/nav";
@@ -18,12 +19,11 @@ import {
   formatOrdinal,
   formatRecord,
   formatRecordWithWinPct,
-  formatScheduleDate,
   formatSignedMargin,
-  formatTimeET,
   teamCentricMargin,
 } from "@/lib/format";
 import { lastTenFromGames, streakFromGames } from "@/lib/team-form";
+import { formatGameTime } from "@/lib/timezones";
 import type { TeamGame } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +44,7 @@ function TeamProfile() {
   const routeSlug = params.slug;
   const isLegacyRoute = isLegacyEntityId(routeSlug);
   const { season: requestedSeason, isLoading: seasonsLoading } = useSeason();
+  const { timezone } = useProfile();
   const [seasonOverride, setSeasonOverride] = useState<string | null>(null);
   const [opponentId, setOpponentId] = useState("");
   const [location, setLocation] = useState<"all" | "home" | "away">("all");
@@ -211,7 +212,6 @@ function TeamProfile() {
             {[
               team.abbreviation,
               team.conference,
-              team.division,
               [team.arena_name, team.city].filter(Boolean).join(", ") || null,
             ]
               .filter(Boolean)
@@ -403,14 +403,13 @@ function TeamProfile() {
                     ? game.away_team_abbreviation
                     : game.home_team_abbreviation;
                   const opponentName = isHome ? game.away_team_name : game.home_team_name;
+                  const tip = formatGameTime(game.game_date, game.start_time_et, timezone);
                   return (
                     <div key={game.game_id} className="py-2 first:pt-0 last:pb-0">
                       <div className="flex justify-between gap-3 text-sm">
-                        <span className="whitespace-nowrap font-medium">
-                          {formatScheduleDate(game.game_date)}
-                        </span>
+                        <span className="whitespace-nowrap font-medium">{tip.date}</span>
                         <span className="whitespace-nowrap tabular text-muted-foreground">
-                          {formatTimeET(game.start_time_et)}
+                          {tip.zone ? `${tip.time} ${tip.zone}` : tip.time}
                         </span>
                       </div>
                       <p className="mt-1 flex items-center gap-1.5 text-sm">

@@ -49,7 +49,7 @@ test.describe("sign-in", () => {
     await expect(page.getByRole("heading", { name: "Sign in", level: 1 })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
-    await expect(page.getByText("Sign in to make picks and use chat.")).toBeVisible();
+    await expect(page.getByText("Sign in to make picks.")).toBeVisible();
     // The signed-in features are not advertised in the main navigation.
     await expect(primaryNav(page).getByRole("link", { name: /picks/i })).toHaveCount(0);
   });
@@ -68,7 +68,6 @@ test.describe("sign-in", () => {
     await expect(page.getByRole("menu")).toHaveCount(0);
     await nav.getByRole("button", { name: /Pat Tester/ }).click();
     const menu = page.getByRole("menu", { name: "Your account" });
-    await expect(menu.getByTestId("profile-record")).toHaveText("0–0 · 0 open picks");
     await expect(menu.getByRole("menuitem", { name: "Account" })).toHaveAttribute(
       "href",
       "/account"
@@ -178,11 +177,17 @@ test.describe("admin access", () => {
 // --- picks --------------------------------------------------------------------
 
 test.describe("picks", () => {
-  test("an anonymous visitor sees the schedule with no pick column", async ({ page }) => {
+  test("an anonymous visitor sees the pick buttons and is sent to sign in", async ({ page }) => {
     await page.goto("/schedule");
     await expect(row(page, "Chase Center")).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Your pick" })).toHaveCount(0);
-    await expect(page.getByTestId("pick-cell")).toHaveCount(0);
+    await expect(page.getByRole("columnheader", { name: "Your pick" })).toBeVisible();
+    // The steps are a popup, not a banner above the table.
+    await expect(page.getByText("Pick a winner")).toHaveCount(0);
+    await row(page, "Chase Center").getByRole("button", { name: "Pick GSW" }).click();
+    const steps = page.getByRole("dialog", { name: "How picks work" });
+    await expect(steps).toContainText("Add a stake, if you want");
+    await steps.getByRole("link", { name: "Sign in to start" }).click();
+    await expect(page).toHaveURL(/\/signin\?callbackUrl=%2Fschedule/);
 
     await page.goto("/picks");
     await expect(page.getByText("Sign in to pick winners")).toBeVisible();
@@ -199,7 +204,11 @@ test.describe("picks", () => {
     const userId = await signInAs(context, visitor());
     await page.goto("/schedule");
     const game = row(page, "Chase Center");
-    await expect(page.getByTestId("pick-record")).toContainText("Your record: 0–0");
+    await page.getByRole("button", { name: "How picks work" }).click();
+    await expect(page.getByRole("dialog", { name: "How picks work" })).toContainText(
+      "Track your net"
+    );
+    await page.keyboard.press("Escape");
     // Nobody is handed a balance to bet with.
     await expect(page.getByText(/balance|available/i)).toHaveCount(0);
 
@@ -213,10 +222,10 @@ test.describe("picks", () => {
 
     await game.getByRole("button", { name: "Add stake" }).click();
     const editor = page.getByTestId("stake-editor");
-    await expect(editor.getByText("Stake on GSW −150 (optional)")).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "GSW to win" })).toContainText("−150");
     await expect(editor.getByText("Counts toward your record only")).toBeVisible();
     await editor.getByRole("button", { name: "$50" }).click();
-    await expect(editor.getByText("$50 to win $33.33")).toBeVisible();
+    await expect(editor.getByText("Returns $83.33 if GSW win · net +$33.33")).toBeVisible();
     await editor.getByRole("button", { name: "Save stake" }).click();
     await expect(page.getByTestId("stake-editor")).toHaveCount(0);
     await expect(game.getByText("$50 to win $33.33")).toBeVisible();
@@ -574,6 +583,21 @@ test.describe("account", () => {
     await expect(page.getByText("Sign in to pick winners")).toBeVisible();
   });
 
+  test("a chosen time zone shifts game times and is remembered", async ({ page, context }) => {
+    await signInAs(context, visitor());
+    await page.goto("/schedule");
+    await expect(row(page, "Chase Center")).toContainText("7:30 PM ET");
+
+    await page.goto("/account");
+    await page.getByLabel("Time zone").selectOption({ label: "Pacific (Los Angeles)" });
+    await expect(page.getByLabel("Time zone")).toHaveValue("America/Los_Angeles");
+    await page.goto("/schedule");
+    await expect(row(page, "Chase Center")).toContainText(/4:30 PM P[DS]T/);
+    await page.goto("/account");
+    await expect(page.getByTestId("member-since")).toHaveText("Member since October 3, 2026");
+    await expect(page.getByLabel("Time zone")).toHaveValue("America/Los_Angeles");
+  });
+
   test("signing out from the account page ends the session", async ({ page, context }) => {
     await signInAs(context, visitor({ name: "Pat Tester" }));
     await page.goto("/account");
@@ -594,9 +618,7 @@ test.describe("account", () => {
     ).toBeVisible();
 
     await page.goto("/account");
-    await expect(
-      page.getByText(/Your email address and the text of your chat questions/)
-    ).toBeVisible();
+    await expect(page.getByText(/Your email address is not stored/)).toBeVisible();
     await page.getByRole("button", { name: "Delete my account" }).click();
     await page.getByRole("button", { name: "Cancel" }).click();
     expect((await stubRequests()).some((request) => request.method === "DELETE")).toBe(false);

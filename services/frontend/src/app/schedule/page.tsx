@@ -1,24 +1,22 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
-import { PickCell, StakeEditor } from "@/components/account/pick-cell";
+import { PickCell } from "@/components/account/pick-cell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamAbbrLink } from "@/components/team-logo";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { usePicks } from "@/hooks/use-picks";
+import { useProfile } from "@/hooks/use-profile";
 import { useSeason } from "@/hooks/use-season";
+import { useAccount, useFeatures } from "@/lib/account";
 import { api, queryErrorMessage } from "@/lib/api";
-import {
-  formatMoneyline,
-  formatProbability,
-  formatScheduleDate,
-  formatSpread,
-  formatTimeET,
-} from "@/lib/format";
+import { formatMoneyline, formatProbability, formatScheduleDate, formatSpread } from "@/lib/format";
 import { teamHref, withSeason } from "@/lib/nav";
-import { formatSignedMoney } from "@/lib/picks";
+import { formatGameTime } from "@/lib/timezones";
 import type { ScheduledGame, UserPick } from "@/lib/types";
 
 // One request covers the day on screen and reaches the next one: a full slate
@@ -54,11 +52,18 @@ function ScheduleBody() {
   });
 
   const picks = usePicks();
+  const { timezone } = useProfile();
+  const { account, isLoading: accountIsLoading } = useAccount();
+  const features = useFeatures();
+  const pathname = usePathname();
+  const search = useSearchParams().toString();
+  // A visitor with no session still gets the pick buttons, so the feature is
+  // visible; choosing a side explains picks and offers sign-in back to this page.
+  const signedOut = features.picks && !accountIsLoading && !account;
+  const signInHref = `/signin?callbackUrl=${encodeURIComponent(search ? `${pathname}?${search}` : pathname)}`;
   // A sheet that will not load is reported too: without it the pick column
   // simply is not there, which reads as "picks are broken" with no reason given.
   const pickError = picks.save.error ?? picks.remove.error ?? picks.error;
-  // The one game whose stake editor is open.
-  const [staking, setStaking] = useState<string | null>(null);
 
   const fetched = scheduleQuery.data?.data ?? [];
   const shownDay = fetched[0]?.game_date.slice(0, 10);
@@ -71,31 +76,23 @@ function ScheduleBody() {
         <div>
           <h1 className="type-page">Schedule</h1>
           <p className="mt-1 text-sm text-ink-2">
-            {season ? `${season} schedule` : "Upcoming schedule"} from today onward. TV lists
-            national broadcasts only. Win % is Baseline&apos;s pregame model estimate.{" "}
-            <Link href="/predictions" className="underline underline-offset-2">
-              How accurate is the model?
-            </Link>
+            {season ? `${season} schedule` : "Upcoming schedule"} from today onward.
           </p>
-          {picks.enabled && picks.sheet ? (
-            <p className="mt-1 text-sm text-ink-2" data-testid="pick-record">
-              Pick a winner for any game before it tips. Add a stake if you like; it pays at the
-              moneyline. Your record:{" "}
-              <span className="tabular font-semibold text-foreground">
-                {picks.sheet.summary.wins}–{picks.sheet.summary.losses}
-              </span>
-              {picks.sheet.summary.net !== 0 ? (
-                <>
-                  , net{" "}
-                  <span className="tabular font-semibold text-foreground">
-                    {formatSignedMoney(picks.sheet.summary.net)}
-                  </span>
-                </>
+          {features.picks && (signedOut || picks.sheet) ? (
+            <p className="mt-1 flex flex-wrap gap-x-4 text-sm text-ink-2" data-testid="pick-intro">
+              {picks.sheet ? (
+                <Link href="/picks" className="underline underline-offset-2">
+                  Your picks
+                </Link>
               ) : null}
-              .{" "}
-              <Link href="/picks" className="underline underline-offset-2">
-                Your picks
-              </Link>
+              <Popover>
+                <PopoverTrigger className="underline underline-offset-2 hover:text-foreground">
+                  How picks work
+                </PopoverTrigger>
+                <PopoverContent title="How picks work">
+                  <HowPicksWork signInHref={signedOut ? signInHref : undefined} />
+                </PopoverContent>
+              </Popover>
             </p>
           ) : null}
           {pickError ? (
@@ -120,15 +117,43 @@ function ScheduleBody() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Date / time (ET)</th>
+                <th>Date / time</th>
                 <th>Matchup</th>
-                <th title="National TV and streaming">TV</th>
-                <th title="Pregame model estimate, away / home">Win % (away / home)</th>
-                <th title="Consensus moneyline, away / home">Moneyline</th>
-                <th title="Consensus home spread">Spread</th>
+                <ColumnHelp label="TV" title="TV">
+                  <p>National TV and streaming broadcasts only. Local broadcasts are not listed.</p>
+                </ColumnHelp>
+                <ColumnHelp label="Win %" title="Win %">
+                  <p>
+                    Baseline&apos;s pregame model estimate of each team&apos;s chance to win, shown
+                    away / home.
+                  </p>
+                  <Link
+                    href="/predictions"
+                    className="mt-2 inline-block text-primary underline-offset-2 hover:underline"
+                  >
+                    How accurate is the model? →
+                  </Link>
+                </ColumnHelp>
+                <ColumnHelp label="Moneyline" title="Moneyline">
+                  <p>
+                    Consensus price to win, shown away / home. A minus is the favorite: −150 means
+                    staking $150 wins $100. A plus is the underdog: +130 means staking $100 wins
+                    $130.
+                  </p>
+                </ColumnHelp>
+                <ColumnHelp label="Spread" title="Spread">
+                  <p>
+                    Consensus point spread for the home team. −3.5 means the home team is favored by
+                    3.5 points.
+                  </p>
+                </ColumnHelp>
                 <th>Status</th>
                 <th>Arena</th>
-                {picks.sheet ? <th>Your pick</th> : null}
+                {picks.sheet || signedOut ? (
+                  <ColumnHelp label="Your pick" title="How picks work" align="end">
+                    <HowPicksWork signInHref={signedOut ? signInHref : undefined} />
+                  </ColumnHelp>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -138,8 +163,8 @@ function ScheduleBody() {
                   game={game}
                   season={season}
                   picks={picks}
-                  staking={staking === game.game_id}
-                  onStaking={setStaking}
+                  timezone={timezone}
+                  signInHref={signedOut ? signInHref : undefined}
                 />
               ))}
             </tbody>
@@ -178,80 +203,155 @@ function ScheduleBody() {
   );
 }
 
-// Date, matchup, TV, win %, moneyline, spread, status, arena, your pick.
-const PICK_TABLE_COLUMNS = 9;
+const PICK_STEPS = [
+  ["Pick a winner", "Tap the team you think wins, any time before tip-off."],
+  ["Add a stake, if you want", "Pretend dollars, paid at the moneyline. Nothing is charged."],
+  ["Track your net", "Picks settle after the final. Your record and net are under Your picks."],
+];
+
+/** The three steps of making a pick; with `signInHref`, ends in a way to start. */
+function HowPicksWork({ signInHref }: { signInHref?: string }) {
+  return (
+    <>
+      <ol className="space-y-2.5">
+        {PICK_STEPS.map(([title, body], index) => (
+          <li key={title} className="flex gap-2.5">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-primary text-xs text-primary tabular"
+            >
+              {index + 1}
+            </span>
+            <span>
+              <span className="block font-semibold">{title}</span>
+              <span className="block text-ink-2">{body}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      {signInHref ? (
+        <Link href={signInHref} className="btn-fill mt-3">
+          Sign in to start
+        </Link>
+      ) : null}
+    </>
+  );
+}
+
+/** A column heading that explains itself in a popover when pressed. */
+function ColumnHelp({
+  label,
+  title,
+  align,
+  children,
+}: {
+  label: string;
+  title: string;
+  align?: "start" | "end";
+  children: React.ReactNode;
+}) {
+  return (
+    <th>
+      <Popover>
+        <PopoverTrigger
+          // Inherits the heading's type; only the dotted rule marks it as pressable.
+          className="[font:inherit] tracking-[inherit] text-inherit uppercase underline decoration-dotted underline-offset-4 hover:text-foreground"
+        >
+          {label}
+        </PopoverTrigger>
+        <PopoverContent title={title} align={align}>
+          <div className="text-ink-2">{children}</div>
+        </PopoverContent>
+      </Popover>
+    </th>
+  );
+}
 
 function ScheduleGame({
   game,
   season,
   picks,
-  staking,
-  onStaking,
+  timezone,
+  signInHref,
 }: {
   game: ScheduledGame;
   season: string;
   picks: ReturnType<typeof usePicks>;
-  staking: boolean;
-  onStaking: (gameId: string | null) => void;
+  timezone: string | null;
+  /** Set for a visitor with no session: a pick button explains picks instead of saving. */
+  signInHref?: string;
 }) {
-  if (!picks.sheet) return <ScheduleRow game={game} season={season} />;
+  if (signInHref) {
+    return (
+      <ScheduleRow game={game} season={season} timezone={timezone}>
+        <td>
+          <SignedOutPick game={game} signInHref={signInHref} />
+        </td>
+      </ScheduleRow>
+    );
+  }
+  if (!picks.sheet) return <ScheduleRow game={game} season={season} timezone={timezone} />;
   const pick: UserPick | undefined = picks.sheet.picks.find(
     (item) => item.game_id === game.game_id
   );
-  const busy = picks.save.isPending || picks.remove.isPending;
   return (
-    <>
-      <ScheduleRow game={game} season={season}>
-        <td>
-          <PickCell
-            game={game}
-            pick={pick}
-            busy={busy}
-            editing={staking}
-            onSave={picks.save.mutate}
-            onRemove={(gameId) => {
-              onStaking(null);
-              picks.remove.mutate(gameId);
-            }}
-            onEditStake={onStaking}
-          />
-        </td>
-      </ScheduleRow>
-      {staking && pick ? (
-        <tr>
-          <td colSpan={PICK_TABLE_COLUMNS}>
-            <StakeEditor
-              game={game}
-              pick={pick}
-              busy={busy}
-              onSave={picks.save.mutate}
-              onClose={() => onStaking(null)}
-            />
-          </td>
-        </tr>
-      ) : null}
-    </>
+    <ScheduleRow game={game} season={season} timezone={timezone}>
+      <td>
+        <PickCell
+          game={game}
+          pick={pick}
+          busy={picks.save.isPending || picks.remove.isPending}
+          onSave={picks.save.mutate}
+          onRemove={picks.remove.mutate}
+        />
+      </td>
+    </ScheduleRow>
+  );
+}
+
+/** The same two buttons, opening the explanation beside the game that was pressed. */
+function SignedOutPick({ game, signInHref }: { game: ScheduledGame; signInHref: string }) {
+  const [open, setOpen] = useState(false);
+  const cell = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={cell}>
+      <PickCell
+        game={game}
+        pick={undefined}
+        busy={false}
+        onSave={() => setOpen(true)}
+        onRemove={() => setOpen(true)}
+      />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverContent title="How picks work" anchor={cell} align="end">
+          <HowPicksWork signInHref={signInHref} />
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 
 function ScheduleRow({
   game,
   season,
+  timezone,
   children,
 }: {
   game: ScheduledGame;
   season: string;
+  timezone: string | null;
   children?: React.ReactNode;
 }) {
+  const tip = formatGameTime(game.game_date, game.start_time_et, timezone);
   const away = game.away_team_abbreviation ?? "Away";
   const home = game.home_team_abbreviation ?? "Home";
   const arena = game.arena || game.arena_city || "—";
   return (
     <tr>
       <td className="tabular whitespace-nowrap">
-        <span className="block">{formatScheduleDate(game.game_date)}</span>
+        <span className="block">{tip.date}</span>
         <span className="block text-xs text-muted-foreground">
-          {formatTimeET(game.start_time_et)}
+          {tip.zone ? `${tip.time} ${tip.zone}` : tip.time}
         </span>
       </td>
       <td>

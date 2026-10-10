@@ -417,9 +417,16 @@ def pipeline_disable_cmd(reason: str) -> None:
         "Also runs Reddit. scrape_mode=none still skips NBA. Missing REDDIT_* skips reddit HTTP."
     ),
 )
-def pipeline_run_once_cmd(force: bool) -> None:
+@click.option(
+    "--triggered-by",
+    type=click.Choice(["manual", "scheduled"]),
+    default="manual",
+    show_default=True,
+    help="Recorded on source.pipeline_runs: 'scheduled' for the cron, 'manual' for an operator.",
+)
+def pipeline_run_once_cmd(force: bool, triggered_by: str) -> None:
     """Scrape according to source.scrape_pipeline (does not run dbt)."""
-    result = run_pipeline_scrape(force=force, triggered_by="force" if force else "manual")
+    result = run_pipeline_scrape(force=force, triggered_by=triggered_by)
     click.echo(f"run_id={result['run_id']}")
     click.echo(f"status={result['status']}")
     click.echo(f"action={result['action']}")

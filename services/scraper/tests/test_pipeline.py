@@ -409,7 +409,12 @@ def test_record_dbt_only_run_logs_a_standalone_build(
     assert record_dbt_only_run(dbt_exit, detail="make dbt") == expected
     session.execute.assert_called_once_with(
         INSERT_DBT_ONLY_RUN,
-        {"triggered_by": "dbt", "dbt_exit": dbt_exit, "detail": "make dbt", "failed_nodes": None},
+        {
+            "triggered_by": "manual",
+            "dbt_exit": dbt_exit,
+            "detail": "make dbt",
+            "failed_nodes": None,
+        },
     )
     session.commit.assert_called_once()
 
@@ -580,7 +585,7 @@ def test_run_pipeline_scrape_success_and_failure(monkeypatch: pytest.MonkeyPatch
         "pipeline.execute_scrape",
         lambda action, config, alert=None: (_ for _ in ()).throw(RuntimeError("boom")),
     )
-    result = run_pipeline_scrape(force=True, triggered_by="cron", today=date(2026, 1, 15))
+    result = run_pipeline_scrape(force=True, triggered_by="scheduled", today=date(2026, 1, 15))
     assert result["status"] == "failed"
     assert result["scrape_exit"] == 1
     assert "boom" in result["detail"]

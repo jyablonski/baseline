@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamAbbrLink, TeamLogo } from "@/components/team-logo";
+import { useProfile } from "@/hooks/use-profile";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import {
@@ -13,7 +14,6 @@ import {
   formatRecord,
   formatScrapedAt,
   formatSlateDate,
-  formatTimeET,
   isoDateET,
   isoDayBefore,
 } from "@/lib/format";
@@ -21,6 +21,7 @@ import { teamHref, withSeason } from "@/lib/nav";
 import { CONTENT_TYPE_LABELS, formatCount, rangeToDates } from "@/lib/social";
 import { standingsSeed } from "@/lib/team-form";
 import { cn } from "@/lib/utils";
+import { formatGameTime } from "@/lib/timezones";
 import type { GameHighlight, LeagueGame, ScheduledGame, StandingRow } from "@/lib/types";
 
 export default function HomePage() {
@@ -169,7 +170,7 @@ function HomeDesk() {
         </aside>
       </div>
 
-      <p className="type-timestamp border-t border-rule pt-[var(--ct-space-3)]">
+      <p className="type-caption tabular border-t border-rule pt-[var(--ct-space-3)]">
         Scraped {formatScrapedAt(statusQuery.data?.last_scraped_at)}
       </p>
     </div>
@@ -332,14 +333,25 @@ function UpcomingList({
   standings: StandingRow[];
   results: LeagueGame[];
 }) {
+  const { timezone } = useProfile();
   const date = games[0]?.game_date;
   const shown = games.slice(0, SLATE_LIMIT);
+  // The heading names the zone once for every time under it. A game with no
+  // start time has no zone to give, so the first one that does speaks for all.
+  const zone =
+    shown
+      .map((game) => formatGameTime(game.game_date, game.start_time_et, timezone).zone)
+      .find(Boolean) || "ET";
   const title = date && date.slice(0, 10) === isoDateET() ? "Games today" : "Next up";
   return (
     <>
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <h2 className="type-module">{title}</h2>
-        {date ? <p className="type-caption">{formatSlateDate(date)} · ET</p> : null}
+        {date ? (
+          <p className="type-caption">
+            {formatSlateDate(date)} · {zone}
+          </p>
+        ) : null}
       </div>
       {isLoading ? (
         <LoadingState label="Loading upcoming games…" />
@@ -355,7 +367,7 @@ function UpcomingList({
               className={cn(UPCOMING_GRID, "border-b border-rule-soft py-1.5 text-sm")}
             >
               <span className="tabular text-ink-2">
-                {formatTimeET(game.start_time_et).replace(" ET", "")}
+                {formatGameTime(game.game_date, game.start_time_et, timezone).time}
               </span>
               <TeamAbbrLink
                 teamId={game.away_team_id}

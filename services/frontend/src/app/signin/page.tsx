@@ -32,7 +32,7 @@ export default async function SignInPage({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">Sign in to make picks and use chat.</p>
+          <p className="text-sm text-muted-foreground">Sign in to make picks.</p>
           {message ? (
             <p className="bg-destructive/10 px-3 py-2 text-sm text-destructive">{message}</p>
           ) : null}
