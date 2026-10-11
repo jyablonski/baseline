@@ -49,8 +49,14 @@ POST_CONTENT_TYPE = f"""
 
 CONTENT_TYPES = ("highlight", "report", "discussion", "link")
 
+# A live game thread is busy by design and rarely upvoted, so it passes both bounds
+# without anyone arguing. "[Post Game Thread]" opens with a bracket and is kept.
 IS_CONTESTED = f"""
-    (posts.score <= {CONTESTED_MAX_SCORE} AND posts.num_comments >= {CONTESTED_MIN_COMMENTS})
+    (
+        posts.score <= {CONTESTED_MAX_SCORE}
+        AND posts.num_comments >= {CONTESTED_MIN_COMMENTS}
+        AND btrim(posts.title) NOT ILIKE 'game thread:%'
+    )
 """
 
 # Comments per upvote with the score floored at 1. The floor is deliberate here and

@@ -55,7 +55,7 @@ test("the active filter chip is legible, not paper-on-paper", async ({ page }) =
   // chip background transparent while the label keeps its paper colour, so the
   // active chip renders blank. Type checking and unit tests cannot see that.
   for (const chip of [
-    page.getByRole("button", { name: "7d" }),
+    page.getByRole("button", { name: "24h" }),
     page.getByRole("button", { name: /^All/ }),
   ]) {
     await expect(chip).toHaveAttribute("aria-pressed", "true");
@@ -67,7 +67,7 @@ test("the active filter chip is legible, not paper-on-paper", async ({ page }) =
     expect(style.background).not.toBe("rgba(0, 0, 0, 0)");
   }
 
-  await expect(page.getByRole("button", { name: "7d" })).toContainText("7d");
+  await expect(page.getByRole("button", { name: "24h" })).toContainText("24h");
   await expect(page.getByRole("button", { name: /^All/ })).toContainText("All");
 });
 

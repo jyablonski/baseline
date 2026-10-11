@@ -8,11 +8,11 @@ export const SOCIAL_RANGES = [
 
 export type SocialRangeKey = (typeof SOCIAL_RANGES)[number]["key"];
 
-export const DEFAULT_SOCIAL_RANGE: SocialRangeKey = "7d";
+export const DEFAULT_SOCIAL_RANGE: SocialRangeKey = "24h";
 
-// Newest first. Discussion ratio floors a score of 0 to 1, so as the default it
-// filled the first screen with downvoted threads; it stays one pick away in Sort.
-export const DEFAULT_SOCIAL_SORT = "recent";
+// Highest score first. Discussion ratio floors a score of 0 to 1, so as the default
+// it filled the first screen with downvoted threads; it stays one pick away in Sort.
+export const DEFAULT_SOCIAL_SORT = "score";
 
 export const SOCIAL_SORTS = [
   { key: "discussion", label: "Discussion ratio" },
