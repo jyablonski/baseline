@@ -433,6 +433,7 @@ def test_contested_threshold_matches_the_observed_score_floor() -> None:
     assert CONTESTED_MAX_SCORE == 25
     assert CONTESTED_MIN_COMMENTS == 50
     assert f"posts.score <= {CONTESTED_MAX_SCORE}" in IS_CONTESTED
+    assert "NOT ILIKE 'game thread:%'" in IS_CONTESTED
 
 
 @pytest.mark.unit
