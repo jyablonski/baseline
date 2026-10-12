@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatGameTime, isTimezone, TIMEZONES } from "@/lib/timezones";
+import { formatGameTime, formatScrapedAt, isTimezone, TIMEZONES } from "@/lib/timezones";
 
 describe("formatGameTime", () => {
   it("shows Eastern by default, exactly as the game is stored", () => {
@@ -57,5 +57,24 @@ describe("the offered time zones", () => {
     }
     expect(isTimezone("Mars/Olympus_Mons")).toBe(false);
     expect(isTimezone(null)).toBe(false);
+  });
+});
+
+describe("formatScrapedAt", () => {
+  it("shows Eastern by default and the account's zone when one is chosen", () => {
+    expect(formatScrapedAt("2026-10-08T02:27:00Z", null)).toBe(
+      "Wednesday, Oct 7, 2026 · 10:27 PM ET"
+    );
+    expect(formatScrapedAt("2026-10-08T02:27:00Z", "America/Los_Angeles")).toBe(
+      "Wednesday, Oct 7, 2026 · 7:27 PM PDT"
+    );
+    expect(formatScrapedAt("2026-10-08T02:27:00Z", "UTC")).toBe(
+      "Thursday, Oct 8, 2026 · 2:27 AM UTC"
+    );
+  });
+
+  it("falls back to a dash without a usable timestamp", () => {
+    expect(formatScrapedAt(null, null)).toBe("—");
+    expect(formatScrapedAt("nope", null)).toBe("—");
   });
 });

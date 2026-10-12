@@ -100,6 +100,10 @@
   --ct-content: 1280px;
   --ct-header-h: 60px;
   --ct-header-h-sm: 52px;
+  /* Bottom padding that seats the tab labels and the wordmark on one text line.
+     The wordmark's larger type needs 2px more to land on the same baseline. */
+  --ct-header-tab-pb: 17px;
+  --ct-header-wordmark-pb: calc(var(--ct-header-tab-pb) + 2px);
   --ct-control-header: 32px;
   --ct-control-page: 34px;
   --ct-control-ask: 44px;
@@ -249,22 +253,26 @@
     line-height: 1.65;
   }
 
+  /* Seated on the bottom edge so the labels share a text line with the wordmark. */
   .ct-tab {
     display: inline-flex;
     height: 100%;
-    align-items: center;
+    align-items: flex-end;
+    padding-bottom: var(--ct-header-tab-pb);
     font-size: var(--ct-fs-nav);
     font-weight: 400;
-    color: var(--ct-ink);
+    color: var(--ct-ink-2);
   }
 
   .ct-tab:hover {
     color: var(--ct-ink);
   }
 
+  /* The bar is the wordmark's rule carried along the header's bottom edge. */
   .ct-tab-active {
     font-weight: 600;
-    box-shadow: inset 0 -3px 0 0 var(--ct-rule-strong);
+    color: var(--ct-ink);
+    box-shadow: inset 0 -3px 0 0 var(--ct-accent);
   }
 
   .ct-ask-tool {

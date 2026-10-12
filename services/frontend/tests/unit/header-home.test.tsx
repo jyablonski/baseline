@@ -34,7 +34,8 @@ describe("header home", () => {
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/ask");
     expect(within(nav).getByRole("link", { name: "Home" })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "About" })).toHaveAttribute("href", "/about");
+    // About lives in the footer, with the other pages that are not data.
+    expect(within(nav).queryByRole("link", { name: "About" })).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Player or team")).not.toBeInTheDocument();
     expect(screen.queryByText("Season")).not.toBeInTheDocument();
     expect(screen.queryByText(/API v1/i)).not.toBeInTheDocument();

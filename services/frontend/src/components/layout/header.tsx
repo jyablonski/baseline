@@ -40,8 +40,8 @@ export function Header() {
   return (
     <header className="sticky top-0 z-20 border-b border-rule-strong bg-raised">
       <div className="mx-auto flex h-[var(--ct-header-h-sm)] max-w-[1280px] items-center gap-3 px-[14px] sm:h-[var(--ct-header-h)] sm:px-6">
-        <Link href="/" aria-label="Baseline" className="shrink-0">
-          <BaselineWordmark className="block h-[38px] w-auto" />
+        <Link href="/" aria-label="Baseline" className="mr-7 h-full shrink-0">
+          <BaselineWordmark />
         </Link>
 
         <nav aria-label="Primary" className="hidden h-full items-center gap-5 md:flex">

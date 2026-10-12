@@ -199,33 +199,6 @@ export function formatOrdinal(value: number | null | undefined) {
   return `${value}th`;
 }
 
-const SHORT_MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-export function formatScrapedAt(value: string | null | undefined) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  const day = date.getUTCDate();
-  const month = SHORT_MONTHS[date.getUTCMonth()];
-  const year = date.getUTCFullYear();
-  const hours = String(date.getUTCHours()).padStart(2, "0");
-  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
-  return `${day} ${month} ${year}, ${hours}:${minutes} UTC`;
-}
-
 export function formatSignedMargin(value: number | null | undefined, digits?: number) {
   if (value == null || Number.isNaN(value)) return "—";
   const formatted =

@@ -24,7 +24,8 @@ test("header shows Baseline tabs, watermark, and no sidebar", async ({ page }) =
   await expect(page).toHaveURL(/\/ask/);
   await expect(page.getByRole("heading", { name: "Ask" })).toBeVisible();
 
-  await nav.getByRole("link", { name: "About" }).click();
+  await expect(nav.getByRole("link", { name: "About" })).toHaveCount(0);
+  await page.getByRole("contentinfo").getByRole("link", { name: "About" }).click();
   await expect(page).toHaveURL(/\/about/);
   await expect(page).toHaveTitle("About — Baseline");
   await expect(page.getByRole("heading", { name: "About", exact: true })).toBeVisible();

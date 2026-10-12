@@ -12,7 +12,6 @@ import { api, queryErrorMessage } from "@/lib/api";
 import {
   formatGamesBack,
   formatRecord,
-  formatScrapedAt,
   formatSlateDate,
   isoDateET,
   isoDayBefore,
@@ -21,7 +20,7 @@ import { teamHref, withSeason } from "@/lib/nav";
 import { CONTENT_TYPE_LABELS, formatCount, rangeToDates } from "@/lib/social";
 import { standingsSeed } from "@/lib/team-form";
 import { cn } from "@/lib/utils";
-import { formatGameTime } from "@/lib/timezones";
+import { formatGameTime, formatScrapedAt } from "@/lib/timezones";
 import type { GameHighlight, LeagueGame, ScheduledGame, StandingRow } from "@/lib/types";
 
 export default function HomePage() {
@@ -70,6 +69,7 @@ function HomeDesk() {
     queryFn: () => api.listStandings({ season: season || undefined }),
   });
 
+  const { timezone } = useProfile();
   const statusQuery = useQuery({
     queryKey: ["status"],
     queryFn: () => api.getStatus(),
@@ -171,7 +171,7 @@ function HomeDesk() {
       </div>
 
       <p className="type-caption tabular border-t border-rule pt-[var(--ct-space-3)]">
-        Scraped {formatScrapedAt(statusQuery.data?.last_scraped_at)}
+        Scraped {formatScrapedAt(statusQuery.data?.last_scraped_at, timezone)}
       </p>
     </div>
   );

@@ -14,7 +14,7 @@ The product name is **Baseline**. One header bar holds the lockup, tabs, and a l
 
 ## Pages
 
-Tabs: **Home · Schedule · Players · Teams · Ask · Social · About** — the list in `src/lib/nav.ts`.
+Tabs: **Home · Schedule · Players · Teams · Ask · Social** — the list in `src/lib/nav.ts`. About, Privacy, Terms and Contact are in the footer (`src/components/layout/footer.tsx`).
 
 `/games`, `/standings`, `/predictions`, `/players/compare`, and `/admin` are reachable routes with no tab of their own.
 

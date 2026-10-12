@@ -51,14 +51,15 @@ export function ProfileMenu({ name, showPicks }: { name: string | null; showPick
           (open || pathname === "/account" || pathname === "/picks") && "ct-tab-active"
         )}
       >
+        {/* Tabs are bottom-aligned: the offsets centre the avatar and caret on the label's line. */}
         <span
           aria-hidden="true"
-          className="inline-flex size-7 items-center justify-center rounded-full bg-primary text-[var(--ct-fs-meta)] font-semibold text-primary-foreground"
+          className="-mb-[3px] inline-flex size-7 items-center justify-center rounded-full bg-primary text-[var(--ct-fs-meta)] font-semibold text-primary-foreground"
         >
           {label.trim().charAt(0).toUpperCase()}
         </span>
         <span className="max-w-[14ch] truncate font-semibold">{label}</span>
-        <span aria-hidden="true" className="text-[10px] text-ink-3">
+        <span aria-hidden="true" className="mb-[3px] text-[10px] text-ink-3">
           ▼
         </span>
       </button>

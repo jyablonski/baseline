@@ -79,19 +79,39 @@ export function formatGameTime(
   startTimeEt: string | null | undefined,
   timezone: string | null | undefined
 ) {
-  const timeZone = timezone || DEFAULT_TIMEZONE;
   const tip = tipOff(gameDate, startTimeEt);
   if (!tip) return { date: formatScheduleDate(gameDate), time: "TBD", zone: "" };
+  return formatInstant(tip, timezone);
+}
+
+/** When the data was last scraped, read the way the account reads game times. */
+export function formatScrapedAt(
+  value: string | null | undefined,
+  timezone: string | null | undefined
+) {
+  if (!value) return "—";
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return "—";
+  const { date, time, zone } = formatInstant(instant, timezone, "long");
+  return `${date} · ${time} ${zone}`;
+}
+
+function formatInstant(
+  instant: Date,
+  timezone: string | null | undefined,
+  weekday: "short" | "long" = "short"
+) {
+  const timeZone = timezone || DEFAULT_TIMEZONE;
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
     hour: "numeric",
     minute: "2-digit",
     timeZoneName: "short",
-  }).formatToParts(tip);
+  }).formatToParts(instant);
   const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
   return {
-    date: tip.toLocaleDateString("en-US", {
-      weekday: "short",
+    date: instant.toLocaleDateString("en-US", {
+      weekday,
       year: "numeric",
       month: "short",
       day: "numeric",

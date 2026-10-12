@@ -10,32 +10,18 @@ import {
   BASELINE_PAPER,
   FAVICON_RULE_D,
   FAVICON_VIEWBOX,
-  WORDMARK_ARC_D,
-  WORDMARK_BAR_D,
-  WORDMARK_SRC,
-  WORDMARK_VIEWBOX,
 } from "@/components/brand/baseline-mark";
 import { BaselineWordmark } from "@/components/brand/baseline-wordmark";
 
 describe("BaselineWordmark", () => {
-  it("renders the official lockup as a single image", () => {
-    render(<BaselineWordmark />);
-    const img = document.querySelector(`img[src="${WORDMARK_SRC}"]`);
-    expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute("alt", "");
-    expect(img).toHaveAttribute("width", "198");
-    expect(img).toHaveAttribute("height", "59");
-
-    const lockup = readFileSync(
-      path.resolve(__dirname, "../../public/logo/baseline-lockup.svg"),
-      "utf8"
-    );
-    expect(lockup).toContain(`viewBox="${WORDMARK_VIEWBOX}"`);
-    expect(lockup).toContain(`stroke="${BASELINE_LINE_GREEN}"`);
-    expect(lockup).toContain(WORDMARK_BAR_D);
-    expect(lockup).toContain(WORDMARK_ARC_D);
-    expect(lockup).toContain(BASELINE_INK);
-    expect(lockup).toContain('font-family="IBM Plex Sans, Helvetica, Arial, sans-serif"');
+  it("renders the word as live text in the nav's face, over a hidden lane arc", () => {
+    const { container } = render(<BaselineWordmark />);
+    const word = container.firstElementChild;
+    expect(word).toHaveTextContent("Baseline");
+    expect(word).toHaveClass("font-sans", "font-semibold");
+    expect(container.querySelector("img")).not.toBeInTheDocument();
+    expect(container.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(container.querySelector("svg")).toHaveAttribute("width", "36");
   });
 });
 

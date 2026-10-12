@@ -9,7 +9,6 @@ import {
   formatMoneyline,
   formatNumber,
   formatProbability,
-  formatScrapedAt,
   formatSignedMargin,
   formatSlateDate,
   formatStat,
@@ -128,9 +127,6 @@ describe("format helpers", () => {
     expect(formatSignedMargin(0, 1)).toBe(
       (0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
     );
-    expect(formatScrapedAt(null)).toBe("—");
-    expect(formatScrapedAt("nope")).toBe("—");
-    expect(formatScrapedAt("2026-09-04T04:12:00Z")).toMatch(/4 Sep[t]? 2026, 04:12 UTC/);
     expect(formatBirthDate(null)).toBeNull();
     expect(formatBirthDate("not-a-date")).toBe("not-a-date");
     expect(formatBirthDate("1991-06-29")).toContain("1991");
@@ -151,11 +147,7 @@ describe("format helpers", () => {
     expect(formatArenaLine({})).toBeNull();
   });
 
-  it("formats scrape watermarks, money, and identity extras", () => {
-    expect(formatScrapedAt(null)).toBe("—");
-    expect(formatScrapedAt("not-a-date")).toBe("—");
-    expect(formatScrapedAt("2026-09-04T04:12:00Z")).toContain("2026");
-    expect(formatScrapedAt("2026-09-04T04:12:00Z")).toContain("UTC");
+  it("formats money and identity extras", () => {
     expect(formatUsdCompact(null)).toBe("—");
     expect(formatUsdCompact(50_000_000)).toBe("$50M");
     expect(formatUsdCompact(1_500_000)).toBe("$1.5M");
