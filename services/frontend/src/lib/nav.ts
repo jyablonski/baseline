@@ -5,7 +5,6 @@ export const PRIMARY_NAV = [
   { href: "/teams", label: "Teams" },
   { href: "/ask", label: "Ask" },
   { href: "/social", label: "Social" },
-  { href: "/about", label: "About" },
 ] as const;
 
 /**

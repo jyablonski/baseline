@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Sans_3 } from "next/font/google";
 import { Suspense } from "react";
 
+import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { Providers } from "@/components/providers";
 
@@ -60,6 +61,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <main className="mx-auto w-full max-w-[1280px] flex-1 px-[14px] py-[26px] sm:px-6">
               {children}
             </main>
+            <Footer />
           </div>
         </Providers>
       </body>

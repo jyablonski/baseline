@@ -141,7 +141,9 @@ describe("home desk", () => {
 
   it("carries the scrape stamp, which is no longer in the header", async () => {
     renderHome();
-    expect(await screen.findByText("Scraped 8 Oct 2026, 02:27 UTC")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Scraped Wednesday, Oct 7, 2026 · 10:27 PM ET")
+    ).toBeInTheDocument();
   });
 
   it("shows last night's slate, capped, and leaves older games out", async () => {
