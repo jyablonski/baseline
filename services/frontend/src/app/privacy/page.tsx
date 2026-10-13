@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { WhenChatbot } from "@/components/account/when-chatbot";
 import { Section } from "@/components/layout/section";
-import { CONTACT_EMAIL } from "@/lib/contact";
 
 export const metadata: Metadata = { title: "Privacy" };
 
@@ -16,7 +15,7 @@ export default function PrivacyPage() {
           Baseline can be read without an account, and nothing is collected about visitors who do
           not sign in. There are no analytics, advertising or tracking scripts on this site.
         </p>
-        <p className="type-prose mt-1 text-ink-2">Effective October 12, 2026.</p>
+        <p className="type-prose mt-1 text-ink-2">Effective October 13, 2026.</p>
       </header>
 
       <Section title="What is kept when you sign in">
@@ -74,16 +73,6 @@ export default function PrivacyPage() {
             account page
           </Link>
           . That removes your account, your picks and your usage history, and cannot be undone.
-        </p>
-      </Section>
-
-      <Section title="Contact">
-        <p>
-          Questions about this policy can be sent to{" "}
-          <a className="underline underline-offset-2" href={`mailto:${CONTACT_EMAIL}`}>
-            {CONTACT_EMAIL}
-          </a>
-          .
         </p>
       </Section>
     </article>

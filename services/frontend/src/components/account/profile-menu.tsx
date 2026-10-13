@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { Avatar } from "@/components/account/avatar";
 import { signOutAndReload } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +12,15 @@ const ITEM =
   "block w-full px-[var(--ct-space-3)] py-2.5 text-left text-[var(--ct-fs-nav)] hover:bg-tint";
 
 /** The signed-in visitor's avatar and name, opening a menu of their own pages. */
-export function ProfileMenu({ name, showPicks }: { name: string | null; showPicks: boolean }) {
+export function ProfileMenu({
+  name,
+  image,
+  showPicks,
+}: {
+  name: string | null;
+  image: string | null;
+  showPicks: boolean;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -52,12 +61,7 @@ export function ProfileMenu({ name, showPicks }: { name: string | null; showPick
         )}
       >
         {/* Tabs are bottom-aligned: the offsets centre the avatar and caret on the label's line. */}
-        <span
-          aria-hidden="true"
-          className="-mb-[3px] inline-flex size-7 items-center justify-center rounded-full bg-primary text-[var(--ct-fs-meta)] font-semibold text-primary-foreground"
-        >
-          {label.trim().charAt(0).toUpperCase()}
-        </span>
+        <Avatar name={label} image={image} className="-mb-[3px] size-7 text-[var(--ct-fs-meta)]" />
         <span className="max-w-[14ch] truncate font-semibold">{label}</span>
         <span aria-hidden="true" className="mb-[3px] text-[10px] text-ink-3">
           ▼

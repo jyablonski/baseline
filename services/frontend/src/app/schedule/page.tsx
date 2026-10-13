@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { PickCell } from "@/components/account/pick-cell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
-import { TeamAbbrLink } from "@/components/team-logo";
+import { TEAM_LOGO_SIZE, TeamAbbrLink } from "@/components/team-logo";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { usePicks } from "@/hooks/use-picks";
 import { useProfile } from "@/hooks/use-profile";
@@ -22,6 +22,12 @@ import type { ScheduledGame, UserPick } from "@/lib/types";
 // One request covers the day on screen and reaches the next one: a full slate
 // is 15 games, so the first row dated later is always inside this window.
 const FETCH_LIMIT = 50;
+
+// Abbreviations are not all one width in a proportional face ("PHI" against
+// "OKC"), so the away side gets a fixed slot and the "@" and home team start
+// at the same place on every row. Logo, TeamAbbrLink's gap-1.5, then room
+// for the widest one.
+const AWAY_TEAM_SLOT = { width: `calc(${TEAM_LOGO_SIZE}px + 0.375rem + 4.25ch)` };
 
 export default function SchedulePage() {
   return (
@@ -356,15 +362,18 @@ function ScheduleRow({
       </td>
       <td>
         <span className="inline-flex flex-wrap items-center gap-1.5">
-          {game.away_team_id ? (
-            <TeamAbbrLink
-              teamId={game.away_team_id}
-              abbreviation={away}
-              href={withSeason(teamHref(game.away_team_name ?? away), season)}
-            />
-          ) : (
-            <span className="font-semibold">{away}</span>
-          )}
+          {/* Semibold here too: the slot's ch is measured in the weight the abbreviation is set in. */}
+          <span className="inline-flex font-semibold" style={AWAY_TEAM_SLOT}>
+            {game.away_team_id ? (
+              <TeamAbbrLink
+                teamId={game.away_team_id}
+                abbreviation={away}
+                href={withSeason(teamHref(game.away_team_name ?? away), season)}
+              />
+            ) : (
+              away
+            )}
+          </span>
           <span className="text-muted-foreground">@</span>
           {game.home_team_id ? (
             <TeamAbbrLink

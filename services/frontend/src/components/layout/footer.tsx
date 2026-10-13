@@ -13,7 +13,7 @@ const FOOTER_LINKS = [
 export function Footer() {
   return (
     <footer className="border-t border-rule">
-      <div className="mx-auto w-full max-w-[1280px] px-[14px] pt-6 pb-7 text-center sm:px-6">
+      <div className="mx-auto w-full max-w-[1280px] px-[14px] py-3.5 text-center sm:px-6">
         <nav
           aria-label="Footer"
           className="flex items-center justify-center gap-3 text-sm text-ink-2"
@@ -38,7 +38,7 @@ export function Footer() {
             </Fragment>
           ))}
         </nav>
-        <p className="mt-1.5 text-[length:var(--ct-fs-num)] text-ink-3">
+        <p className="mt-1 text-[length:var(--ct-fs-num)] text-ink-3">
           Not affiliated with the NBA or its teams.
         </p>
       </div>

@@ -18,27 +18,27 @@ test("About lists ingest sources without salary jargon or 2010-11 copy", async (
     /scraped everyday around [34]:15 AM ET, picking up the previous day's games and the upcoming slate/
   );
   await expect(page.getByRole("heading", { name: "How the data gets here" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Coverage" })).toBeVisible();
-  await expect(page.getByText(/Coverage defaults to the latest season/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Coverage" })).toHaveCount(0);
+  const pipeline = page.locator("section", {
+    has: page.getByRole("heading", { name: "How the data gets here" }),
+  });
+  await expect(pipeline.getByText(/Coverage defaults to the latest season/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "About the salary figures" })).toHaveCount(0);
   await expectNo2010Range(page);
   await expect(about).not.toContainText("—");
 });
 
-test("About names the stack once, after coverage, with no background section", async ({ page }) => {
+test("About has no stack or background section", async ({ page }) => {
   await mockApi(page);
   await page.goto("/about");
   const about = page.getByRole("article");
-  await expect(about.getByRole("heading", { name: "Built with" })).toBeVisible();
-  await expect(about.getByText(/Python scrapers load Postgres, dbt builds/)).toBeVisible();
-  await expect(about.getByText(/Cube semantic layer sits over the warehouse/)).toBeVisible();
+  await expect(about.getByRole("heading", { name: "Built with" })).toHaveCount(0);
+  await expect(about.getByText(/Python scrapers load Postgres, dbt builds/)).toHaveCount(0);
   await expect(about.getByRole("heading", { name: "Background" })).toHaveCount(0);
   await expect(about.getByText(/running in some form since 2021/)).toHaveCount(0);
   await expect(about.getByRole("heading", { level: 2 })).toHaveText([
     "Sources",
     "How the data gets here",
-    "Coverage",
-    "Built with",
     "Developer",
     "Version",
   ]);

@@ -33,7 +33,6 @@ describe("privacy page", () => {
       "Cookies",
       "How it is used",
       "Deleting your data",
-      "Contact",
     ]);
     expect(policy).not.toHaveTextContent(/chat/i);
     expect(policy).toHaveTextContent(/nothing is collected about visitors who do not sign in/);
@@ -43,10 +42,7 @@ describe("privacy page", () => {
       "href",
       "/account"
     );
-    expect(within(policy).getByRole("link", { name: /@/ })).toHaveAttribute(
-      "href",
-      expect.stringMatching(/^mailto:/)
-    );
+    expect(within(policy).queryByRole("link", { name: /@/ })).not.toBeInTheDocument();
   });
 
   it("covers chat only while chat is offered", async () => {

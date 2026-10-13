@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 
 export type AccountSession = {
   name: string | null;
+  /** The provider's profile picture, when it sent one. */
+  image: string | null;
   /** False when signed in but the account could not be registered yet. */
   hasAccount: boolean;
   /** Whether to show the site owner a link to /admin. Display only. */
@@ -23,11 +25,17 @@ export async function fetchAccountSession(): Promise<AccountSession | null> {
     const response = await fetch("/api/auth/session", { cache: "no-store" });
     if (!response.ok) return null;
     const body = (await response.json()) as {
-      user?: { name?: string | null; userId?: string; isAdmin?: boolean };
+      user?: {
+        name?: string | null;
+        image?: string | null;
+        userId?: string;
+        isAdmin?: boolean;
+      };
     } | null;
     if (!body?.user) return null;
     return {
       name: body.user.name ?? null,
+      image: body.user.image || null,
       hasAccount: Boolean(body.user.userId),
       isAdmin: body.user.isAdmin === true,
     };

@@ -3,8 +3,8 @@ export const PRIMARY_NAV = [
   { href: "/schedule", label: "Schedule" },
   { href: "/players", label: "Players" },
   { href: "/teams", label: "Teams" },
-  { href: "/ask", label: "Ask" },
   { href: "/social", label: "Social" },
+  { href: "/ask", label: "Ask" },
 ] as const;
 
 /**

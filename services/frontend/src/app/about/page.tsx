@@ -58,17 +58,8 @@ export default function AboutPage() {
           day&apos;s games and the upcoming slate. The data is then transformed and enriched into
           analytics tables and served out over this app.
         </p>
-      </Section>
-
-      <Section title="Coverage">
-        <p>Coverage defaults to the latest season only. Preseason games are not included.</p>
-      </Section>
-
-      <Section title="Built with">
-        <p>
-          Python scrapers load Postgres, dbt builds the analytics tables, and a FastAPI service and
-          Next.js frontend serve them. A Cube semantic layer sits over the warehouse and powers Ask,
-          along with an MCP server that lets AI assistants query the data directly.
+        <p className="mt-3">
+          Coverage defaults to the latest season only. Preseason games are not included.
         </p>
       </Section>
 
