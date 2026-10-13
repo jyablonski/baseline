@@ -73,7 +73,11 @@ export function Header() {
           className="ml-auto hidden h-full shrink-0 items-center gap-4 md:flex"
         >
           {accountIsLoading ? null : account.account ? (
-            <ProfileMenu name={account.account.name} showPicks={features.picks} />
+            <ProfileMenu
+              name={account.account.name}
+              image={account.account.image}
+              showPicks={features.picks}
+            />
           ) : (
             <Link href={signInHref} className="ct-tab">
               Sign in

@@ -26,6 +26,7 @@ describe("fetchAccountSession", () => {
     fetchMock.mockResolvedValue(sessionResponse({ user: { name: "Pat", userId: "u-1" } }));
     await expect(fetchAccountSession()).resolves.toEqual({
       name: "Pat",
+      image: null,
       hasAccount: true,
       isAdmin: false,
     });
@@ -34,8 +35,13 @@ describe("fetchAccountSession", () => {
     fetchMock.mockResolvedValue(sessionResponse({ user: {} }));
     await expect(fetchAccountSession()).resolves.toEqual({
       name: null,
+      image: null,
       hasAccount: false,
       isAdmin: false,
+    });
+    fetchMock.mockResolvedValue(sessionResponse({ user: { image: "https://example.com/p.png" } }));
+    await expect(fetchAccountSession()).resolves.toMatchObject({
+      image: "https://example.com/p.png",
     });
     // Only a literal true counts.
     fetchMock.mockResolvedValue(sessionResponse({ user: { isAdmin: "yes" } }));

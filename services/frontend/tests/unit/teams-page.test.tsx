@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -137,6 +137,12 @@ describe("teams directory", () => {
       expect(screen.getByText("61–21")).toBeInTheDocument();
     });
     expect(screen.queryByText(/Official ranks aren't available yet/)).not.toBeInTheDocument();
+    // The record and win % columns are labelled once per conference.
+    for (const conference of ["Eastern Conference", "Western Conference"]) {
+      const section = screen.getByRole("heading", { name: conference }).closest("section")!;
+      expect(within(section).getByText("W–L")).toBeInTheDocument();
+      expect(within(section).getByText("Win %")).toBeInTheDocument();
+    }
   });
 
   it("orders each division by Regular Season standings quality, not alphabetically", async () => {

@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-export const PRIMARY_NAV = ["Home", "Schedule", "Players", "Teams", "Ask", "Social"] as const;
+export const PRIMARY_NAV = ["Home", "Schedule", "Players", "Teams", "Social", "Ask"] as const;
 
 export type MockApiOptions = {
   empty?: boolean;

@@ -9,8 +9,8 @@ describe("nav", () => {
       "Schedule",
       "Players",
       "Teams",
-      "Ask",
       "Social",
+      "Ask",
     ]);
   });
 

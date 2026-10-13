@@ -28,19 +28,24 @@ describe("about page", () => {
     expect(screen.getByText(/transformed and enriched/)).toHaveTextContent(
       /scraped everyday around [34]:15 AM ET, picking up the previous day's games and the upcoming slate\. The data is then transformed and enriched/
     );
-    expect(screen.getByRole("heading", { name: "Built with" })).toBeInTheDocument();
-    expect(screen.getByText(/Cube semantic layer sits over the warehouse/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Built with" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Background" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 2 }).map((node) => node.textContent)).toEqual([
       "Sources",
       "How the data gets here",
-      "Coverage",
-      "Built with",
       "Developer",
       "Version",
     ]);
-    expect(screen.getByRole("heading", { name: "Coverage" })).toBeInTheDocument();
-    expect(screen.getByText(/Coverage defaults to the latest season/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Coverage" })).not.toBeInTheDocument();
+    const pipeline = screen
+      .getByRole("heading", { name: "How the data gets here" })
+      .closest("section");
+    expect(pipeline).toBeTruthy();
+    expect(
+      within(pipeline!).getByText(
+        "Coverage defaults to the latest season only. Preseason games are not included."
+      )
+    ).toBeInTheDocument();
   });
 
   it("credits the developer with profile links", () => {

@@ -94,7 +94,12 @@ function ConferenceColumn({
 
   return (
     <section>
-      <h2 className="type-eyebrow mb-4">{title}</h2>
+      {/* Same columns as the rows below, so the labels sit over the record and win %. */}
+      <div className="mb-4 grid grid-cols-[1fr_auto_3.5rem] items-baseline gap-2">
+        <h2 className="type-eyebrow">{title}</h2>
+        <span className="type-eyebrow">W–L</span>
+        <span className="type-eyebrow text-right">Win %</span>
+      </div>
       <div className="space-y-5">
         {grouped.map((group) => (
           <div key={group.division}>

@@ -7,7 +7,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * the server actions at the module, so each state a visitor can be in renders.
  */
 const state = vi.hoisted(() => ({
-  account: null as { name: string | null; hasAccount: boolean; isAdmin?: boolean } | null,
+  account: null as {
+    name: string | null;
+    image?: string | null;
+    hasAccount: boolean;
+    isAdmin?: boolean;
+  } | null,
   flags: { chatbot: true, picks: true, isLoading: false },
   pathname: "/schedule",
 }));
@@ -193,6 +198,19 @@ describe("header", () => {
       "/account"
     );
     expect(within(menu).getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
+  });
+
+  it("shows the provider's picture, and the initial when there is none or it fails", () => {
+    const picture = "https://avatars.githubusercontent.com/u/1?v=4";
+    state.account = { name: "Pat", image: picture, hasAccount: true };
+    const { container } = render(<Header />);
+    const button = screen.getByRole("button", { name: "Pat" });
+    expect(container.querySelector("img")).toHaveAttribute("src", picture);
+    expect(within(button).queryByText("P")).not.toBeInTheDocument();
+
+    fireEvent.error(container.querySelector("img")!);
+    expect(container.querySelector("img")).not.toBeInTheDocument();
+    expect(within(button).getByText("P")).toBeInTheDocument();
   });
 
   it("closes the menu on Escape, an outside click, or choosing a page", () => {
@@ -447,6 +465,15 @@ describe("picks page", () => {
     expect(screen.getByText("stakes are optional; nothing staked yet")).toBeInTheDocument();
     expect(screen.getByText("Nothing open. Picks lock when a game tips.")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Settled" })).not.toBeInTheDocument();
+  });
+
+  it("heads the sheet with the provider's picture when there is one", async () => {
+    const picture = "https://avatars.githubusercontent.com/u/1?v=4";
+    state.account = { name: "Pat", image: picture, hasAccount: true };
+    const { container } = page(<PicksPage />);
+    const heading = await screen.findByRole("heading", { name: "Pat", level: 1 });
+    expect(heading.closest("header")!.querySelector("img")).toHaveAttribute("src", picture);
+    expect(container.querySelectorAll("img")).toHaveLength(1);
   });
 
   it("shows the record, net, model comparison, best call and each pick", async () => {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
+import { Avatar } from "@/components/account/avatar";
 import { SignInPrompt } from "@/components/account/sign-in-prompt";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { KpiCard, KpiStrip, KpiTitle } from "@/components/ui/kpi-card";
@@ -75,7 +76,7 @@ export default function PicksPage() {
       </Shell>
     );
   }
-  return <Sheet name={account.name || "Your picks"} sheet={picks.sheet} />;
+  return <Sheet name={account.name || "Your picks"} image={account.image} sheet={picks.sheet} />;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -100,7 +101,7 @@ function downloadCsv(picks: UserPick[]) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function Sheet({ name, sheet }: { name: string; sheet: PickSheet }) {
+function Sheet({ name, image, sheet }: { name: string; image: string | null; sheet: PickSheet }) {
   const { summary, picks } = sheet;
   const settledCount = summary.wins + summary.losses;
   const open = picks.filter((pick) => pick.result === "pending");
@@ -113,12 +114,7 @@ function Sheet({ name, sheet }: { name: string; sheet: PickSheet }) {
   return (
     <div className="space-y-[var(--ct-space-5)]">
       <header className="flex items-center gap-[var(--ct-space-4)]">
-        <span
-          aria-hidden="true"
-          className="inline-flex size-14 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-semibold text-primary-foreground"
-        >
-          {name.trim().charAt(0).toUpperCase()}
-        </span>
+        <Avatar name={name} image={image} className="size-14 text-lg" />
         <div className="min-w-0">
           <h1 className="type-page truncate">{name}</h1>
         </div>
