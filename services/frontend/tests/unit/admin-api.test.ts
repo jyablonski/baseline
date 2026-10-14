@@ -7,7 +7,9 @@ import {
   fetchAdminFlags,
   fetchAdminHealth,
   setAdminFlag,
+  setAdminPipeline,
   isJobType,
+  isPipelineSwitch,
 } from "@/lib/admin";
 
 /** Types mock.calls as a real tuple without declaring unused parameters. */
@@ -256,6 +258,64 @@ describe("feature flags client", () => {
     );
     await expect(setAdminFlag("chatbot", true, "me")).rejects.toMatchObject({
       message: "Admin API returned 422 Unprocessable",
+    });
+  });
+});
+
+describe("setAdminPipeline", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("accepts only the two gate switches", () => {
+    expect(isPipelineSwitch("enabled")).toBe(true);
+    expect(isPipelineSwitch("season_active")).toBe(true);
+    expect(isPipelineSwitch("scrape_mode")).toBe(false);
+    expect(isPipelineSwitch(1)).toBe(false);
+  });
+
+  it("fails closed with a 503 when no admin token is configured", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(setAdminPipeline("enabled", false, "me")).rejects.toMatchObject({ status: 503 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sends only the switch that changed, naming who changed it", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "admin-secret");
+    vi.stubEnv("ADMIN_API_URL", "http://api:8000");
+    const gate = { enabled: true, season_active: false, action_today: "skipped_offseason" };
+    const fetchMock = vi.fn<FetchMock>(async () => jsonResponse({ data: gate }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(setAdminPipeline("season_active", false, "jyablonski")).resolves.toEqual(gate);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://api:8000/api/v1/admin/pipeline");
+    expect(init?.method).toBe("PUT");
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer admin-secret");
+    expect(JSON.parse(init?.body as string)).toEqual({
+      season_active: false,
+      updated_by: "jyablonski",
+    });
+  });
+
+  it("passes an API message through and falls back when there is none", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "admin-secret");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<FetchMock>(async () => jsonResponse({ detail: "Not authorised." }, 401))
+    );
+    await expect(setAdminPipeline("enabled", true, "me")).rejects.toMatchObject({
+      message: "Not authorised.",
+      status: 401,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<FetchMock>(async () => new Response("nope", { status: 502, statusText: "Bad Gateway" }))
+    );
+    await expect(setAdminPipeline("enabled", true, "me")).rejects.toMatchObject({
+      message: "Admin API returned 502 Bad Gateway",
     });
   });
 });

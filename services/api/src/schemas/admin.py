@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PipelineGate(BaseModel):
@@ -205,6 +205,21 @@ class JobRequest(BaseModel):
     # Audit only. Trusted because the caller already holds ADMIN_API_TOKEN;
     # in the body rather than the query string so it stays out of access logs.
     requested_by: str = Field(min_length=1, max_length=100)
+
+
+class PipelineGateUpdate(BaseModel):
+    """Either switch, or both. An omitted one is left as it is."""
+
+    enabled: bool | None = None
+    season_active: bool | None = None
+    # Audit only, like JobRequest.requested_by.
+    updated_by: str = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def _changes_something(self) -> PipelineGateUpdate:
+        if self.enabled is None and self.season_active is None:
+            raise ValueError("Set enabled, season_active, or both.")
+        return self
 
 
 class AdminHealth(BaseModel):

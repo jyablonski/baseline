@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 type TestUser = { provider?: string; login?: string; email?: string; verifiedEmail?: boolean };
 const session = vi.hoisted(() => ({ current: null as { user?: TestUser } | null }));
 const setFlag = vi.hoisted(() => vi.fn());
+const setPipeline = vi.hoisted(() => vi.fn());
 const enqueue = vi.hoisted(() => vi.fn());
 const revalidate = vi.hoisted(() => vi.fn());
 
@@ -19,10 +20,15 @@ vi.mock("@/auth", () => ({ auth: async () => session.current }));
 vi.mock("next/cache", () => ({ revalidatePath: revalidate }));
 vi.mock("@/lib/admin", async () => {
   const actual = await vi.importActual<typeof import("@/lib/admin")>("@/lib/admin");
-  return { ...actual, enqueueAdminJob: enqueue, setAdminFlag: setFlag };
+  return {
+    ...actual,
+    enqueueAdminJob: enqueue,
+    setAdminFlag: setFlag,
+    setAdminPipeline: setPipeline,
+  };
 });
 
-import { requestJobAction, setFlagAction } from "@/app/admin/actions";
+import { requestJobAction, setFlagAction, setPipelineAction } from "@/app/admin/actions";
 import { AdminApiError } from "@/lib/admin";
 
 function form(jobType?: string): FormData {
@@ -192,6 +198,73 @@ describe("setFlagAction", () => {
     await expect(setFlagAction(null, flagForm("chatbot", "true"))).resolves.toEqual({
       ok: false,
       message: "Could not change the flag.",
+    });
+  });
+});
+
+function pipelineForm(key?: string, value?: string): FormData {
+  const data = new FormData();
+  if (key !== undefined) data.set("switch", key);
+  if (value !== undefined) data.set("value", value);
+  return data;
+}
+
+describe("setPipelineAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("ADMIN_GITHUB_LOGINS", "allowed-user");
+    session.current = { user: { provider: "github", login: "allowed-user" } };
+  });
+
+  it("refuses anyone who is not the operator without touching the gate", async () => {
+    for (const user of [null, { user: { provider: "github", login: "stranger" } }]) {
+      session.current = user;
+      await expect(setPipelineAction(null, pipelineForm("enabled", "false"))).resolves.toEqual({
+        ok: false,
+        message: "Not authorised.",
+      });
+    }
+    expect(setPipeline).not.toHaveBeenCalled();
+  });
+
+  it("rejects a switch the form was not supposed to be able to send", async () => {
+    for (const data of [
+      pipelineForm(),
+      pipelineForm("scrape_mode", "true"),
+      pipelineForm("enabled", "maybe"),
+    ]) {
+      await expect(setPipelineAction(null, data)).resolves.toEqual({
+        ok: false,
+        message: "Unknown pipeline switch.",
+      });
+    }
+    expect(setPipeline).not.toHaveBeenCalled();
+  });
+
+  it("flips the switch as the operator and reports what today's run will do", async () => {
+    setPipeline.mockResolvedValue({
+      enabled: true,
+      season_active: false,
+      action_today: "skipped_offseason",
+    });
+    await expect(setPipelineAction(null, pipelineForm("season_active", "false"))).resolves.toEqual({
+      ok: true,
+      message: "The season is now off. Action today: skipped_offseason.",
+    });
+    expect(setPipeline).toHaveBeenCalledWith("season_active", false, "allowed-user");
+    expect(revalidate).toHaveBeenCalledWith("/admin");
+  });
+
+  it("passes an API message through and hides anything unexpected", async () => {
+    setPipeline.mockRejectedValue(new AdminApiError("ADMIN_API_TOKEN is not set.", 503));
+    await expect(setPipelineAction(null, pipelineForm("enabled", "true"))).resolves.toEqual({
+      ok: false,
+      message: "ADMIN_API_TOKEN is not set.",
+    });
+    setPipeline.mockRejectedValue(new Error("ECONNREFUSED"));
+    await expect(setPipelineAction(null, pipelineForm("enabled", "true"))).resolves.toEqual({
+      ok: false,
+      message: "Could not change the pipeline.",
     });
   });
 });

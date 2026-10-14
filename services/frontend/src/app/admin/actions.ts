@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
-import { AdminApiError, enqueueAdminJob, isJobType, setAdminFlag } from "@/lib/admin";
+import {
+  AdminApiError,
+  enqueueAdminJob,
+  isJobType,
+  isPipelineSwitch,
+  setAdminFlag,
+  setAdminPipeline,
+} from "@/lib/admin";
 import { adminJobsEnabled, isAdminUser } from "@/lib/admin-access";
 
 export type JobActionState = { ok: boolean; message: string } | null;
@@ -80,5 +87,38 @@ export async function setFlagAction(
       return { ok: false, message: error.message };
     }
     return { ok: false, message: "Could not change the flag." };
+  }
+}
+
+const PIPELINE_SWITCH_NAMES = { enabled: "The pipeline", season_active: "The season" } as const;
+
+/** Flip the scrape gate or the season. Same gate as flags: the admin check here is the lock. */
+export async function setPipelineAction(
+  _previous: JobActionState,
+  formData: FormData
+): Promise<JobActionState> {
+  const session = await auth();
+  if (!isAdminUser(session?.user)) {
+    return { ok: false, message: "Not authorised." };
+  }
+
+  const key = formData.get("switch");
+  const value = formData.get("value");
+  if (!isPipelineSwitch(key) || (value !== "true" && value !== "false")) {
+    return { ok: false, message: "Unknown pipeline switch." };
+  }
+
+  try {
+    const gate = await setAdminPipeline(key, value === "true", operatorName(session?.user));
+    revalidatePath("/admin");
+    return {
+      ok: true,
+      message: `${PIPELINE_SWITCH_NAMES[key]} is now ${gate[key] ? "on" : "off"}. Action today: ${gate.action_today}.`,
+    };
+  } catch (error) {
+    if (error instanceof AdminApiError) {
+      return { ok: false, message: error.message };
+    }
+    return { ok: false, message: "Could not change the pipeline." };
   }
 }

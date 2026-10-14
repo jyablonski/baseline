@@ -638,6 +638,61 @@ def test_admin_jobs_queue_allows_one_pending_job(integration_client, postgres_en
 
 
 @pytest.mark.integration
+def test_admin_pipeline_switches_leave_the_other_alone(integration_client, postgres_engine) -> None:
+    from sqlalchemy import text
+
+    from config import Settings, get_settings
+
+    token = "integration-admin-token"
+    integration_client.app.dependency_overrides[get_settings] = lambda: Settings(
+        admin_api_token=token
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    with postgres_engine.begin() as conn:
+        before = conn.execute(
+            text("SELECT enabled, season_active, reason FROM source.scrape_pipeline WHERE id = 1")
+        ).one()
+        conn.execute(
+            text(
+                "UPDATE source.scrape_pipeline SET enabled = true, season_active = true "
+                "WHERE id = 1"
+            )
+        )
+
+    try:
+        off = integration_client.put(
+            "/api/v1/admin/pipeline",
+            json={"enabled": False, "updated_by": "jyablonski"},
+            headers=headers,
+        )
+        assert off.status_code == 200
+        gate = off.json()["data"]
+        assert (gate["enabled"], gate["season_active"]) == (False, True)
+        assert gate["action_today"] == "skipped_disabled"
+        assert gate["reason"] == "Pipeline turned off from /admin by jyablonski."
+
+        both = integration_client.put(
+            "/api/v1/admin/pipeline",
+            json={"enabled": True, "season_active": False, "updated_by": "jyablonski"},
+            headers=headers,
+        ).json()["data"]
+        assert (both["enabled"], both["season_active"]) == (True, False)
+        assert both["action_today"] == "skipped_offseason"
+        assert (
+            both["reason"] == "Pipeline turned on and Season turned off from /admin by jyablonski."
+        )
+    finally:
+        with postgres_engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE source.scrape_pipeline SET enabled = :enabled, "
+                    "season_active = :season_active, reason = :reason WHERE id = 1"
+                ),
+                before._asdict(),
+            )
+
+
+@pytest.mark.integration
 def test_admin_job_claim_is_atomic(postgres_engine) -> None:
     """FOR UPDATE SKIP LOCKED: two runners must never claim the same row."""
     from sqlalchemy import text

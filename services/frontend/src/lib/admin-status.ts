@@ -7,6 +7,7 @@ import type {
   HostSnapshot,
   HostStats,
   ModelStatus,
+  PipelineGate,
   PipelineRun,
   SourceHealth,
 } from "@/lib/admin";
@@ -252,14 +253,12 @@ function pipelineReviewItems(health: AdminHealth): ReviewItem[] {
       detail: `The last successful scrape was ${formatAge(pipeline.last_success_at)}.`,
     });
   }
-  if (pipeline.enabled && pipeline.target_season === null) {
+  if (pipeline.enabled && needsTargetSeason(pipeline) && pipeline.target_season === null) {
     add({
       key: "target-season",
       level: "warn",
       title: "Target season is empty",
-      detail: `The ingestion gate has no target season set. Scrapes still run on scrape mode ${
-        pipeline.scrape_mode ?? "—"
-      }.`,
+      detail: "Scrape mode is season but no target season is set, so the NBA scrape does nothing.",
     });
   }
 
@@ -315,7 +314,7 @@ function pipelineReviewItems(health: AdminHealth): ReviewItem[] {
       key: "manual-runs",
       level: "warn",
       title: "Every recent run is a manual trigger",
-      detail: `Runs #${Math.min(...ids)}–${Math.max(...ids)} are labelled manual. Check the scheduler is the one firing them.`,
+      detail: `Runs #${Math.min(...ids)}–${Math.max(...ids)} are labelled manual. The refresh cron entry needs TRIGGER=scheduled to be recorded as scheduled.`,
     });
   }
   for (const run of runs.filter(isInstantRun)) {
@@ -328,7 +327,10 @@ function pipelineReviewItems(health: AdminHealth): ReviewItem[] {
   }
 
   const never = sources.filter(
-    (source) => source.status === "skipped" && source.last_success_at === null
+    (source) =>
+      source.status === "skipped" &&
+      source.last_success_at === null &&
+      !GAME_SOURCES.has(source.source_name)
   );
   if (never.length > 0) {
     add({
@@ -339,6 +341,43 @@ function pipelineReviewItems(health: AdminHealth): ReviewItem[] {
     });
   }
   return items;
+}
+
+/** Only season mode reads target_season; daily mode always scrapes the current season. */
+export function needsTargetSeason(pipeline: PipelineGate): boolean {
+  return pipeline.scrape_mode?.toLowerCase() === "season";
+}
+
+// The daily scrape only attempts these once a game has gone final, so before
+// the first game of the season "never scraped" is the expected state.
+const GAME_SOURCES = new Set(["player_game_logs", "play_by_play"]);
+
+const NBA_ACTION_LABELS: Record<string, string> = {
+  daily: "Daily",
+  season: "Season backfill",
+  skipped_disabled: "Disabled",
+  skipped_offseason: "Off-season",
+  skipped_mode_none: "Nothing to scrape",
+  noop: "Nothing to scrape",
+  dbt: "dbt only",
+};
+
+/**
+ * What a run did, named by its NBA scrape. Contracts, transactions, and Reddit
+ * ride along on every enabled run, so spelling them out only adds noise; the
+ * Sources table has how each did, and the raw string stays as a tooltip.
+ */
+export function runActionLabel(action: string | null): string {
+  if (!action) return "—";
+  const parts = action.split("+");
+  const nba = parts.find((part) => part in NBA_ACTION_LABELS);
+  if (nba) return NBA_ACTION_LABELS[nba];
+  // The scraper leaves the NBA action out when it was gated off but the
+  // ungated sources still ran, which is the off-season on an enabled gate.
+  if (parts.every((part) => ["contracts", "transactions", "reddit"].includes(part))) {
+    return "Off-season";
+  }
+  return action;
 }
 
 /** A run that reported success without taking any time did no work. */
