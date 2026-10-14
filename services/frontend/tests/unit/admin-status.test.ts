@@ -29,6 +29,7 @@ import {
   parseRunsPage,
   reviewItems,
   reviewSummary,
+  runActionLabel,
   sourceCounts,
   pipelineLevel,
   snapshotLevel,
@@ -480,6 +481,19 @@ describe("hostChecks", () => {
   });
 });
 
+describe("runActionLabel", () => {
+  it("names a run by its NBA scrape, not the sources that always ride along", () => {
+    expect(runActionLabel("daily+contracts+transactions+reddit")).toBe("Daily");
+    expect(runActionLabel("season+reddit")).toBe("Season backfill");
+    expect(runActionLabel("contracts+transactions+reddit")).toBe("Off-season");
+    expect(runActionLabel("skipped_disabled")).toBe("Disabled");
+    expect(runActionLabel("noop")).toBe("Nothing to scrape");
+    expect(runActionLabel("dbt")).toBe("dbt only");
+    expect(runActionLabel(null)).toBe("—");
+    expect(runActionLabel("something_new")).toBe("something_new");
+  });
+});
+
 describe("isInstantRun", () => {
   it("is a successful run that took no time, not a failed or unfinished one", () => {
     expect(isInstantRun(run({ duration_seconds: 0 }))).toBe(true);
@@ -508,8 +522,10 @@ describe("reviewItems", () => {
       pipeline: { ...health().pipeline, target_season: null },
       sources: [
         source(),
+        // Never attempted until a game goes final: expected before the season.
         source({ source_name: "play_by_play", status: "skipped", last_success_at: null }),
         source({ source_name: "player_game_logs", status: "skipped", last_success_at: null }),
+        source({ source_name: "reddit", status: "skipped", last_success_at: null }),
         // Skipped today but scraped before: not worth a line.
         source({ source_name: "odds", status: "skipped" }),
       ],
@@ -520,17 +536,16 @@ describe("reviewItems", () => {
       ],
     });
     const items = reviewItems(value);
+    // Daily mode never reads target_season, so leaving it empty is fine.
     expect(items.map((item) => [item.level, item.title])).toEqual([
-      ["warn", "Target season is empty"],
       ["warn", "Every recent run is a manual trigger"],
       ["warn", "Run #44 finished in 0s"],
-      ["idle", "play_by_play and player_game_logs never scraped"],
+      ["idle", "reddit never scraped"],
     ]);
-    expect(items[0].detail).toContain("scrape mode daily");
-    expect(items[1].detail).toContain("Runs #44–48");
+    expect(items[0].detail).toContain("Runs #44–48");
     expect(items.every((item) => item.tab === "pipeline")).toBe(true);
     expect(overallLevel(value)).toBe("ok");
-    expect(reviewSummary(items)).toBe("4 items to review, none blocking");
+    expect(reviewSummary(items)).toBe("3 items to review, none blocking");
   });
 
   it("does not read one manual run, or a disabled gate, as a problem", () => {
@@ -551,7 +566,7 @@ describe("reviewItems", () => {
         ...health().pipeline,
         is_stale: true,
         target_season: null,
-        scrape_mode: null,
+        scrape_mode: "Season",
       },
       sources: [
         source({ source_name: "odds", status: "failed", unhealthy_streak: 1, error_detail: "403" }),
@@ -588,7 +603,7 @@ describe("reviewItems", () => {
     expect(detail("odds failed")).toBe("403");
     expect(detail("reddit failed 3 runs in a row")).toMatch(/^Last healthy run /);
     expect(detail("dbt build failed with exit 1")).toMatch(/^1 node failed/);
-    expect(detail("Target season is empty")).toContain("scrape mode —");
+    expect(detail("Target season is empty")).toMatch(/does nothing/);
     expect(reviewSummary(items)).toBe("8 items to review, 3 blocking");
     expect(reviewSummary(items.slice(0, 1))).toBe("1 item to review, 1 blocking");
   });

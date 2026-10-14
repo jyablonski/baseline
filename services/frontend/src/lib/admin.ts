@@ -332,3 +332,42 @@ export async function setAdminFlag(
   }
   return ((await response.json()) as { data: FeatureFlag }).data;
 }
+
+/** The two scrape-gate switches /admin can flip. Everything else stays on the CLI. */
+export const PIPELINE_SWITCHES = ["enabled", "season_active"] as const;
+export type PipelineSwitch = (typeof PIPELINE_SWITCHES)[number];
+
+export function isPipelineSwitch(value: unknown): value is PipelineSwitch {
+  return typeof value === "string" && (PIPELINE_SWITCHES as readonly string[]).includes(value);
+}
+
+/** Flip one gate switch. Returns the whole gate, including the new action_today. */
+export async function setAdminPipeline(
+  key: PipelineSwitch,
+  value: boolean,
+  updatedBy: string
+): Promise<PipelineGate> {
+  const token = process.env.ADMIN_API_TOKEN;
+  if (!token) {
+    throw new AdminApiError("ADMIN_API_TOKEN is not set.", 503);
+  }
+  const response = await fetch(`${adminApiBase()}/api/v1/admin/pipeline`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ [key]: value, updated_by: updatedBy }),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const detail = await response
+      .json()
+      .then((body: { detail?: string }) => body.detail)
+      .catch(() => undefined);
+    throw new AdminApiError(
+      typeof detail === "string"
+        ? detail
+        : `Admin API returned ${response.status} ${response.statusText}`,
+      response.status
+    );
+  }
+  return ((await response.json()) as { data: PipelineGate }).data;
+}

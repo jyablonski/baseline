@@ -17,6 +17,7 @@ from queries.admin import (
     ADMIN_SOURCE_HEALTH,
     INSERT_ADMIN_JOB,
     SELECT_ADMIN_JOBS,
+    UPDATE_PIPELINE_GATE,
 )
 from repositories.status import as_utc
 
@@ -60,6 +61,31 @@ class AdminRepository:
                 row["enabled"] and (hours is None or float(hours) > STALE_AFTER_HOURS)
             ),
         }
+
+    def set_pipeline_gate(
+        self,
+        *,
+        enabled: bool | None,
+        season_active: bool | None,
+        updated_by: str,
+    ) -> dict:
+        # scrape_pipeline has no updated_by column; reason is what
+        # `make pipeline-status` and the page already show for the last change.
+        changes = [
+            f"{label} turned {'on' if value else 'off'}"
+            for label, value in (("Pipeline", enabled), ("Season", season_active))
+            if value is not None
+        ]
+        self.db.execute(
+            UPDATE_PIPELINE_GATE,
+            {
+                "enabled": enabled,
+                "season_active": season_active,
+                "reason": f"{' and '.join(changes)} from /admin by {updated_by}.",
+            },
+        )
+        self.db.commit()
+        return self.get_pipeline()
 
     def get_recent_runs(self, limit: int = 20, offset: int = 0) -> list[dict]:
         rows = (

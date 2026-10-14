@@ -1,32 +1,12 @@
 "use client";
 
 import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
 
 import { setFlagAction, type JobActionState } from "@/app/admin/actions";
+import { ToggleSwitch } from "@/components/admin/toggle-switch";
 import { formatAge } from "@/lib/admin-status";
 import type { FeatureFlag } from "@/lib/admin";
 import { cn } from "@/lib/utils";
-
-function FlagSwitch({ flag }: { flag: FeatureFlag }) {
-  // Form-scoped status: every switch locks while any one change is in flight.
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      role="switch"
-      aria-checked={flag.enabled}
-      aria-label={flag.flag_key}
-      disabled={pending}
-      className={cn(
-        "flex h-6 w-12 items-center rounded-full p-0.5 transition-colors disabled:opacity-50",
-        flag.enabled ? "justify-end bg-primary" : "justify-start bg-rule"
-      )}
-    >
-      <span className="size-5 rounded-full bg-field" />
-    </button>
-  );
-}
 
 /** One switch per feature. A change applies to the next request; no deploy. */
 export function FeatureFlags({ flags }: { flags: FeatureFlag[] }) {
@@ -60,7 +40,7 @@ export function FeatureFlags({ flags }: { flags: FeatureFlag[] }) {
               <span className={cn("text-sm", flag.enabled ? "text-primary" : "text-ink-3")}>
                 {flag.enabled ? "On" : "Off"}
               </span>
-              <FlagSwitch flag={flag} />
+              <ToggleSwitch checked={flag.enabled} label={flag.flag_key} />
             </form>
           </li>
         ))}

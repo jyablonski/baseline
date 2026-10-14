@@ -9,7 +9,11 @@ const actionState = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("@/auth", () => ({ signIn }));
-vi.mock("@/app/admin/actions", () => ({ requestJobAction: vi.fn(), setFlagAction: vi.fn() }));
+vi.mock("@/app/admin/actions", () => ({
+  requestJobAction: vi.fn(),
+  setFlagAction: vi.fn(),
+  setPipelineAction: vi.fn(),
+}));
 // The form is never submitted here, so the real hook would always report a
 // resting state; stubbing it lets both result branches render.
 vi.mock("react", async () => {
@@ -23,12 +27,13 @@ import { DbtBuildStatus, DBT_FAILED_NODES_CAP } from "@/components/admin/dbt-bui
 import { SignInButtons } from "@/components/account/sign-in-buttons";
 import { FeatureFlags } from "@/components/admin/feature-flags";
 import { JobButtons } from "@/components/admin/job-buttons";
+import { PipelineSwitches } from "@/components/admin/pipeline-switches";
 import { RunDuration } from "@/components/admin/run-duration";
 import { RunsPager } from "@/components/admin/runs-pager";
 import { Section } from "@/components/admin/section";
 import { Meter, Status, StatusDot } from "@/components/admin/status";
 import { VmDiagnostics } from "@/components/admin/vm-diagnostics";
-import type { DbtStatus, Diagnostics, PipelineRun } from "@/lib/admin";
+import type { DbtStatus, Diagnostics, PipelineGate, PipelineRun } from "@/lib/admin";
 import type { ReviewItem } from "@/lib/admin-status";
 
 const JOB_LABELS = ["Re-run ingestion", "Re-run dbt", "Re-run ML", "Full refresh"];
@@ -499,6 +504,52 @@ describe("FeatureFlags", () => {
   it("says so when no flags exist", () => {
     render(<FeatureFlags flags={[]} />);
     expect(screen.getByText("No feature flags are defined.")).toBeInTheDocument();
+  });
+});
+
+describe("PipelineSwitches", () => {
+  afterEach(() => {
+    actionState.current = null;
+  });
+
+  const gate = (overrides: Partial<PipelineGate> = {}): PipelineGate => ({
+    enabled: true,
+    season_active: false,
+    season_start: null,
+    season_end: null,
+    scrape_mode: "daily",
+    target_season: null,
+    last_success_at: null,
+    last_scrape_date: null,
+    reason: "Season turned off from /admin by jyablonski.",
+    updated_at: new Date().toISOString(),
+    action_today: "skipped_offseason",
+    reddit_would_run: true,
+    hours_since_success: 2,
+    is_stale: false,
+    ...overrides,
+  });
+
+  it("shows each switch and submits its opposite", () => {
+    render(<PipelineSwitches pipeline={gate()} />);
+    const enabled = screen.getByTestId("pipeline-enabled");
+    expect(within(enabled).getByRole("switch", { name: "Pipeline" })).toBeChecked();
+    // The server action reads these two fields; they are the contract.
+    expect(enabled.querySelector('input[name="switch"]')).toHaveValue("enabled");
+    expect(enabled.querySelector('input[name="value"]')).toHaveValue("false");
+    const season = screen.getByTestId("pipeline-season_active");
+    expect(within(season).getByText("Off")).toBeInTheDocument();
+    expect(season.querySelector('input[name="value"]')).toHaveValue("true");
+  });
+
+  it("says what today's run will do and who changed the gate last", () => {
+    render(<PipelineSwitches pipeline={gate()} />);
+    expect(screen.getByText(/Action today: skipped_offseason\./)).toHaveTextContent(
+      /by jyablonski/
+    );
+    actionState.current = { ok: false, message: "Not authorised." };
+    render(<PipelineSwitches pipeline={gate({ reason: null })} />);
+    expect(screen.getByText("Not authorised.")).toHaveClass("text-destructive");
   });
 });
 

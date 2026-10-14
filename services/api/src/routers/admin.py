@@ -11,7 +11,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from dependencies import get_admin_repository, get_flags_repository, require_admin_token
 from repositories.admin import AdminRepository, JobAlreadyPendingError
 from repositories.flags import FlagsRepository
-from schemas import AdminHealth, AdminJob, ItemResponse, JobRequest, PipelineRun
+from schemas import (
+    AdminHealth,
+    AdminJob,
+    ItemResponse,
+    JobRequest,
+    PipelineGate,
+    PipelineGateUpdate,
+    PipelineRun,
+)
 from schemas.account import FeatureFlag, FlagUpdate
 
 router = APIRouter(dependencies=[Depends(require_admin_token)])
@@ -25,6 +33,24 @@ def get_admin_health(
 ) -> ItemResponse[AdminHealth]:
     """Everything the dashboard needs in one round trip."""
     return ItemResponse(data=AdminHealth.model_validate(repo.get_health(run_limit, run_offset)))
+
+
+@router.put("/pipeline", response_model=ItemResponse[PipelineGate])
+def set_admin_pipeline(
+    request: PipelineGateUpdate,
+    repo: AdminRepository = Depends(get_admin_repository),
+) -> ItemResponse[PipelineGate]:
+    """Switch the scrape gate or the season on or off. The next scheduled run obeys it.
+
+    Only the two switches: the season window, scrape mode, and target season
+    stay with `make pipeline-enable`, where a typo cannot be one click away.
+    """
+    gate = repo.set_pipeline_gate(
+        enabled=request.enabled,
+        season_active=request.season_active,
+        updated_by=request.updated_by,
+    )
+    return ItemResponse(data=PipelineGate.model_validate(gate))
 
 
 @router.get("/runs", response_model=list[PipelineRun])

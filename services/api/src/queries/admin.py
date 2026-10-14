@@ -41,6 +41,20 @@ ADMIN_PIPELINE_STATUS = text(
     """
 )
 
+# The two switches /admin exposes. NULL leaves a switch as it is, so turning the
+# pipeline off does not also forget whether the season was active.
+UPDATE_PIPELINE_GATE = text(
+    """
+    UPDATE source.scrape_pipeline
+    SET
+        enabled = COALESCE(:enabled, scrape_pipeline.enabled),
+        season_active = COALESCE(:season_active, scrape_pipeline.season_active),
+        reason = :reason,
+        updated_at = NOW()
+    WHERE scrape_pipeline.id = 1
+    """
+)
+
 ADMIN_RECENT_RUNS = text(
     """
     SELECT

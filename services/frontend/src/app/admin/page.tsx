@@ -10,6 +10,7 @@ import {
   fetchAdminHealth,
   type AdminHealth,
   type FeatureFlag,
+  type PipelineGate,
   type PipelineRun,
 } from "@/lib/admin";
 import {
@@ -24,12 +25,14 @@ import {
   formatPercent,
   latestPredictionAt,
   mlLevel,
+  needsTargetSeason,
   overallLevel,
   parseAdminTab,
   parseRunsPage,
   pipelineLevel,
   reviewItems,
   reviewSummary,
+  runActionLabel,
   sourceCounts,
   sourceLevel,
   type ReviewItem,
@@ -37,6 +40,7 @@ import {
 import { AdminTabs } from "@/components/admin/admin-tabs";
 import { JobButtons } from "@/components/admin/job-buttons";
 import { FeatureFlags } from "@/components/admin/feature-flags";
+import { PipelineSwitches } from "@/components/admin/pipeline-switches";
 import { DbtBuildStatus } from "@/components/admin/dbt-build-status";
 import { RunDuration } from "@/components/admin/run-duration";
 import { RunsPager } from "@/components/admin/runs-pager";
@@ -134,7 +138,7 @@ export default async function AdminPage({
         <Pipeline health={health} runs={pagedRuns} runsPage={runsPage} />
       ) : null}
       {tab === "infrastructure" ? <VmDiagnostics diagnostics={health.diagnostics} /> : null}
-      {tab === "settings" ? <Settings /> : null}
+      {tab === "settings" ? <Settings pipeline={health.pipeline} /> : null}
     </article>
   );
 }
@@ -358,8 +362,8 @@ function Pipeline({
           <Field label="Last scrape date" value={pipeline.last_scrape_date ?? "—"} />
           <Field
             label="Target season"
-            value={pipeline.target_season ?? "not set"}
-            flagged={pipeline.target_season === null}
+            value={pipeline.target_season ?? (needsTargetSeason(pipeline) ? "not set" : "—")}
+            flagged={needsTargetSeason(pipeline) && pipeline.target_season === null}
           />
           {pipeline.reason ? (
             <p className="text-ink-2 sm:col-span-4 lg:col-span-7">{pipeline.reason}</p>
@@ -506,7 +510,9 @@ function Pipeline({
                   <TableCell>
                     <Status level={outcomeLevel(run.status, "success")}>{run.status}</Status>
                   </TableCell>
-                  <TableCell>{run.scrape_action ?? "—"}</TableCell>
+                  <TableCell title={run.scrape_action ?? undefined}>
+                    {runActionLabel(run.scrape_action)}
+                  </TableCell>
                   <TableCell className="text-right">
                     {run.dbt_exit === null ? "—" : run.dbt_exit}
                   </TableCell>
@@ -532,7 +538,7 @@ function Pipeline({
   );
 }
 
-async function Settings() {
+async function Settings({ pipeline }: { pipeline: PipelineGate }) {
   // Its own request so a flags failure cannot take the health view down with it.
   let flags: FeatureFlag[] | null = null;
   try {
@@ -542,7 +548,10 @@ async function Settings() {
   }
 
   return (
-    <div className="pt-10">
+    <div className="space-y-10 pt-10">
+      <Section title="Scrape pipeline">
+        <PipelineSwitches pipeline={pipeline} />
+      </Section>
       <Section title="Feature flags">
         {flags === null ? (
           <Empty>Could not load the feature flags.</Empty>

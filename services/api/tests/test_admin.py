@@ -121,6 +121,15 @@ class FakeAdminRepository:
     def get_recent_runs(self, limit: int = 20) -> list[dict]:
         return []
 
+    def set_pipeline_gate(self, *, enabled, season_active, updated_by: str) -> dict:
+        self.gate_args = (enabled, season_active, updated_by)
+        pipeline = self.get_health()["pipeline"]
+        if enabled is not None:
+            pipeline["enabled"] = enabled
+        if season_active is not None:
+            pipeline["season_active"] = season_active
+        return pipeline
+
     def get_jobs(self, limit: int = 20) -> list[dict]:
         return []
 
@@ -288,3 +297,29 @@ def test_jobs_listing_is_gated() -> None:
         "/api/v1/admin/jobs", headers={"Authorization": f"Bearer {ADMIN_TOKEN}"}
     )
     assert ok.status_code == 200
+
+
+@pytest.mark.unit
+def test_pipeline_switch_is_gated_and_passes_only_what_changed() -> None:
+    repo = FakeAdminRepository()
+    client = _client(ADMIN_TOKEN, repo)
+    body = {"enabled": False, "updated_by": "jyablonski"}
+    assert client.put("/api/v1/admin/pipeline", json=body).status_code == 401
+
+    response = client.put(
+        "/api/v1/admin/pipeline", json=body, headers={"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["enabled"] is False
+    assert response.json()["data"]["season_active"] is True
+    assert repo.gate_args == (False, None, "jyablonski")
+
+
+@pytest.mark.unit
+def test_pipeline_switch_refuses_a_change_to_nothing() -> None:
+    response = _client(ADMIN_TOKEN).put(
+        "/api/v1/admin/pipeline",
+        json={"updated_by": "jyablonski"},
+        headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
+    )
+    assert response.status_code == 422
