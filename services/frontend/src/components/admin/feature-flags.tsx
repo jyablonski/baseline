@@ -4,19 +4,27 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { setFlagAction, type JobActionState } from "@/app/admin/actions";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { formatAge } from "@/lib/admin-status";
 import type { FeatureFlag } from "@/lib/admin";
+import { cn } from "@/lib/utils";
 
-function FlagButton({ flag }: { flag: FeatureFlag }) {
-  const { pending, data } = useFormStatus();
-  // Form-scoped status: only the row that was clicked shows "Saving…".
-  const isThisFlag = data?.get("flag_key") === flag.flag_key;
+function FlagSwitch({ flag }: { flag: FeatureFlag }) {
+  // Form-scoped status: every switch locks while any one change is in flight.
+  const { pending } = useFormStatus();
   return (
-    <Button type="submit" variant="outline" size="sm" disabled={pending}>
-      {pending && isThisFlag ? "Saving…" : flag.enabled ? "Turn off" : "Turn on"}
-    </Button>
+    <button
+      type="submit"
+      role="switch"
+      aria-checked={flag.enabled}
+      aria-label={flag.flag_key}
+      disabled={pending}
+      className={cn(
+        "flex h-6 w-12 items-center rounded-full p-0.5 transition-colors disabled:opacity-50",
+        flag.enabled ? "justify-end bg-primary" : "justify-start bg-rule"
+      )}
+    >
+      <span className="size-5 rounded-full bg-field" />
+    </button>
   );
 }
 
@@ -30,31 +38,29 @@ export function FeatureFlags({ flags }: { flags: FeatureFlag[] }) {
 
   return (
     <div className="space-y-3">
-      <ul className="divide-y divide-rule">
+      <ul className="divide-y divide-rule border-b border-rule">
         {flags.map((flag) => (
           <li
             key={flag.flag_key}
-            className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0"
+            className="flex flex-wrap items-center justify-between gap-3 py-4"
             data-testid={`flag-${flag.flag_key}`}
           >
             <div className="min-w-0 space-y-1">
-              <p className="flex items-center gap-2 font-medium">
-                {flag.flag_key}
-                <Badge variant={flag.enabled ? "default" : "secondary"}>
-                  {flag.enabled ? "On" : "Off"}
-                </Badge>
-              </p>
-              <p className="text-sm text-muted-foreground">{flag.description}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="font-mono font-medium">{flag.flag_key}</p>
+              <p className="text-foreground">{flag.description}</p>
+              <p className="type-caption">
                 {flag.updated_by
                   ? `Last changed ${formatAge(flag.updated_at)} by ${flag.updated_by}`
                   : "Never changed"}
               </p>
             </div>
-            <form action={formAction}>
+            <form action={formAction} className="flex items-center gap-6">
               <input type="hidden" name="flag_key" value={flag.flag_key} />
               <input type="hidden" name="enabled" value={flag.enabled ? "false" : "true"} />
-              <FlagButton flag={flag} />
+              <span className={cn("text-sm", flag.enabled ? "text-primary" : "text-ink-3")}>
+                {flag.enabled ? "On" : "Off"}
+              </span>
+              <FlagSwitch flag={flag} />
             </form>
           </li>
         ))}

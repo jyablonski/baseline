@@ -20,7 +20,8 @@ export function RunsPager({
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = Math.min(page * pageSize, total);
-  const href = (target: number) => (target <= 1 ? "/admin" : `/admin?runs=${target}`);
+  const href = (target: number) =>
+    target <= 1 ? "/admin?tab=pipeline" : `/admin?tab=pipeline&runs=${target}`;
 
   return (
     <nav aria-label="Recent runs pages" className="flex items-center justify-between gap-4">
@@ -56,7 +57,7 @@ function PagerLink({
       </span>
     );
   }
-  // scroll={false}: the table is at the bottom of a long page.
+  // scroll={false}: the table is at the bottom of the Pipeline tab.
   return (
     <Link href={href} scroll={false} className={className}>
       {children}

@@ -30,7 +30,7 @@ function JobButton({ type, label, disabled }: { type: JobType; label: string; di
       name="job_type"
       value={type}
       variant="outline"
-      size="sm"
+      className="bg-field px-4"
       disabled={pending || disabled}
     >
       {pending && isThisButton ? "Queueing…" : label}
@@ -60,7 +60,8 @@ export function JobButtons({
 
   return (
     <div className="space-y-3">
-      <form action={formAction} className="flex flex-wrap gap-2">
+      <form action={formAction} className="flex flex-wrap items-center gap-3">
+        <span className="text-sm text-ink-2">Run now</span>
         {JOBS.map((job) => (
           <JobButton
             key={job.type}
@@ -75,7 +76,7 @@ export function JobButtons({
           ? "Jobs are disabled here: only production runs queued jobs. Run the equivalent make target locally instead."
           : hasPendingJob
             ? "A job is queued or running. This page refreshes itself until it finishes."
-            : "Jobs start within about a minute. Only one runs at a time, and a job never overlaps the daily refresh."}
+            : "Starts within a minute. One job at a time; never overlaps the daily refresh."}
       </p>
       {state ? (
         <p

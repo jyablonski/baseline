@@ -5,19 +5,14 @@ import type {
   DbtStatus,
   Diagnostics,
   HostSnapshot,
+  HostStats,
   ModelStatus,
+  PipelineRun,
   SourceHealth,
 } from "@/lib/admin";
 
 /** Traffic-light level shared by every panel on the admin page. */
 export type Level = "ok" | "warn" | "bad" | "idle";
-
-export const LEVEL_BADGE: Record<Level, "default" | "secondary" | "destructive" | "outline"> = {
-  ok: "default",
-  warn: "secondary",
-  bad: "destructive",
-  idle: "outline",
-};
 
 export const LEVEL_LABEL: Record<Level, string> = {
   ok: "Healthy",
@@ -51,13 +46,19 @@ export function dbtLevel(dbt: DbtStatus): Level {
   return dbt.gold_table_count === 0 ? "warn" : "ok";
 }
 
+/** When the newest prediction of any model was scored. */
+export function latestPredictionAt(models: ModelStatus[]): string | null {
+  return (
+    models
+      .map((model) => model.latest_scraped_at)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ?? null
+  );
+}
+
 export function mlLevel(models: ModelStatus[], staleAfterHours = 26): Level {
-  if (models.length === 0) return "idle";
-  const latest = models
-    .map((model) => model.latest_scraped_at)
-    .filter((value): value is string => Boolean(value))
-    .sort()
-    .at(-1);
+  const latest = latestPredictionAt(models);
   if (!latest) return "idle";
   const hours = (Date.now() - new Date(latest).getTime()) / 3_600_000;
   return hours > staleAfterHours ? "warn" : "ok";
@@ -100,24 +101,50 @@ export function isSnapshotStale(snapshot: HostSnapshot, now = Date.now()): boole
   return !Number.isFinite(minutes) || minutes > SNAPSHOT_STALE_MINUTES;
 }
 
+/** One scored reading per host resource, so the level and the review list agree. */
+export function hostChecks(host: HostStats): { resource: string; level: Level; detail: string }[] {
+  const checks: { resource: string; level: Level; detail: string }[] = [];
+  // MemAvailable counts reclaimable page cache, so this is real headroom.
+  const available = ratio(host.mem_available_bytes, host.mem_total_bytes);
+  if (available !== null) {
+    checks.push({
+      resource: "Memory",
+      level: available < 0.1 ? "bad" : available < 0.2 ? "warn" : "ok",
+      detail: `${Math.round(available * 100)}% of memory is still available.`,
+    });
+  }
+  const swapFree = ratio(host.swap_free_bytes, host.swap_total_bytes);
+  if (swapFree !== null) {
+    checks.push({
+      resource: "Swap",
+      level: swapFree < 0.5 ? "warn" : "ok",
+      detail: `${Math.round((1 - swapFree) * 100)}% of swap is in use.`,
+    });
+  }
+  const disk = ratio(host.disk_used_bytes, host.disk_total_bytes);
+  if (disk !== null) {
+    checks.push({
+      resource: "Disk",
+      level: disk >= 0.9 ? "bad" : disk >= 0.8 ? "warn" : "ok",
+      detail: `${Math.round(disk * 100)}% of the disk is used.`,
+    });
+  }
+  if (host.load_5m !== null && host.cpu_count) {
+    checks.push({
+      resource: "Load",
+      level: host.load_5m > host.cpu_count ? "warn" : "ok",
+      detail: `5-minute load is ${host.load_5m.toFixed(2)} on ${host.cpu_count} CPUs.`,
+    });
+  }
+  return checks;
+}
+
 export function snapshotLevel(snapshot: HostSnapshot | null, now = Date.now()): Level {
   if (snapshot === null) return "idle";
   if (isSnapshotStale(snapshot, now)) return "warn";
   const levels: Level[] = snapshot.containers.map(containerLevel);
   if (snapshot.errors.length > 0) levels.push("warn");
-  const host = snapshot.host;
-  if (host) {
-    // MemAvailable counts reclaimable page cache, so this is real headroom.
-    const available = ratio(host.mem_available_bytes, host.mem_total_bytes);
-    if (available !== null) levels.push(available < 0.1 ? "bad" : available < 0.2 ? "warn" : "ok");
-    const swapFree = ratio(host.swap_free_bytes, host.swap_total_bytes);
-    if (swapFree !== null && swapFree < 0.5) levels.push("warn");
-    const disk = ratio(host.disk_used_bytes, host.disk_total_bytes);
-    if (disk !== null) levels.push(disk >= 0.9 ? "bad" : disk >= 0.8 ? "warn" : "ok");
-    if (host.load_5m !== null && host.cpu_count && host.load_5m > host.cpu_count) {
-      levels.push("warn");
-    }
-  }
+  if (snapshot.host) levels.push(...hostChecks(snapshot.host).map((check) => check.level));
   return worstOf(levels);
 }
 
@@ -154,6 +181,257 @@ export function overallLevel(health: AdminHealth): Level {
     vmLevel(health.diagnostics),
   ];
   return worstOf(levels);
+}
+
+export const ADMIN_TABS = ["overview", "pipeline", "infrastructure", "settings"] as const;
+export type AdminTab = (typeof ADMIN_TABS)[number];
+
+/** `?tab=` is user-editable, so anything unknown falls back to the overview. */
+export function parseAdminTab(value: string | string[] | undefined): AdminTab {
+  const tab = Array.isArray(value) ? value[0] : value;
+  return (ADMIN_TABS as readonly string[]).includes(tab ?? "") ? (tab as AdminTab) : "overview";
+}
+
+export function adminTabHref(tab: AdminTab): string {
+  return tab === "overview" ? "/admin" : `/admin?tab=${tab}`;
+}
+
+/** How the last run of each source went, for the overview headline. */
+export function sourceCounts(sources: SourceHealth[]) {
+  const levels = sources.map(sourceLevel);
+  const skipped = levels.filter((level) => level === "idle").length;
+  const succeeded = levels.filter((level) => level === "ok").length;
+  return {
+    total: sources.length,
+    succeeded,
+    skipped,
+    failed: sources.length - succeeded - skipped,
+  };
+}
+
+/**
+ * Which `source` tables each scraper source fills. The API reports the two
+ * separately (per-source runs, per-table watermarks) and has no join between
+ * them; a source that is not listed here simply shows no tables.
+ */
+export const SOURCE_TABLES: Record<string, string[]> = {
+  todays_games: ["games"],
+  player_game_logs: ["player_game_logs"],
+  play_by_play: ["play_by_play"],
+  standings: ["standings"],
+  injuries: ["player_injuries"],
+  contracts: ["player_contracts", "team_payroll"],
+  odds: ["game_odds"],
+  reddit: ["reddit_posts", "reddit_comments"],
+};
+
+/**
+ * Something for the operator to look at. `bad` is blocking; `warn` is worth a
+ * look; `idle` is expected but would otherwise read as broken. Kept apart from
+ * the traffic-light levels: an odd-looking run does not make the system
+ * unhealthy, so several of these never move the overall status.
+ */
+export type ReviewItem = {
+  key: string;
+  level: "bad" | "warn" | "idle";
+  title: string;
+  detail: string;
+  tab: "pipeline" | "infrastructure";
+};
+
+function pipelineReviewItems(health: AdminHealth): ReviewItem[] {
+  const { pipeline, sources, dbt, ml, recent_runs: runs } = health;
+  const items: ReviewItem[] = [];
+  const add = (item: Omit<ReviewItem, "tab">) => items.push({ ...item, tab: "pipeline" });
+
+  if (pipeline.enabled && pipeline.is_stale) {
+    add({
+      key: "stale",
+      level: "bad",
+      title: "Ingestion is stale",
+      detail: `The last successful scrape was ${formatAge(pipeline.last_success_at)}.`,
+    });
+  }
+  if (pipeline.enabled && pipeline.target_season === null) {
+    add({
+      key: "target-season",
+      level: "warn",
+      title: "Target season is empty",
+      detail: `The ingestion gate has no target season set. Scrapes still run on scrape mode ${
+        pipeline.scrape_mode ?? "—"
+      }.`,
+    });
+  }
+
+  for (const source of sources) {
+    const level = sourceLevel(source);
+    if (level !== "bad" && level !== "warn") continue;
+    const streak = source.unhealthy_streak > 1 ? ` ${source.unhealthy_streak} runs in a row` : "";
+    add({
+      key: `source-${source.source_name}`,
+      level,
+      title:
+        source.status === "failed"
+          ? `${source.source_name} failed${streak}`
+          : `${source.source_name} returned no rows${streak}`,
+      detail: source.error_detail ?? `Last healthy run ${formatAge(source.last_success_at)}.`,
+    });
+  }
+
+  if (dbt.last_dbt_exit !== null && dbt.last_dbt_exit !== 0) {
+    const failed = dbt.last_dbt_failed_nodes?.length ?? 0;
+    add({
+      key: "dbt-failed",
+      level: "bad",
+      title: `dbt build failed with exit ${dbt.last_dbt_exit}`,
+      detail:
+        failed === 0
+          ? "dbt stopped before naming a failing model or test."
+          : `${failed} ${failed === 1 ? "node" : "nodes"} failed; downstream models were skipped.`,
+    });
+  } else if (dbtLevel(dbt) === "warn") {
+    add({
+      key: "dbt-empty",
+      level: "warn",
+      title: "dbt built no gold tables",
+      detail: "The last build exited 0 but the gold schema is empty.",
+    });
+  }
+
+  if (mlLevel(ml) === "warn") {
+    add({
+      key: "ml-stale",
+      level: "warn",
+      title: "ML predictions are stale",
+      detail: `The newest prediction was scored ${formatAge(latestPredictionAt(ml))}.`,
+    });
+  }
+
+  // One manual run is an operator pressing a button; nothing but manual runs
+  // suggests the scheduled refresh is not the one doing the work.
+  if (runs.length > 1 && runs.every((run) => run.triggered_by === "manual")) {
+    const ids = runs.map((run) => run.run_id);
+    add({
+      key: "manual-runs",
+      level: "warn",
+      title: "Every recent run is a manual trigger",
+      detail: `Runs #${Math.min(...ids)}–${Math.max(...ids)} are labelled manual. Check the scheduler is the one firing them.`,
+    });
+  }
+  for (const run of runs.filter(isInstantRun)) {
+    add({
+      key: `instant-run-${run.run_id}`,
+      level: "warn",
+      title: `Run #${run.run_id} finished in 0s`,
+      detail: "Likely a no-op. Worth a look if it was meant to scrape or rebuild models.",
+    });
+  }
+
+  const never = sources.filter(
+    (source) => source.status === "skipped" && source.last_success_at === null
+  );
+  if (never.length > 0) {
+    add({
+      key: "never-scraped",
+      level: "idle",
+      title: `${joinNames(never.map((source) => source.source_name))} never scraped`,
+      detail: "Skipped on every run so far, so nothing has been collected yet.",
+    });
+  }
+  return items;
+}
+
+/** A run that reported success without taking any time did no work. */
+export function isInstantRun(run: PipelineRun): boolean {
+  return run.status === "success" && run.duration_seconds !== null && run.duration_seconds < 1;
+}
+
+function joinNames(names: string[]): string {
+  return names.length < 3
+    ? names.join(" and ")
+    : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
+function infrastructureReviewItems(diagnostics: Diagnostics, now: number): ReviewItem[] {
+  const { snapshot, database } = diagnostics;
+  const items: ReviewItem[] = [];
+  const add = (item: Omit<ReviewItem, "tab">) => items.push({ ...item, tab: "infrastructure" });
+
+  if (snapshot !== null && isSnapshotStale(snapshot, now)) {
+    add({
+      key: "snapshot-stale",
+      level: "warn",
+      title: "Host snapshot is stale",
+      detail: `Last recorded ${formatAge(snapshot.captured_at)}. The admin-jobs cron, python3, or Docker on the host has stopped reporting.`,
+    });
+  } else if (snapshot !== null) {
+    for (const check of snapshot.host ? hostChecks(snapshot.host) : []) {
+      if (check.level !== "bad" && check.level !== "warn") continue;
+      add({
+        key: `host-${check.resource}`,
+        level: check.level,
+        title: `${check.resource} is under pressure`,
+        detail: check.detail,
+      });
+    }
+    for (const container of snapshot.containers) {
+      const level = containerLevel(container);
+      if (level !== "bad" && level !== "warn") continue;
+      add({
+        key: `container-${container.name}`,
+        level,
+        title: `${container.service ?? container.name} needs a look`,
+        detail: container.oom_killed
+          ? "The container was OOM killed."
+          : container.status !== "running"
+            ? `The container is ${container.status ?? "in an unknown state"}.`
+            : container.health === "unhealthy"
+              ? "Its health check is failing."
+              : `${formatPercent(container.mem_used_bytes, container.mem_limit_bytes)} of its memory limit used, ${container.restart_count} restarts.`,
+      });
+    }
+    if (snapshot.errors.length > 0) {
+      add({
+        key: "snapshot-errors",
+        level: "warn",
+        title: "The host snapshot is incomplete",
+        detail: snapshot.errors.join("; "),
+      });
+    }
+  }
+
+  const level = databaseLevel(database);
+  if (level === "bad" || level === "warn") {
+    const stuck = database.connections.some(
+      (group) => (group.longest_active_seconds ?? 0) > LONG_QUERY_SECONDS
+    );
+    add({
+      key: "database",
+      level,
+      title: stuck
+        ? "A Postgres query has been running a long time"
+        : "Postgres is near its connection limit",
+      detail: `${database.total_connections} of ${database.max_connections} connections in use.`,
+    });
+  }
+  return items;
+}
+
+/** Blocking items first, then the ones worth a look, then the merely notable. */
+export function reviewItems(health: AdminHealth, now = Date.now()): ReviewItem[] {
+  const order = { bad: 0, warn: 1, idle: 2 };
+  return [
+    ...pipelineReviewItems(health),
+    ...infrastructureReviewItems(health.diagnostics, now),
+  ].sort((a, b) => order[a.level] - order[b.level]);
+}
+
+export function reviewSummary(items: ReviewItem[]): string {
+  if (items.length === 0) return "Nothing to review";
+  const blocking = items.filter((item) => item.level === "bad").length;
+  return `${items.length} ${items.length === 1 ? "item" : "items"} to review, ${
+    blocking === 0 ? "none" : blocking
+  } blocking`;
 }
 
 export function formatAge(iso: string | null): string {

@@ -56,6 +56,7 @@
   --color-accent-hover: var(--ct-accent-hover);
   --color-accent-soft: var(--ct-accent-soft);
   --color-loss-bar: var(--ct-loss-bar);
+  --color-warn: var(--ct-warn);
   --color-skel-1: var(--ct-skel-1);
   --color-skel-2: var(--ct-skel-2);
   --radius-sm: 0;
@@ -86,6 +87,7 @@
   --ct-accent-soft: #b7cbb3;
   --ct-loss: #9b2c22;
   --ct-loss-bar: #c6a9a2;
+  --ct-warn: #9a6418;
   --ct-skel-1: #dfdacc;
   --ct-skel-2: #e7e2d4;
   --ct-radius: 0;
