@@ -22,13 +22,15 @@ const ALIAS_IF_PREFERRED = [
   ["player_name", "full_name"],
   ["total_b2b_games", "total_back_to_backs"],
   ["avg_pts_in_b2b", "avg_pts_b2b"],
+  // The abbreviation is the Team column; the full name beside it only repeats it.
+  ["team_name", "abbreviation"],
 ] as const;
 
 const COLUMN_LABELS: Record<string, string> = {
   full_name: "Player",
   player_name: "Player",
   team_name: "Team",
-  abbreviation: "Abbr",
+  abbreviation: "Team",
   season: "Season",
   conference: "Conf",
   conference_rank: "#",

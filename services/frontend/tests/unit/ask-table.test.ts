@@ -34,7 +34,7 @@ describe("askTableColumns", () => {
     ]);
   });
 
-  it("hides team_id, filters_applied, empty game_list, and folds W-L into record", () => {
+  it("hides team_id, the full name beside an abbreviation, filters_applied, empty game_list, and folds W-L into record", () => {
     const columns = askTableColumns([
       {
         team_id: 1610612744,
@@ -46,7 +46,7 @@ describe("askTableColumns", () => {
         filters_applied: { arena_city: "Chicago" },
       },
     ]);
-    expect(columns).toEqual(["abbreviation", "team_name", "record"]);
+    expect(columns).toEqual(["abbreviation", "record"]);
   });
 
   it("hides Cube-prefixed duplicates and empty leftover dims", () => {
@@ -77,6 +77,7 @@ describe("askTableLabel", () => {
     expect(askTableLabel("win_pct")).toBe("Win %");
     expect(askTableLabel("current_season_salary")).toBe("Salary");
     expect(askTableLabel("Teams.team_name")).toBe("Team");
+    expect(askTableLabel("abbreviation")).toBe("Team");
     expect(askTableLabel("mystery_stat")).toBe("mystery stat");
   });
 });
