@@ -112,14 +112,14 @@ test.describe("admin access", () => {
     await page.goto("/admin");
     await expect(page).toHaveURL(/\/admin$/);
     await expect(page.getByRole("heading", { name: "Admin", level: 1 })).toBeVisible();
-    await expect(page.getByText("System status")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Needs review" })).toBeVisible();
   });
 
   test("the owner gets in with Google", async ({ page, context }) => {
     await signInAs(context, googleOwner);
     await page.goto("/admin");
     await expect(page).toHaveURL(/\/admin$/);
-    await expect(page.getByText("System status")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Needs review" })).toBeVisible();
   });
 
   const strangers = [
@@ -146,7 +146,7 @@ test.describe("admin access", () => {
         await page.goto(path);
         await expect(page).toHaveURL(/\/admin\/signin\?error=AccessDenied$/);
         await expect(page.getByText("That account is not on the admin allowlist.")).toBeVisible();
-        await expect(page.getByText("System status")).toHaveCount(0);
+        await expect(page.getByRole("heading", { name: "Needs review" })).toHaveCount(0);
         await expect(page.getByText("Feature flags")).toHaveCount(0);
       }
       // Still a perfectly good account everywhere else.
@@ -170,7 +170,7 @@ test.describe("admin access", () => {
     await page.goto("/account");
     await page.getByRole("link", { name: "Open admin →" }).click();
     await expect(page).toHaveURL(/\/admin$/);
-    await expect(page.getByText("System status")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Needs review" })).toBeVisible();
   });
 });
 
@@ -475,13 +475,13 @@ test.describe("feature flags", () => {
     await user.goto("/chat");
     await expect(user.getByLabel("Your question")).toBeEnabled();
 
-    await admin.goto("/admin");
+    await admin.goto("/admin?tab=settings");
     const chatbot = admin.getByTestId("flag-chatbot");
     await expect(chatbot.getByText("On", { exact: true })).toBeVisible();
     await expect(chatbot.getByText("Never changed")).toBeVisible();
-    await chatbot.getByRole("button", { name: "Turn off" }).click();
+    await chatbot.getByRole("switch").click();
     await expect(chatbot.getByText("Off", { exact: true })).toBeVisible();
-    await expect(chatbot.getByRole("button", { name: "Turn on" })).toBeVisible();
+    await expect(chatbot.getByRole("switch")).not.toBeChecked();
     await expect(chatbot.getByText(`by ${E2E.ownerLogin}`)).toBeVisible();
     await expect(admin.getByText("chatbot is now off.")).toBeVisible();
     // The other flag is untouched.
@@ -507,7 +507,7 @@ test.describe("feature flags", () => {
     await expect(user.getByText("Rules answer.")).toBeVisible();
 
     // And back on.
-    await chatbot.getByRole("button", { name: "Turn on" }).click();
+    await chatbot.getByRole("switch").click();
     await expect(chatbot.getByText("On", { exact: true })).toBeVisible();
     await user.goto("/chat");
     await expect(user.getByLabel("Your question")).toBeEnabled();
@@ -522,8 +522,8 @@ test.describe("feature flags", () => {
     const ownerContext = await browser.newContext();
     await signInAs(ownerContext, googleOwner);
     const admin = await ownerContext.newPage();
-    await admin.goto("/admin");
-    await admin.getByTestId("flag-picks").getByRole("button", { name: "Turn off" }).click();
+    await admin.goto("/admin?tab=settings");
+    await admin.getByTestId("flag-picks").getByRole("switch").click();
     await expect(admin.getByTestId("flag-picks").getByText(`by ${E2E.ownerEmail}`)).toBeVisible();
 
     const userContext = await browser.newContext();

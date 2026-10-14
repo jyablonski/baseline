@@ -112,7 +112,7 @@ Sessions issued before Google sign-in was added carry no provider and are refuse
 
 ## Feature flags
 
-`source.feature_flags` holds one row per switchable feature, and the Feature flags card on `/admin` turns each on or off. A change applies to the next request, with no deploy or restart. Current flags:
+`source.feature_flags` holds one row per switchable feature, and the Settings tab on `/admin` turns each on or off. A change applies to the next request, with no deploy or restart. Current flags:
 
 - `chatbot` — the signed-in chat at `/chat`. Off makes `POST /api/v1/account/chat` return 503 and puts Ask back in the nav.
 - `picks` — game picks on `/schedule` and `/picks`. Off hides them and makes the picks routes return 503. Existing picks are kept.
@@ -183,7 +183,7 @@ The buttons only work on the prod overlay, which sets `ADMIN_JOBS_ENABLED=true` 
 
 ## VM health
 
-The **VM health** panel on `/admin` combines two sources:
+The **Infrastructure** tab on `/admin` combines two sources:
 
 - **Host snapshot.** Each admin-jobs cron tick first runs `scripts/host-snapshot.py` (host `python3`, stdlib only) and stores its JSON in `source.host_snapshots`, pruning rows older than `HOST_SNAPSHOT_RETENTION` (default 7 days). It records host memory (`MemAvailable`, so page cache is not counted as used), swap, disk, load, per-container memory/CPU/restarts/OOM kills from `docker stats` and `docker inspect`, and open TCP connections into Caddy (`:80`/`:443`, with the busiest client IPs) and MCP (`:8000`). Connections are read from `/proc/net/tcp` inside each container because published ports are DNAT'd past the host's own socket table. HTTP/3 (UDP) is not counted. Collection is best effort and never blocks the job queue; a snapshot older than 5 minutes shows as stale.
 - **Postgres connections**, read live from `pg_stat_activity` and grouped by application, user, client, and state. Clients outside loopback/private ranges are tagged **external** — Postgres is published on the public IP for DBeaver, so that is where an unexpected client would appear. External connections are shown but do not change the status.

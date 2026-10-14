@@ -7,6 +7,7 @@ import type {
   DbtStatus,
   HostSnapshot,
   ModelStatus,
+  PipelineRun,
   SourceHealth,
 } from "@/lib/admin";
 import {
@@ -18,9 +19,17 @@ import {
   formatCount,
   formatDuration,
   formatPercent,
+  adminTabHref,
+  hostChecks,
+  isInstantRun,
+  latestPredictionAt,
   mlLevel,
   overallLevel,
+  parseAdminTab,
   parseRunsPage,
+  reviewItems,
+  reviewSummary,
+  sourceCounts,
   pipelineLevel,
   snapshotLevel,
   sourceLevel,
@@ -55,7 +64,7 @@ function health(overrides: Partial<AdminHealth> = {}): AdminHealth {
       season_start: null,
       season_end: null,
       scrape_mode: "daily",
-      target_season: null,
+      target_season: "2026-27",
       last_success_at: new Date().toISOString(),
       last_scrape_date: null,
       reason: null,
@@ -413,5 +422,265 @@ describe("formatters", () => {
     expect(formatCount(null)).toBe("—");
     expect(formatCount(undefined)).toBe("—");
     expect(formatCount(1234567)).toBe("1,234,567");
+  });
+});
+
+function run(overrides: Partial<PipelineRun> = {}): PipelineRun {
+  return {
+    run_id: 1,
+    triggered_by: "scheduled",
+    status: "success",
+    scrape_action: "daily",
+    scrape_exit: 0,
+    reddit_ran: true,
+    reddit_exit: 0,
+    dbt_exit: 0,
+    dbt_failed_nodes: null,
+    ml_exit: 0,
+    detail: null,
+    started_at: new Date().toISOString(),
+    finished_at: new Date().toISOString(),
+    duration_seconds: 280,
+    ...overrides,
+  };
+}
+
+describe("admin tabs", () => {
+  it("falls back to the overview for anything it does not know", () => {
+    expect(parseAdminTab("pipeline")).toBe("pipeline");
+    expect(parseAdminTab(["settings", "pipeline"])).toBe("settings");
+    expect(parseAdminTab("nope")).toBe("overview");
+    expect(parseAdminTab(undefined)).toBe("overview");
+  });
+
+  it("keeps the overview on the bare URL", () => {
+    expect(adminTabHref("overview")).toBe("/admin");
+    expect(adminTabHref("infrastructure")).toBe("/admin?tab=infrastructure");
+  });
+});
+
+describe("sourceCounts", () => {
+  it("splits the last runs into succeeded, skipped, and the rest", () => {
+    expect(
+      sourceCounts([
+        source(),
+        source({ status: "skipped" }),
+        source({ status: "failed", unhealthy_streak: 1 }),
+        source({ expectation: "below", unhealthy_streak: 3 }),
+      ])
+    ).toEqual({ total: 4, succeeded: 1, skipped: 1, failed: 2 });
+  });
+});
+
+describe("hostChecks", () => {
+  it("skips a reading the snapshot did not carry", () => {
+    const host = { ...snapshot().host!, mem_available_bytes: null, cpu_count: null };
+    // No swap configured, so swap has no share to score either.
+    expect(hostChecks(host).map((check) => check.resource)).toEqual(["Disk"]);
+  });
+});
+
+describe("isInstantRun", () => {
+  it("is a successful run that took no time, not a failed or unfinished one", () => {
+    expect(isInstantRun(run({ duration_seconds: 0 }))).toBe(true);
+    expect(isInstantRun(run({ duration_seconds: 0, status: "failed" }))).toBe(false);
+    expect(isInstantRun(run({ duration_seconds: null }))).toBe(false);
+    expect(isInstantRun(run())).toBe(false);
+  });
+});
+
+describe("latestPredictionAt", () => {
+  it("is null until a model has scored something", () => {
+    expect(latestPredictionAt([])).toBeNull();
+  });
+});
+
+describe("reviewItems", () => {
+  const titles = (value: AdminHealth) => reviewItems(value).map((item) => item.title);
+
+  it("has nothing to say about a healthy system", () => {
+    expect(reviewItems(health())).toEqual([]);
+    expect(reviewSummary([])).toBe("Nothing to review");
+  });
+
+  it("raises odd-looking runs without calling the system unhealthy", () => {
+    const value = health({
+      pipeline: { ...health().pipeline, target_season: null },
+      sources: [
+        source(),
+        source({ source_name: "play_by_play", status: "skipped", last_success_at: null }),
+        source({ source_name: "player_game_logs", status: "skipped", last_success_at: null }),
+        // Skipped today but scraped before: not worth a line.
+        source({ source_name: "odds", status: "skipped" }),
+      ],
+      recent_runs: [
+        run({ run_id: 48, triggered_by: "manual" }),
+        run({ run_id: 47, triggered_by: "manual" }),
+        run({ run_id: 44, triggered_by: "manual", duration_seconds: 0 }),
+      ],
+    });
+    const items = reviewItems(value);
+    expect(items.map((item) => [item.level, item.title])).toEqual([
+      ["warn", "Target season is empty"],
+      ["warn", "Every recent run is a manual trigger"],
+      ["warn", "Run #44 finished in 0s"],
+      ["idle", "play_by_play and player_game_logs never scraped"],
+    ]);
+    expect(items[0].detail).toContain("scrape mode daily");
+    expect(items[1].detail).toContain("Runs #44–48");
+    expect(items.every((item) => item.tab === "pipeline")).toBe(true);
+    expect(overallLevel(value)).toBe("ok");
+    expect(reviewSummary(items)).toBe("4 items to review, none blocking");
+  });
+
+  it("does not read one manual run, or a disabled gate, as a problem", () => {
+    const value = health({
+      pipeline: { ...health().pipeline, enabled: false, is_stale: true, target_season: null },
+      recent_runs: [run({ triggered_by: "manual" })],
+    });
+    expect(reviewItems(value)).toEqual([]);
+    expect(
+      titles(health({ recent_runs: [run({ triggered_by: "manual" }), run({ run_id: 2 })] }))
+    ).toEqual([]);
+  });
+
+  it("puts blocking pipeline problems first", () => {
+    const stale = new Date(Date.now() - 40 * 3_600_000).toISOString();
+    const value = health({
+      pipeline: {
+        ...health().pipeline,
+        is_stale: true,
+        target_season: null,
+        scrape_mode: null,
+      },
+      sources: [
+        source({ source_name: "odds", status: "failed", unhealthy_streak: 1, error_detail: "403" }),
+        source({ source_name: "reddit", status: "failed", unhealthy_streak: 3 }),
+        source({ source_name: "standings", expectation: "below", unhealthy_streak: 1 }),
+        source({ source_name: "a", status: "skipped", last_success_at: null }),
+        source({ source_name: "b", status: "skipped", last_success_at: null }),
+        source({ source_name: "c", status: "skipped", last_success_at: null }),
+      ],
+      dbt: { ...health().dbt, last_dbt_exit: 1, last_dbt_failed_nodes: ["model fct_x"] },
+      ml: [
+        {
+          model_name: "elo",
+          model_version: "elo-v1",
+          prediction_count: 3,
+          latest_as_of: null,
+          latest_scraped_at: stale,
+          with_market_wp: 0,
+        },
+      ],
+    });
+    const items = reviewItems(value);
+    expect(items.map((item) => [item.level, item.title])).toEqual([
+      ["bad", "Ingestion is stale"],
+      ["bad", "reddit failed 3 runs in a row"],
+      ["bad", "dbt build failed with exit 1"],
+      ["warn", "Target season is empty"],
+      ["warn", "odds failed"],
+      ["warn", "standings returned no rows"],
+      ["warn", "ML predictions are stale"],
+      ["idle", "a, b and c never scraped"],
+    ]);
+    const detail = (title: string) => items.find((item) => item.title === title)?.detail;
+    expect(detail("odds failed")).toBe("403");
+    expect(detail("reddit failed 3 runs in a row")).toMatch(/^Last healthy run /);
+    expect(detail("dbt build failed with exit 1")).toMatch(/^1 node failed/);
+    expect(detail("Target season is empty")).toContain("scrape mode —");
+    expect(reviewSummary(items)).toBe("8 items to review, 3 blocking");
+    expect(reviewSummary(items.slice(0, 1))).toBe("1 item to review, 1 blocking");
+  });
+
+  it("words a dbt failure by how much dbt could name", () => {
+    const failed = (nodes: string[] | null) =>
+      reviewItems(
+        health({ dbt: { ...health().dbt, last_dbt_exit: 2, last_dbt_failed_nodes: nodes } })
+      )[0].detail;
+    expect(failed(null)).toMatch(/stopped before naming/);
+    expect(failed(["a", "b"])).toMatch(/^2 nodes failed/);
+    expect(titles(health({ dbt: { ...health().dbt, gold_table_count: 0 } }))).toEqual([
+      "dbt built no gold tables",
+    ]);
+  });
+
+  it("sends host, container, and database problems to the infrastructure tab", () => {
+    const value = health({
+      diagnostics: {
+        snapshot: snapshot({
+          host: {
+            ...snapshot().host!,
+            mem_available_bytes: 1_000 * MB,
+            disk_used_bytes: 85_000 * MB,
+          },
+          containers: [
+            container(),
+            container({ name: "nba-api-1", service: "api", oom_killed: true }),
+            container({ name: "nba-cube-1", service: null, status: "exited" }),
+            container({ name: "nba-mcp-1", service: "mcp", status: null }),
+            container({ name: "nba-caddy-1", service: "caddy", health: "unhealthy" }),
+            container({ name: "nba-frontend-1", service: "frontend", restart_count: 2 }),
+          ],
+          errors: ["connections: timeout", "stats: timeout"],
+        }),
+        database: database({ total_connections: 85 }),
+      },
+    });
+    const items = reviewItems(value);
+    expect(items.every((item) => item.tab === "infrastructure")).toBe(true);
+    expect(items.map((item) => [item.level, item.title, item.detail])).toEqual([
+      ["bad", "Memory is under pressure", "4% of memory is still available."],
+      ["bad", "api needs a look", "The container was OOM killed."],
+      ["bad", "nba-cube-1 needs a look", "The container is exited."],
+      ["bad", "mcp needs a look", "The container is in an unknown state."],
+      ["bad", "caddy needs a look", "Its health check is failing."],
+      ["warn", "Disk is under pressure", "85% of the disk is used."],
+      ["warn", "frontend needs a look", "15% of its memory limit used, 2 restarts."],
+      ["warn", "The host snapshot is incomplete", "connections: timeout; stats: timeout"],
+      ["warn", "Postgres is near its connection limit", "85 of 100 connections in use."],
+    ]);
+  });
+
+  it("reports a stale snapshot instead of scoring its old readings", () => {
+    const now = Date.now();
+    const old = snapshot({
+      captured_at: new Date(now - 30 * 60_000).toISOString(),
+      containers: [container({ oom_killed: true })],
+    });
+    const items = reviewItems(
+      health({
+        diagnostics: {
+          snapshot: old,
+          database: database({
+            connections: [
+              {
+                user_name: "postgres",
+                application_name: "psql",
+                client_addr: null,
+                is_external: false,
+                state: "active",
+                connections: 1,
+                oldest_connected_at: null,
+                longest_active_seconds: 900,
+              },
+            ],
+          }),
+        },
+      }),
+      now
+    );
+    expect(items.map((item) => item.title)).toEqual([
+      "Host snapshot is stale",
+      "A Postgres query has been running a long time",
+    ]);
+  });
+
+  it("is quiet before the first snapshot and for a snapshot with no host section", () => {
+    const base = health().diagnostics;
+    expect(reviewItems(health({ diagnostics: { ...base, snapshot: null } }))).toEqual([]);
+    expect(
+      reviewItems(health({ diagnostics: { ...base, snapshot: snapshot({ host: null }) } }))
+    ).toEqual([]);
   });
 });

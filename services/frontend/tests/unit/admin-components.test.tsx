@@ -2,14 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const refresh = vi.hoisted(() => vi.fn());
-const signOut = vi.hoisted(() => vi.fn());
 const signIn = vi.hoisted(() => vi.fn());
 const actionState = vi.hoisted(() => ({
   current: null as { ok: boolean; message: string } | null,
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
-vi.mock("@/auth", () => ({ signOut, signIn }));
+vi.mock("@/auth", () => ({ signIn }));
 vi.mock("@/app/admin/actions", () => ({ requestJobAction: vi.fn(), setFlagAction: vi.fn() }));
 // The form is never submitted here, so the real hook would always report a
 // resting state; stubbing it lets both result branches render.
@@ -19,14 +18,18 @@ vi.mock("react", async () => {
 });
 
 import { AdminTable } from "@/components/admin/admin-table";
+import { AdminTabs } from "@/components/admin/admin-tabs";
 import { DbtBuildStatus, DBT_FAILED_NODES_CAP } from "@/components/admin/dbt-build-status";
 import { SignInButtons } from "@/components/account/sign-in-buttons";
 import { FeatureFlags } from "@/components/admin/feature-flags";
 import { JobButtons } from "@/components/admin/job-buttons";
+import { RunDuration } from "@/components/admin/run-duration";
 import { RunsPager } from "@/components/admin/runs-pager";
-import { SignOutButton } from "@/components/admin/sign-out-button";
+import { Section } from "@/components/admin/section";
+import { Meter, Status, StatusDot } from "@/components/admin/status";
 import { VmDiagnostics } from "@/components/admin/vm-diagnostics";
-import type { DbtStatus, Diagnostics } from "@/lib/admin";
+import type { DbtStatus, Diagnostics, PipelineRun } from "@/lib/admin";
+import type { ReviewItem } from "@/lib/admin-status";
 
 const JOB_LABELS = ["Re-run ingestion", "Re-run dbt", "Re-run ML", "Full refresh"];
 
@@ -42,7 +45,8 @@ describe("JobButtons", () => {
     for (const label of JOB_LABELS) {
       expect(screen.getByRole("button", { name: label })).toBeEnabled();
     }
-    expect(screen.getByText(/Only one runs at a time/)).toBeInTheDocument();
+    expect(screen.getByText("Run now")).toBeInTheDocument();
+    expect(screen.getByText(/One job at a time/)).toBeInTheDocument();
   });
 
   it("disables every button while a job is queued or running", () => {
@@ -125,18 +129,6 @@ describe("AdminTable", () => {
     expect(table.className).toContain("[&_td]:px-3");
     expect(table.className).toContain("mt-4");
     expect(within(table).getByText("cell")).toBeInTheDocument();
-  });
-});
-
-describe("SignOutButton", () => {
-  it("signs out back to the sign-in page rather than the public site", async () => {
-    const { container } = render(<SignOutButton />);
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    fireEvent.submit(container.querySelector("form") as HTMLFormElement);
-    // Landing anywhere else would look like a failed sign-out to the operator.
-    await waitFor(() => {
-      expect(signOut).toHaveBeenCalledWith({ redirectTo: "/admin/signin" });
-    });
   });
 });
 
@@ -224,7 +216,10 @@ describe("RunsPager", () => {
   it("links to older runs from the first page and disables Newer", () => {
     render(<RunsPager page={1} pageSize={5} total={22} />);
     expect(screen.getByText("1–5 of 22")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Older" })).toHaveAttribute("href", "/admin?runs=2");
+    expect(screen.getByRole("link", { name: "Older" })).toHaveAttribute(
+      "href",
+      "/admin?tab=pipeline&runs=2"
+    );
     expect(screen.queryByRole("link", { name: "Newer" })).not.toBeInTheDocument();
     expect(screen.getByText("Newer")).toHaveAttribute("aria-disabled", "true");
   });
@@ -237,7 +232,10 @@ describe("RunsPager", () => {
   it("returns to the bare URL for page one and stops at the last page", () => {
     render(<RunsPager page={2} pageSize={5} total={10} />);
     expect(screen.getByText("6–10 of 10")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Newer" })).toHaveAttribute("href", "/admin");
+    expect(screen.getByRole("link", { name: "Newer" })).toHaveAttribute(
+      "href",
+      "/admin?tab=pipeline"
+    );
     expect(screen.getByText("Older")).toHaveAttribute("aria-disabled", "true");
   });
 });
@@ -312,15 +310,29 @@ describe("VmDiagnostics", () => {
 
   it("renders host, container, connection, and database health", () => {
     render(<VmDiagnostics diagnostics={diagnostics} />);
-    expect(screen.getByText("Healthy")).toBeInTheDocument();
-    expect(screen.getByText("4.9 GB of 23 GB")).toBeInTheDocument();
-    // Once as the container, once as the database user.
-    expect(screen.getAllByText("postgres")).toHaveLength(2);
-    expect(screen.getByText("291 MB / 2.0 GB")).toBeInTheDocument();
+    expect(screen.getByText("4.9 GB of 23 GB · page cache excluded")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Memory" })).toHaveAttribute(
+      "aria-valuenow",
+      "21"
+    );
+    expect(screen.getByRole("progressbar", { name: "Disk" })).toHaveAttribute(
+      "aria-valuenow",
+      "30"
+    );
+    expect(screen.getByText("no swap")).toBeInTheDocument();
+    expect(screen.getByText("0.02 / 0.05 on 4 CPUs (1 / 5 / 15m)")).toBeInTheDocument();
+    expect(screen.getByText("1 running · 0 restarts")).toBeInTheDocument();
+    expect(screen.getByText("291 MB / 2.0 GB · 14%")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "postgres memory" })).toBeInTheDocument();
+    // A plainly running container gets a dot, not a status word.
+    expect(screen.queryByText("running")).not.toBeInTheDocument();
     expect(screen.getByText("Site (Caddy)")).toBeInTheDocument();
+    expect(screen.getByText("3 open · 2 clients")).toBeInTheDocument();
     expect(screen.getByText("203.0.113.9 ×2, 198.51.100.4 ×1")).toBeInTheDocument();
-    expect(screen.getByText(/6 of 100 connections/)).toBeInTheDocument();
+    expect(screen.getByText("6 of 100 connections · 900 MB")).toBeInTheDocument();
     expect(screen.getByText("external")).toBeInTheDocument();
+    const external = screen.getByText("External connections").closest("li") as HTMLElement;
+    expect(within(external).getByText("2")).toBeInTheDocument();
   });
 
   it("renders unhappy and sparse states without crashing", () => {
@@ -379,18 +391,23 @@ describe("VmDiagnostics", () => {
         }}
       />
     );
-    expect(screen.getByText("Needs attention")).toBeInTheDocument();
-    expect(screen.getByText("OOM killed")).toBeInTheDocument();
+    // The stuck query is scored on the Postgres section itself.
+    expect(screen.getByText("Degraded")).toBeInTheDocument();
+    expect(screen.getByText("OOM killed")).toHaveClass("text-destructive");
     expect(screen.getByText("exited (137)")).toBeInTheDocument();
-    expect(screen.getByText("running unhealthy")).toBeInTheDocument();
+    expect(screen.getByText("unhealthy")).toBeInTheDocument();
     expect(screen.getByText("nba-cube-1")).toBeInTheDocument();
     expect(screen.getByText("(job)")).toBeInTheDocument();
     expect(screen.getByText("MCP")).toBeInTheDocument();
     expect(screen.getByText("other")).toBeInTheDocument();
     expect(screen.getByText(/TimeoutExpired/)).toBeInTheDocument();
-    expect(screen.getByText("local socket")).toBeInTheDocument();
-    expect(screen.getByText("15m")).toBeInTheDocument();
+    expect(screen.getByText(/local socket/)).toBeInTheDocument();
+    expect(screen.getByText("active · 15m")).toBeInTheDocument();
     expect(screen.getByText("2.9 GB")).toBeInTheDocument();
+    expect(screen.getByText("75%")).toBeInTheDocument();
+    expect(screen.getByText("0.02 / 0.05 (1 / 5 / 15m)")).toBeInTheDocument();
+    const external = screen.getByText("External connections").closest("li") as HTMLElement;
+    expect(within(external).getByText("None")).toBeInTheDocument();
   });
 
   it("handles a snapshot with no host section and nothing running", () => {
@@ -405,12 +422,15 @@ describe("VmDiagnostics", () => {
     expect(screen.getByText("No containers reported.")).toBeInTheDocument();
     expect(screen.getByText(/No Caddy or MCP container/)).toBeInTheDocument();
     expect(screen.getByText("No other connections.")).toBeInTheDocument();
-    expect(screen.queryByText("Memory used")).not.toBeInTheDocument();
+    expect(screen.queryByText("Memory")).not.toBeInTheDocument();
   });
 
   it("explains a missing or stale snapshot", () => {
     const { unmount } = render(<VmDiagnostics diagnostics={{ ...diagnostics, snapshot: null }} />);
     expect(screen.getByText(/No host snapshot yet/)).toBeInTheDocument();
+    // Postgres is read live, so it still shows; the snapshot sections do not.
+    expect(screen.getByText("Postgres")).toBeInTheDocument();
+    expect(screen.queryByText("Inbound connections")).not.toBeInTheDocument();
     unmount();
     const stale = new Date(Date.now() - 30 * 60_000).toISOString();
     render(
@@ -418,8 +438,7 @@ describe("VmDiagnostics", () => {
         diagnostics={{ ...diagnostics, snapshot: { ...diagnostics.snapshot!, captured_at: stale } }}
       />
     );
-    expect(screen.getByText(/stale: the admin-jobs cron/)).toBeInTheDocument();
-    expect(screen.getByText("Degraded")).toBeInTheDocument();
+    expect(screen.getByText(/stale: the admin-jobs cron/)).toHaveClass("text-warn");
   });
 });
 
@@ -459,12 +478,12 @@ describe("FeatureFlags", () => {
   it("submits the opposite of the current state for the flag that was clicked", () => {
     render(<FeatureFlags flags={flags} />);
     const chatbot = screen.getByTestId("flag-chatbot");
-    expect(within(chatbot).getByRole("button", { name: "Turn off" })).toBeEnabled();
+    expect(within(chatbot).getByRole("switch", { name: "chatbot" })).toBeChecked();
     // The server action reads these two fields; they are the contract.
     expect(chatbot.querySelector('input[name="flag_key"]')).toHaveValue("chatbot");
     expect(chatbot.querySelector('input[name="enabled"]')).toHaveValue("false");
     const picks = screen.getByTestId("flag-picks");
-    expect(within(picks).getByRole("button", { name: "Turn on" })).toBeInTheDocument();
+    expect(within(picks).getByRole("switch", { name: "picks" })).not.toBeChecked();
     expect(picks.querySelector('input[name="enabled"]')).toHaveValue("true");
   });
 
@@ -480,5 +499,144 @@ describe("FeatureFlags", () => {
   it("says so when no flags exist", () => {
     render(<FeatureFlags flags={[]} />);
     expect(screen.getByText("No feature flags are defined.")).toBeInTheDocument();
+  });
+});
+
+describe("AdminTabs", () => {
+  const item = (overrides: Partial<ReviewItem>): ReviewItem => ({
+    key: "k",
+    level: "warn",
+    title: "t",
+    detail: "d",
+    tab: "pipeline",
+    ...overrides,
+  });
+
+  it("links every section and marks the open one", () => {
+    render(<AdminTabs active="pipeline" items={[]} />);
+    const nav = screen.getByRole("navigation", { name: "Admin sections" });
+    const links = within(nav).getAllByRole("link");
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "/admin",
+      "/admin?tab=pipeline",
+      "/admin?tab=infrastructure",
+      "/admin?tab=settings",
+    ]);
+    expect(within(nav).getByRole("link", { name: "Pipeline" })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
+    expect(within(nav).getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("counts what needs review on each tab, in red once something is blocking", () => {
+    render(
+      <AdminTabs
+        active="overview"
+        items={[
+          item({ key: "a" }),
+          item({ key: "b", level: "idle" }),
+          item({ key: "c", level: "bad", tab: "infrastructure" }),
+        ]}
+      />
+    );
+    expect(screen.getByLabelText("2 to review")).toHaveClass("bg-warn");
+    expect(screen.getByLabelText("1 to review")).toHaveClass("bg-destructive");
+  });
+});
+
+describe("RunDuration", () => {
+  const run = (overrides: Partial<PipelineRun>): PipelineRun => ({
+    run_id: 1,
+    triggered_by: "scheduled",
+    status: "success",
+    scrape_action: "daily",
+    scrape_exit: 0,
+    reddit_ran: true,
+    reddit_exit: 0,
+    dbt_exit: 0,
+    dbt_failed_nodes: null,
+    ml_exit: 0,
+    detail: null,
+    started_at: new Date().toISOString(),
+    finished_at: new Date().toISOString(),
+    duration_seconds: 100,
+    ...overrides,
+  });
+
+  it("draws the runs oldest first, scaled to the longest", () => {
+    render(
+      <RunDuration
+        runs={[
+          run({ run_id: 4, duration_seconds: 200 }),
+          run({ run_id: 3, duration_seconds: 100, status: "failed" }),
+          run({ run_id: 2, duration_seconds: null, status: "running" }),
+          run({ run_id: 1, duration_seconds: 0 }),
+        ]}
+      />
+    );
+    const bars = screen.getAllByRole("listitem");
+    // The run still in flight has no duration to draw.
+    expect(bars.map((bar) => bar.textContent)).toEqual([
+      expect.stringContaining("#1"),
+      expect.stringContaining("#3"),
+      expect.stringContaining("#4"),
+    ]);
+    expect(screen.getByTestId("run-bar-4")).toHaveStyle({ height: "80%" });
+    expect(screen.getByTestId("run-bar-3")).toHaveStyle({ height: "40%" });
+    expect(screen.getByTestId("run-bar-3")).toHaveClass("bg-loss-bar");
+    // A run that took no time is called out rather than drawn as nothing.
+    expect(screen.getByTestId("run-bar-1")).toHaveClass("bg-warn");
+    expect(screen.getByText("0s")).toHaveClass("text-warn");
+    expect(screen.getByText("100s")).toHaveClass("text-destructive");
+  });
+
+  it("says so when there is nothing to chart", () => {
+    render(<RunDuration runs={[run({ duration_seconds: null })]} />);
+    expect(screen.getByText("No finished runs to chart yet.")).toBeInTheDocument();
+  });
+});
+
+describe("Status", () => {
+  it("labels a level with its own word unless given another", () => {
+    const { container, rerender } = render(<Status level="warn" />);
+    expect(screen.getByText("Degraded")).toHaveClass("text-warn");
+    expect(container.querySelector("[data-level=warn]")).toHaveClass("bg-warn");
+    rerender(<Status level="bad">failed</Status>);
+    expect(screen.getByText("failed")).toHaveClass("text-destructive");
+  });
+
+  it("keeps the dot out of the accessible text", () => {
+    const { container } = render(<StatusDot level="ok" className="extra" />);
+    expect(container.firstChild).toHaveAttribute("aria-hidden", "true");
+    expect(container.firstChild).toHaveClass("bg-primary", "extra");
+  });
+
+  it("clamps the meter to its track", () => {
+    const { rerender } = render(<Meter value={0.676} label="Memory" />);
+    expect(screen.getByRole("progressbar", { name: "Memory" })).toHaveAttribute(
+      "aria-valuenow",
+      "68"
+    );
+    rerender(<Meter value={4} label="Memory" />);
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+  });
+});
+
+describe("Section", () => {
+  it("pushes its note to the far edge unless asked to keep it inline", () => {
+    const { rerender } = render(
+      <Section title="Needs review" note="4 items">
+        body
+      </Section>
+    );
+    expect(screen.getByRole("heading", { name: "Needs review" })).toBeInTheDocument();
+    expect(screen.getByText("4 items").parentElement).toHaveClass("justify-between");
+    rerender(
+      <Section title="Containers" note="6 running" noteAlign="inline">
+        body
+      </Section>
+    );
+    expect(screen.getByText("6 running").parentElement).not.toHaveClass("justify-between");
   });
 });

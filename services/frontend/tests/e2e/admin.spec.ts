@@ -17,8 +17,8 @@ test("unauthenticated /admin redirects to the sign-in page", async ({ page }) =>
   await expect(page).toHaveURL(/\/admin\/signin/);
   await expect(page.getByRole("heading", { name: "Admin sign in" })).toBeVisible();
   // The operational data must never render for an anonymous visitor.
-  await expect(page.getByRole("heading", { name: "System status" })).toHaveCount(0);
-  await expect(page.getByText("Ingestion gate")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Needs review" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Admin sections" })).toHaveCount(0);
 });
 
 test("the sign-in page itself is reachable without a session", async ({ page }) => {
