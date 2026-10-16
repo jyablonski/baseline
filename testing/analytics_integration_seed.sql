@@ -1,6 +1,6 @@
 -- Seeded gold mart rows for API/MCP integration tests (no dbt required).
 
-TRUNCATE gold.fct_daily_highlights, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
+TRUNCATE gold.fct_game_injuries, gold.fct_player_injuries, gold.fct_daily_highlights, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
          gold.fct_standings, gold.fct_player_mvp_scores, gold.fct_player_season_stats, gold.fct_player_game_logs,
          gold.fct_team_game_results, gold.fct_games_schedule, gold.dim_players, gold.dim_teams
          RESTART IDENTITY CASCADE;
@@ -111,7 +111,16 @@ INSERT INTO gold.fct_games_schedule (
     ('00000000-0000-4000-8000-000000000205', '2024-25', 'Regular Season', CURRENT_DATE + 15, 'Scheduled',
      'Intuit Dome', 'Inglewood', 'CA',
      'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'LA Clippers', NULL,
-     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Golden State Warriors', NULL, NULL);
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Golden State Warriors', NULL, NULL),
+    -- Two of the Finals above, so a single-game read covers a played game too.
+    ('00000000-0000-4000-8000-000000000201', '2024-25', 'Regular Season', '2024-10-22', 'Final',
+     'Chase Center', 'San Francisco', 'CA',
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Golden State Warriors', 120,
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'LA Clippers', 110, NULL),
+    ('00000000-0000-4000-8000-000000000203', '2024-25', 'Regular Season', '2024-10-25', 'Final',
+     'Crypto.com Arena', 'Los Angeles', 'CA',
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'LA Clippers', 118,
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Golden State Warriors', 115, NULL);
 
 -- 10/22 has a lead highlight and a runner-up for the same game; 10/23 is the
 -- newest day, so it is what an undated request returns.
@@ -187,3 +196,28 @@ INSERT INTO gold.fct_standings (
      'West', 'Pacific', 2, 2, 48, 33, 0.593, 1.5, 1.5, 'L1', '6-4'),
     ('a96f53b4-0f5c-4cb6-8b88-21ba05224cae', 'CHI', 'Chicago Bulls', '2024-25', 'Regular Season', '2025-04-13',
      'East', 'Central', 5, 2, 45, 37, 0.549, 4, 4, 'W2', '5-5');
+
+-- Curry is out and notable; Kawhi is a doubt. GAME_ONE (Final) has Kawhi
+-- listed out and not playing; the upcoming GAME_SCHEDULE has Curry out.
+INSERT INTO gold.fct_player_injuries (
+    player_id, team_id, team_abbreviation, player_name, update_date, description,
+    injury_status, injury_detail, is_notable
+) VALUES
+    ('00000000-0000-4000-8000-000000000101', '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Stephen Curry',
+     CURRENT_DATE - 1, 'Out (Ankle) - Left ankle sprain', 'Out', 'Ankle', TRUE),
+    ('00000000-0000-4000-8000-000000000102', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'Kawhi Leonard',
+     CURRENT_DATE - 2, 'Day To Day (Knee) - Soreness', 'Day To Day', 'Knee', TRUE);
+
+INSERT INTO gold.fct_game_injuries (
+    game_id, game_date, season, team_id, side, player_id, player_name, injury_status,
+    injury_detail, description, update_date, snapshot_date, is_notable, played
+) VALUES
+    ('00000000-0000-4000-8000-000000000201', '2024-10-22', '2024-25', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'away',
+     '00000000-0000-4000-8000-000000000102', 'Kawhi Leonard', 'Out', 'Knee', 'Out (Knee) - Soreness',
+     '2024-10-21', '2024-10-22', TRUE, FALSE),
+    ('00000000-0000-4000-8000-000000000204', CURRENT_DATE + 14, '2024-25', '7bf8726a-a852-452d-b81f-14839127c5fb', 'home',
+     '00000000-0000-4000-8000-000000000101', 'Stephen Curry', 'Out', 'Ankle', 'Out (Ankle) - Left ankle sprain',
+     CURRENT_DATE - 1, CURRENT_DATE, TRUE, NULL),
+    ('00000000-0000-4000-8000-000000000204', CURRENT_DATE + 14, '2024-25', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'away',
+     '00000000-0000-4000-8000-000000000102', 'Kawhi Leonard', 'Day To Day', 'Knee', 'Day To Day (Knee) - Soreness',
+     CURRENT_DATE - 2, CURRENT_DATE, TRUE, NULL);

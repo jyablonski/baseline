@@ -11,6 +11,9 @@ type SortDirection = "asc" | "desc";
 type Column = {
   key: string;
   label: string;
+  /** Percentage columns show only with Shooting % on. */
+  shooting?: boolean;
+  className?: (row: BoxScoreRow) => string | false;
   /** Null sorts last in both directions, so blanks never lead the table. */
   value: (row: BoxScoreRow) => number | string | null;
   numeric: boolean;
@@ -68,6 +71,7 @@ const COLUMNS: Column[] = [
   },
   {
     key: "fg_pct",
+    shooting: true,
     label: "FG%",
     value: (row) => row.field_goal_pct,
     numeric: true,
@@ -82,6 +86,7 @@ const COLUMNS: Column[] = [
   },
   {
     key: "three_pct",
+    shooting: true,
     label: "3P%",
     value: (row) => row.three_point_pct,
     numeric: true,
@@ -96,6 +101,7 @@ const COLUMNS: Column[] = [
   },
   {
     key: "ft_pct",
+    shooting: true,
     label: "FT%",
     value: (row) => row.free_throw_pct,
     numeric: true,
@@ -103,6 +109,7 @@ const COLUMNS: Column[] = [
   },
   {
     key: "ts_pct",
+    shooting: true,
     label: "TS%",
     value: (row) => row.true_shooting_pct,
     numeric: true,
@@ -114,6 +121,10 @@ const COLUMNS: Column[] = [
     value: (row) => row.plus_minus,
     numeric: true,
     render: (row) => formatSignedMargin(row.plus_minus),
+    className: (row) =>
+      row.plus_minus != null &&
+      row.plus_minus !== 0 &&
+      (row.plus_minus > 0 ? "text-primary" : "text-destructive"),
   },
   {
     key: "mvp",
@@ -126,9 +137,21 @@ const COLUMNS: Column[] = [
 
 const DEFAULT_SORT = "points";
 
-export function BoxScore({ rows }: { rows: BoxScoreRow[] }) {
-  // The API orders home team first, so grouping by first appearance keeps that
-  // without re-sorting. Each team sorts on its own.
+export type BoxScoreSide = { teamId: string; label: string };
+
+/**
+ * One team's lines at a time. `sides` names the switch ("Knicks 94") in the
+ * order to show it; without it the teams come in the API's order, home first.
+ */
+export function BoxScore({
+  rows,
+  sides,
+  defaultTeamId,
+}: {
+  rows: BoxScoreRow[];
+  sides?: BoxScoreSide[];
+  defaultTeamId?: string | null;
+}) {
   const teams: { key: string; label: string; rows: BoxScoreRow[] }[] = [];
   for (const row of rows) {
     const existing = teams.find((team) => team.key === row.team_id);
@@ -140,20 +163,103 @@ export function BoxScore({ rows }: { rows: BoxScoreRow[] }) {
         rows: [row],
       });
   }
+  if (sides) {
+    const order = sides.map((side) => side.teamId);
+    teams.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+    for (const team of teams) {
+      team.label = sides.find((side) => side.teamId === team.key)?.label ?? team.label;
+    }
+  }
+  const [teamKey, setTeamKey] = useState<string | null>(defaultTeamId ?? null);
+  const [shooting, setShooting] = useState(false);
+  const shown = teams.find((team) => team.key === teamKey) ?? teams[0];
 
   return (
-    <section className="space-y-6">
-      <h2 className="type-module">Box score</h2>
-      {teams.map((team) => (
-        <TeamTable key={team.key} label={team.label} rows={team.rows} />
-      ))}
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule-strong pb-2">
+        <h2 className="type-module">Box score</h2>
+        <div className="flex flex-wrap gap-2">
+          {teams.length > 1 ? (
+            <div className="flex border border-input" role="group" aria-label="Team">
+              {teams.map((team) => (
+                <button
+                  key={team.key}
+                  type="button"
+                  aria-pressed={team.key === shown?.key}
+                  onClick={() => setTeamKey(team.key)}
+                  className={cn("seg-btn normal-case", team.key === shown?.key && "seg-btn-active")}
+                >
+                  {team.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            aria-pressed={shooting}
+            onClick={() => setShooting((current) => !current)}
+            className={cn("seg-btn border border-input normal-case", shooting && "seg-btn-active")}
+          >
+            Shooting %
+          </button>
+        </div>
+      </div>
+      {shown ? (
+        <TeamTable
+          key={shown.key}
+          rows={shown.rows}
+          columns={COLUMNS.filter((column) => shooting || !column.shooting)}
+        />
+      ) : null}
     </section>
   );
 }
 
-function TeamTable({ label, rows }: { label: string; rows: BoxScoreRow[] }) {
-  const [sortKey, setSortKey] = useState(DEFAULT_SORT);
-  const [direction, setDirection] = useState<SortDirection>("desc");
+/** The team line: summed counts and shooting from the summed attempts. */
+function teamTotals(rows: BoxScoreRow[]): BoxScoreRow {
+  const sum = (pick: (row: BoxScoreRow) => number | null | undefined) =>
+    rows.reduce((total, row) => total + (pick(row) ?? 0), 0);
+  const ratio = (made: number, attempted: number) => (attempted > 0 ? made / attempted : null);
+  const fgm = sum((row) => row.field_goals_made);
+  const fga = sum((row) => row.field_goals_attempted);
+  const tpm = sum((row) => row.three_pointers_made);
+  const tpa = sum((row) => row.three_pointers_attempted);
+  const ftm = sum((row) => row.free_throws_made);
+  const fta = sum((row) => row.free_throws_attempted);
+  const points = sum((row) => row.points);
+  const tsa = 2 * (fga + 0.44 * fta);
+  return {
+    ...rows[0],
+    player_id: "team",
+    player_name: "Team",
+    minutes: Math.round(sum((row) => row.minutes)),
+    points,
+    rebounds: sum((row) => row.rebounds),
+    assists: sum((row) => row.assists),
+    field_goals_made: fgm,
+    field_goals_attempted: fga,
+    field_goal_pct: ratio(fgm, fga),
+    three_pointers_made: tpm,
+    three_pointers_attempted: tpa,
+    three_point_pct: ratio(tpm, tpa),
+    free_throws_made: ftm,
+    free_throws_attempted: fta,
+    free_throw_pct: ratio(ftm, fta),
+    true_shooting_pct: tsa > 0 ? points / tsa : null,
+    plus_minus: null,
+    mvp_game_score: null,
+  };
+}
+
+function TeamTable({ rows, columns }: { rows: BoxScoreRow[]; columns: Column[] }) {
+  const [chosenKey, setSortKey] = useState(DEFAULT_SORT);
+  const [chosenDirection, setDirection] = useState<SortDirection>("desc");
+  const totals = useMemo(() => teamTotals(rows), [rows]);
+  // A sort on a column Shooting % has since hidden falls back to points, so the
+  // order on screen always has a visible arrow explaining it.
+  const visible = columns.some((column) => column.key === chosenKey);
+  const sortKey = visible ? chosenKey : DEFAULT_SORT;
+  const direction = visible ? chosenDirection : "desc";
 
   const sorted = useMemo(() => {
     const column = COLUMNS.find((item) => item.key === sortKey) ?? COLUMNS[0];
@@ -173,7 +279,9 @@ function TeamTable({ label, rows }: { label: string; rows: BoxScoreRow[] }) {
 
   function toggle(column: Column) {
     if (column.key === sortKey) {
-      setDirection((current) => (current === "asc" ? "desc" : "asc"));
+      // From what is on screen, which after a fallback is not what was chosen.
+      setSortKey(column.key);
+      setDirection(direction === "asc" ? "desc" : "asc");
       return;
     }
     setSortKey(column.key);
@@ -183,12 +291,11 @@ function TeamTable({ label, rows }: { label: string; rows: BoxScoreRow[] }) {
 
   return (
     <div>
-      <h3 className="type-eyebrow mb-2">{label}</h3>
       <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
-              {COLUMNS.map((column) => {
+              {columns.map((column) => {
                 const active = column.key === sortKey;
                 return (
                   <th
@@ -214,14 +321,33 @@ function TeamTable({ label, rows }: { label: string; rows: BoxScoreRow[] }) {
           <tbody>
             {sorted.map((row) => (
               <tr key={row.player_id}>
-                {COLUMNS.map((column) => (
-                  <td key={column.key} className={cn(column.numeric && "tabular text-right")}>
+                {columns.map((column) => (
+                  <td
+                    key={column.key}
+                    className={cn(
+                      column.numeric && "tabular text-right",
+                      column.key === "player" && "font-medium",
+                      column.className?.(row)
+                    )}
+                  >
                     {column.render(row)}
                   </td>
                 ))}
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr
+              className="border-t border-rule-strong font-semibold"
+              data-testid="box-score-totals"
+            >
+              {columns.map((column) => (
+                <td key={column.key} className={cn(column.numeric && "tabular text-right")}>
+                  {column.key === "plus_minus" || column.key === "mvp" ? "" : column.render(totals)}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>

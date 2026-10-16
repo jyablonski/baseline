@@ -14,6 +14,7 @@ from repositories.account import AccountRepository
 from repositories.admin import AdminRepository
 from repositories.flags import FlagsRepository
 from repositories.games import GamesRepository
+from repositories.injuries import InjuriesRepository
 from repositories.players import PlayersRepository
 from repositories.predictions import PredictionsRepository
 from repositories.social import SocialRepository
@@ -49,6 +50,10 @@ def get_teams_repository(db: Session = Depends(get_db)) -> TeamsRepository:
 
 def get_games_repository(db: Session = Depends(get_db)) -> GamesRepository:
     return GamesRepository(db)
+
+
+def get_injuries_repository(db: Session = Depends(get_db)) -> InjuriesRepository:
+    return InjuriesRepository(db)
 
 
 def get_standings_repository(db: Session = Depends(get_db)) -> StandingsRepository:

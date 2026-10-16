@@ -66,6 +66,20 @@ vars:
   # Underdog's pregame market win probability at or below this.
   highlight_upset_max_wp: 0.30
 
+  # Injury knobs (int_player_notability, fct_player_injuries, fct_game_injuries).
+  # A notable absence: inside the team's top N or the league's top N by average
+  # Regular Season game score, with at least this many games.
+  injury_notable_team_rank: 2
+  injury_notable_league_rank: 30
+  injury_notable_min_games: 3
+  # A game uses the newest daily snapshot at most this many days before it, so
+  # a missed scrape does not leave a gap and a stale one is not trusted.
+  injury_snapshot_max_age_days: 2
+  # Upcoming games this many days out get today's report; a Day To Day note
+  # says nothing about a game a month away. Mirrored by UPCOMING_REPORT_DAYS in
+  # services/frontend/src/components/games/game-injuries.tsx: change both.
+  injury_upcoming_days: 7
+
 models:
   nba_analytics:
     staging:

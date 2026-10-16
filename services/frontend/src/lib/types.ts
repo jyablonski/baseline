@@ -71,6 +71,35 @@ export type PlayerDetail = PlayerSummary & {
   current_season_salary?: number | null;
   current_remaining_guaranteed?: number | null;
   current_contract_season?: string | null;
+  /** On the current injury report; null when not listed. */
+  injury_status?: InjuryStatus | null;
+  injury_detail?: string | null;
+  injury_description?: string | null;
+  injury_update_date?: string | null;
+};
+
+export type InjuryStatus = "Out" | "Day To Day" | "Out For Season" | "Listed";
+
+/** A player on the current Basketball-Reference injury report. */
+export type PlayerInjury = {
+  player_id: string;
+  player_name: string | null;
+  team_id: string;
+  team_abbreviation: string | null;
+  injury_status: InjuryStatus;
+  injury_detail: string | null;
+  description: string;
+  update_date: string | null;
+  is_notable: boolean;
+};
+
+/** A player on one game's injury report, from that game's daily snapshot. */
+export type GameInjury = Omit<PlayerInjury, "team_abbreviation"> & {
+  game_id: string;
+  side: "home" | "away";
+  snapshot_date: string;
+  /** Once the game is Final, whether they logged minutes; null before. */
+  played: boolean | null;
 };
 
 export type GameLogEntry = {
@@ -346,6 +375,29 @@ export type GameLogParams = {
   offset?: number;
 };
 
+/** One game of a team's season in any state, from that team's side. */
+export type TeamSeasonGame = {
+  game_id: string;
+  season: string;
+  season_type?: string | null;
+  game_date: string;
+  start_time_et?: string | null;
+  status: string;
+  national_tv?: string | null;
+  is_home: boolean;
+  opponent_team_id: string;
+  opponent_abbreviation?: string | null;
+  opponent_name?: string | null;
+  /** Null until Final. */
+  team_score?: number | null;
+  opponent_score?: number | null;
+  result?: "W" | "L" | null;
+  /** The champion model's pregame estimate for this team. */
+  win_probability?: number | null;
+  /** Played the day before. */
+  is_back_to_back: boolean;
+};
+
 export type TeamGamesParams = {
   season?: string;
   opponent_team_id?: string;
@@ -410,6 +462,35 @@ export type ScheduledGame = {
   home_spread?: number | null;
   odds_bookmaker_count?: number | null;
   odds_updated_at?: string | null;
+  /** Notable players ruled out on the game's injury report, by name. */
+  home_notable_out?: string[];
+  away_notable_out?: string[];
+};
+
+/** One game in any state, for the game page. */
+export type GameDetail = ScheduledGame & {
+  /** Null until the game is Final. */
+  home_score: number | null;
+  away_score: number | null;
+  /** Each team's W-L in this season and season type entering the game. */
+  home_wins: number;
+  home_losses: number;
+  away_wins: number;
+  away_losses: number;
+  /** Current form; null once the game is Final, since there is no as-of history. */
+  home_streak: string | null;
+  home_last_10: string | null;
+  away_streak: string | null;
+  away_last_10: string | null;
+  /** The game's lead highlight, once it is Final. */
+  lead_highlight: string | null;
+  lead_highlight_detail: string | null;
+  /** "Knicks", for headlines. */
+  home_team_nickname?: string | null;
+  away_team_nickname?: string | null;
+  /** East or West; a playoff series across them is the Finals. */
+  home_team_conference?: string | null;
+  away_team_conference?: string | null;
 };
 
 export type ScorecardRow = {

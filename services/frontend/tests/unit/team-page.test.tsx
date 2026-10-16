@@ -1,10 +1,13 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const replace = vi.fn();
+let search = "view=list";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/teams/denver-nuggets",
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: vi.fn(), replace }),
+  useSearchParams: () => new URLSearchParams(search),
   useParams: () => ({ slug: "denver-nuggets" }),
 }));
 
@@ -94,13 +97,78 @@ vi.mock("@/lib/api", () => ({
       data: [],
       meta: { total: 0, limit: 10, offset: 0 },
     }),
+    listInjuries: async () => ({
+      data: [
+        {
+          player_id: "p-murray",
+          player_name: "Jamal Murray",
+          team_id: 1610612743,
+          team_abbreviation: "DEN",
+          injury_status: "Out",
+          injury_detail: "Hamstring",
+          description: "Out (Hamstring) - Murray will miss at least a week.",
+          update_date: "2026-04-08",
+          is_notable: true,
+        },
+      ],
+      meta: { total: 1, limit: 1, offset: 0 },
+    }),
     getTeamRecord: async () => ({ wins: 56, losses: 32, win_pct: 0.636, games: 88 }),
+    getTeamSeasonGames: async () => ({
+      data: [
+        {
+          game_id: "g-march",
+          season: "2025-26",
+          game_date: "2026-03-30",
+          status: "Final",
+          is_home: true,
+          opponent_team_id: 1610612750,
+          opponent_abbreviation: "MIN",
+          team_score: 120,
+          opponent_score: 101,
+          result: "W",
+          is_back_to_back: false,
+        },
+        {
+          game_id: "g-april-loss",
+          season: "2025-26",
+          game_date: "2026-04-10",
+          status: "Final",
+          is_home: false,
+          opponent_team_id: 1610612750,
+          opponent_abbreviation: "MIN",
+          team_score: 98,
+          opponent_score: 110,
+          result: "L",
+          is_back_to_back: false,
+        },
+        {
+          game_id: "g-april-next",
+          season: "2025-26",
+          game_date: "2026-04-11",
+          start_time_et: "21:00",
+          status: "Scheduled",
+          is_home: true,
+          opponent_team_id: 1610612750,
+          opponent_abbreviation: "MIN",
+          result: null,
+          win_probability: 0.58,
+          is_back_to_back: true,
+        },
+      ],
+      meta: { total: 3, limit: 3, offset: 0 },
+    }),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
 }));
 
 import TeamProfilePage from "@/app/teams/[slug]/page";
 import { Providers } from "@/components/providers";
+
+beforeEach(() => {
+  search = "view=list";
+  replace.mockClear();
+});
 
 describe("team profile", () => {
   it("shows header form, cap position, filtered games, and a signed Margin", async () => {
@@ -134,6 +202,14 @@ describe("team profile", () => {
     expect(lastTen).toHaveTextContent("Streak W1");
 
     expect(screen.getByText("Cap position · 2026-27")).toBeInTheDocument();
+    const injury = screen.getByTestId("injury-row");
+    expect(injury).toHaveTextContent("Jamal Murray");
+    expect(injury).toHaveTextContent("Out · Hamstring");
+    expect(injury).toHaveTextContent("(updated Wed, Apr 8, 2026)");
+    expect(screen.getByRole("link", { name: "Jamal Murray" })).toHaveAttribute(
+      "href",
+      "/players/jamal-murray"
+    );
     expect(screen.getByText("Over 1st apron · tier 3 of 4")).toBeInTheDocument();
     expect(screen.getByText("Taxpayer mid-level exception")).toBeInTheDocument();
 
@@ -155,5 +231,45 @@ describe("team profile", () => {
     fireEvent.click(screen.getByRole("button", { name: "home" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     expect(screen.getByRole("button", { name: "all" })).toHaveClass("seg-btn-active");
+  });
+
+  it("opens on the season calendar by default, newest month with games first", async () => {
+    search = "";
+    render(
+      <Providers>
+        <TeamProfilePage />
+      </Providers>
+    );
+    const calendar = await screen.findByTestId("season-calendar");
+
+    // Every game is behind us, so it opens on the last one's month.
+    expect(within(calendar).getByRole("heading", { name: "April 2026" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "2025-26 season · 1–1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "calendar" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    // The list view's filters and sidebar are not shown.
+    expect(screen.queryByText("Remaining schedule")).not.toBeInTheDocument();
+    expect(screen.queryByText("Opponent")).not.toBeInTheDocument();
+
+    const loss = within(calendar).getByRole("link", { name: /Apr 10, 2026, at MIN, lost 98–110/ });
+    expect(loss).toHaveAttribute("href", "/games/g-april-loss");
+    const next = within(calendar).getByRole("link", { name: /Apr 11, 2026, vs MIN, 9:00 PM ET/ });
+    expect(next).toHaveAttribute("href", "/games/g-april-next");
+    expect(next).toHaveTextContent("58%");
+    expect(next).toHaveTextContent("B2B");
+    expect(within(calendar).queryByRole("link", { name: /Mar 30/ })).not.toBeInTheDocument();
+
+    fireEvent.click(within(calendar).getByRole("button", { name: "← Prev" }));
+    expect(within(calendar).getByRole("heading", { name: "March 2026" })).toBeInTheDocument();
+    expect(
+      within(calendar).getByRole("link", { name: /Mar 30, 2026, vs MIN, won 120–101/ })
+    ).toBeInTheDocument();
+    // March holds the first game, so there is nothing earlier to page to.
+    expect(within(calendar).getByRole("button", { name: "← Prev" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "list" }));
+    expect(replace).toHaveBeenCalledWith("/teams/denver-nuggets?view=list", { scroll: false });
   });
 });

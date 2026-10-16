@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: stg_player_injuries_history
+    description: Append-only daily Basketball-Reference injury snapshots, one row per player, team, and scrape date.
+    columns:
+      - name: player_id
+        description: Baseline player UUID.
+        data_tests:
+          - not_null
+      - name: team_id
+        description: Team listing the injury (Baseline team UUID).
+        data_tests:
+          - not_null
+      - name: player_name
+        description: Name as shown on the injury report.
+      - name: update_date
+        description: Date Basketball-Reference last updated the note.
+      - name: description
+        description: Injury note as written on Basketball-Reference.
+        data_tests:
+          - not_null
+      - name: snapshot_date
+        description: Date of the daily scrape that captured the row. The scrape runs in the morning, so this is the same calendar day in Eastern.
+        data_tests:
+          - not_null
+      - name: scraped_at
+        description: When the scraper last wrote this row.
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["player_id", "team_id", "snapshot_date"]

@@ -12,6 +12,14 @@ models:
         description: Team listing the injury (Baseline team UUID).
         data_tests:
           - not_null
+      - name: injury_status
+        description: Status parsed from the note by the injury_status macro.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Out", "Day To Day", "Out For Season", "Listed"]
+      - name: injury_detail
+        description: Body part from the note's parentheses; null when the note has none.
       - name: match_method
         description: "How the row was linked to canonical ids. Always external_id: the scraper resolves Basketball-Reference ids at ingest."
         data_tests:

@@ -16,6 +16,18 @@ models:
         description: Player name lowercased with suffixes (Jr., III, ...) and punctuation stripped, via normalize_player_name.
         data_tests:
           - not_null
+      - name: injury_status
+        description: Out, Day To Day, Out For Season, or Listed when the note leads with anything else.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Out", "Day To Day", "Out For Season", "Listed"]
+      - name: injury_detail
+        description: Body part from the note's parentheses, e.g. Ankle.
+      - name: is_notable
+        description: Notable in int_player_notability this season or last.
+        data_tests:
+          - not_null
     data_tests:
       - dbt_expectations.expect_compound_columns_to_be_unique:
           arguments:

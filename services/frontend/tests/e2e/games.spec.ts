@@ -38,12 +38,16 @@ test("game flow page narrates the comeback and charts the differential", async (
   await mockApi(page);
   await page.goto("/games/0022400002");
 
-  await expect(page.getByRole("heading", { name: /Miami Heat|MIA/ })).toBeVisible();
-  // The badge is the comeback story: deficit erased plus where it stood entering Q4.
-  await expect(page.getByText("BOS erased a 21-point deficit, down 9 entering Q4")).toBeVisible();
-  await expect(page.getByText("Max lead +21")).toBeVisible();
-  await expect(page.getByText("4 lead changes")).toBeVisible();
-  await expect(page.getByText("97 plays")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Miami Heat|MIA/);
+  // The turning point is the comeback story: the deficit and where it stood entering Q4.
+  await expect(page.getByTestId("recap-card").filter({ hasText: "Turning point" })).toContainText(
+    "after trailing by 9 entering Q4 and by 21 in Q3"
+  );
+  const facts = page.getByTestId("flow-facts");
+  await expect(facts).toContainText("MIA led 74%");
+  await expect(facts).toContainText("Max lead MIA +21");
+  await expect(facts).toContainText("Lead changes 4");
+  await expect(facts).toContainText("Ties 3");
   await expect(page.getByText("No PBP data available.")).toHaveCount(0);
 });
 
@@ -55,13 +59,13 @@ test("blown-leads table links through to that game", async ({ page }) => {
   await expect(collapses.getByRole("cell", { name: "Q3", exact: true })).toBeVisible();
   await collapses.getByRole("link", { name: "PBP →" }).first().click();
   await expect(page).toHaveURL(/\/games\/0022400002/);
-  await expect(page.getByText("BOS erased a 21-point deficit, down 9 entering Q4")).toBeVisible();
+  await expect(page.getByText(/trailing by 9 entering Q4 and by 21 in Q3/)).toBeVisible();
 });
 
 test("game flow tooltip tints each abbreviation with its side's plot colour", async ({ page }) => {
   await mockApi(page);
   await page.goto("/games/0022400002");
-  await expect(page.getByText("Max lead +21")).toBeVisible();
+  await expect(page.getByTestId("flow-facts")).toBeVisible();
 
   // Recharts only mounts the tooltip once the pointer is inside the plot area.
   const surface = page.locator(".recharts-surface").first();
@@ -141,9 +145,51 @@ test("game page carries a box score with shooting splits under the chart", async
   await mockApi(page);
   await page.goto("/games/0022400002");
   await expect(page.getByRole("heading", { name: "Box score" })).toBeVisible();
+  await page.getByRole("button", { name: "Shooting %" }).click();
   const row = page.getByRole("row", { name: /Kawhi Leonard/ });
   await expect(row.getByText("10-21")).toBeVisible();
   await expect(row.getByText("47.6%")).toBeVisible();
   await expect(row.getByText("57.1%")).toBeVisible();
   await expect(row.getByText("-7")).toBeVisible();
+});
+
+test("game page previews an upcoming game from its schedule row", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/schedule");
+  await page.locator('a[href="/games/0022500999"]').click();
+  await expect(page).toHaveURL(/\/games\/0022500999/);
+
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Los Angeles Lakers @ Golden State Warriors"
+  );
+  await expect(page.getByRole("heading", { name: "Who wins?" })).toBeVisible();
+  const [lal, gsw] = await page.getByTestId("pick-card").all();
+  await expect(lal).toContainText("+130");
+  await expect(gsw).toContainText("−150");
+  await expect(page.getByRole("heading", { name: "Before tip-off" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Season series" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Game flow" })).toHaveCount(0);
+});
+
+test("game page recaps a final with its headline and the model's call", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/games/0022400002");
+  await expect(page.getByTestId("recap-headline")).toBeVisible();
+  await expect(page.getByTestId("recap-call").filter({ hasText: "Model" })).toContainText(
+    "Had BOS at 55% before tip-off · Called it"
+  );
+  await expect(page.getByRole("heading", { name: "Who wins?" })).toHaveCount(0);
+});
+
+test("schedule flags a notable absence and the game page lists the report", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/schedule");
+  await expect(page.getByTestId("notable-out")).toHaveText("GSW: Stephen Curry out");
+
+  await page.goto("/games/0022500999");
+  const report = page.getByTestId("injury-report");
+  await expect(report).toContainText("1 listed");
+  await report.getByText("Injury report", { exact: true }).click();
+  await expect(page.getByTestId("injury-row")).toContainText("Out · Ankle");
+  await expect(page.getByTestId("injuries-away")).toContainText("Nobody listed.");
 });

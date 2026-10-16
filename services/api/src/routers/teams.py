@@ -15,7 +15,7 @@ from schemas import (
     TeamRecord,
     TeamSummary,
 )
-from schemas.game import TeamGameResult
+from schemas.game import TeamGameResult, TeamSeasonGame
 
 router = APIRouter()
 
@@ -166,6 +166,26 @@ def get_team_games(
     return PaginatedResponse(
         data=data,
         meta=PaginationMeta(total=total, limit=limit, offset=offset),
+    )
+
+
+@router.get("/{team_id}/season-games", response_model=PaginatedResponse[TeamSeasonGame])
+def get_team_season_games(
+    team_id: UUID,
+    season: Annotated[str | None, Query()] = None,
+    season_type: Annotated[str | None, Query()] = None,
+    repo: TeamsRepository = Depends(get_teams_repository),
+) -> PaginatedResponse[TeamSeasonGame]:
+    """Every game of one season, played and upcoming, for the team calendar. Unpaginated."""
+    if repo.get_team(team_id) is None:
+        raise HTTPException(status_code=404, detail="Team not found")
+    rows = repo.list_team_season_games(
+        team_id, season=season, season_type=_validate_season_type(season_type)
+    )
+    data = [TeamSeasonGame.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=len(data), offset=0),
     )
 
 

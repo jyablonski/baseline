@@ -81,6 +81,8 @@ DECLARE
   upset_check text;
   national_tv_check text;
   highlight_check text;
+  injury_status_check text;
+  game_injury_check text;
 BEGIN
   SELECT count(*) INTO team_count FROM gold.dim_teams;
   SELECT count(*) INTO player_count FROM gold.dim_players;
@@ -224,6 +226,31 @@ BEGIN
   WHERE match_method = 'external_id';
   IF injury_matched < 1 THEN
     RAISE EXCEPTION 'expected >= 1 matched injury row, got %', injury_matched;
+  END IF;
+
+  SELECT injury_status || ' ' || coalesce(injury_detail, '-') || ' notable=' || is_notable
+  INTO injury_status_check
+  FROM gold.fct_player_injuries
+  WHERE player_id = '11111111-1111-4111-8111-111111111111';
+  -- Curry has two Regular Season games, under the notable minimum of three.
+  IF injury_status_check IS DISTINCT FROM 'Out Ankle notable=false' THEN
+    RAISE EXCEPTION 'unexpected current injury parse: %', injury_status_check;
+  END IF;
+
+  -- 10/25 reads the 10/24 snapshot (both played); 10/27 finds none within the
+  -- max age; 10/30 shows Curry out and not playing.
+  SELECT string_agg(
+           game_date || ' ' || side || ' ' || player_name || ' ' || injury_status ||
+           ' played=' || coalesce(played::text, 'null') || ' notable=' || is_notable,
+           ' | ' ORDER BY game_date, side, player_name)
+  INTO game_injury_check
+  FROM gold.fct_game_injuries;
+  IF game_injury_check IS DISTINCT FROM
+       '2024-10-25 away Stephen Curry Listed played=true notable=false'
+       ' | 2024-10-25 home Kawhi Leonard Day To Day played=true notable=true'
+       ' | 2024-10-30 home Stephen Curry Out played=false notable=false'
+  THEN
+    RAISE EXCEPTION 'unexpected game injuries: %', game_injury_check;
   END IF;
 
   SELECT count(*) INTO scoring_count FROM gold.fct_play_by_play_scoring;

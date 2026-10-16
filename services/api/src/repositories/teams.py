@@ -10,6 +10,7 @@ from queries.teams import (
     LATEST_SEASON_FOR_TEAM,
     LIST_TEAM_GAMES,
     LIST_TEAM_GAMES_COUNT,
+    LIST_TEAM_SEASON_GAMES,
     LIST_TEAMS,
     LIST_TEAMS_COUNT,
     TEAM_BY_ABBREVIATION,
@@ -134,3 +135,12 @@ class TeamsRepository:
         total = self.db.execute(LIST_TEAM_GAMES_COUNT, params).scalar_one()
         rows = self.db.execute(LIST_TEAM_GAMES, params)
         return int(total), [dict(row._mapping) for row in rows]
+
+    def list_team_season_games(
+        self, team_id: UUID, *, season: str | None, season_type: str | None
+    ) -> list[dict]:
+        rows = self.db.execute(
+            LIST_TEAM_SEASON_GAMES,
+            {"team_id": team_id, "season": season, "season_type": season_type},
+        )
+        return [dict(row._mapping) for row in rows]

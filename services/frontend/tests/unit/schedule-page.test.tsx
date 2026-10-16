@@ -34,6 +34,8 @@ vi.mock("@/lib/api", () => ({
           home_moneyline: -150,
           away_moneyline: 130,
           home_spread: -3.5,
+          home_notable_out: ["Stephen Curry"],
+          away_notable_out: [],
         },
         {
           game_id: "0022600101",
@@ -93,6 +95,14 @@ describe("schedule page", () => {
       "/teams/golden-state-warriors?season=2026-27"
     );
     expect(screen.queryByText("PBP →")).not.toBeInTheDocument();
+    // Only the notable player ruled out gets a chip; the other game has none.
+    expect(screen.getAllByTestId("notable-out").map((chip) => chip.textContent)).toEqual([
+      "GSW: Stephen Curry out",
+    ]);
+    // Two games that day, each dated cell linking to its own game page.
+    expect(
+      screen.getAllByRole("link", { name: /Thu, Oct 22, 2026/ }).map((a) => a.getAttribute("href"))
+    ).toEqual(["/games/0022600100", "/games/0022600101"]);
   });
 
   it("shows model win % and consensus odds, and dashes games without them", async () => {

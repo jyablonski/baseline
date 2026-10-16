@@ -4,13 +4,16 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from dependencies import get_games_repository
+from dependencies import get_games_repository, get_injuries_repository
 from repositories.games import GamesRepository
+from repositories.injuries import InjuriesRepository
 from schemas import (
     BoxScoreRow,
     GameCollapse,
+    GameDetail,
     GameFlow,
     GameHighlight,
+    GameInjury,
     GameResult,
     ItemResponse,
     PaginatedResponse,
@@ -105,6 +108,20 @@ def list_recent_games(
     )
 
 
+# Declared after the fixed paths above: /collapses and /highlights would
+# otherwise be parsed as a game id and fail UUID validation.
+@router.get("/{game_id}", response_model=ItemResponse[GameDetail])
+def get_game(
+    game_id: UUID,
+    repo: GamesRepository = Depends(get_games_repository),
+) -> ItemResponse[GameDetail]:
+    """One game in any state: preview before tip, result once Final."""
+    row = repo.get_game(game_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return ItemResponse(data=GameDetail.model_validate(row))
+
+
 @router.get("/{game_id}/play-by-play", response_model=PaginatedResponse[PlayByPlayEvent])
 def get_game_play_by_play(
     game_id: UUID,
@@ -130,6 +147,23 @@ def get_game_box_score(
         raise HTTPException(status_code=404, detail="Game not found")
     rows = repo.list_box_score(game_id)
     data = [BoxScoreRow.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=len(data), offset=0),
+    )
+
+
+@router.get("/{game_id}/injuries", response_model=PaginatedResponse[GameInjury])
+def get_game_injuries(
+    game_id: UUID,
+    games: GamesRepository = Depends(get_games_repository),
+    injuries: InjuriesRepository = Depends(get_injuries_repository),
+) -> PaginatedResponse[GameInjury]:
+    """Both teams' injury report for one game. Empty when no report was on file."""
+    if not games.game_on_schedule(game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
+    rows = injuries.list_game_injuries(game_id)
+    data = [GameInjury.model_validate(row) for row in rows]
     return PaginatedResponse(
         data=data,
         meta=PaginationMeta(total=len(data), limit=len(data), offset=0),

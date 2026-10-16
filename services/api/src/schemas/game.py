@@ -38,6 +38,38 @@ class ScheduledGame(BaseModel):
     home_spread: float | None = None
     odds_bookmaker_count: int | None = None
     odds_updated_at: datetime | None = None
+    # Notable players ruled out (Out or Out For Season) on the game's injury
+    # report, by name. Empty, never null, when nobody is.
+    home_notable_out: list[str] = Field(default_factory=list)
+    away_notable_out: list[str] = Field(default_factory=list)
+
+
+class GameDetail(ScheduledGame):
+    """One game in any state, for the game page."""
+
+    # Null until the game is Final.
+    home_score: int | None = None
+    away_score: int | None = None
+    # Each team's W-L in this season and season type entering the game.
+    home_wins: int = 0
+    home_losses: int = 0
+    away_wins: int = 0
+    away_losses: int = 0
+    # Current form from fct_standings, which has no as-of history, so these
+    # are null once the game is Final.
+    home_streak: str | None = None
+    home_last_10: str | None = None
+    away_streak: str | None = None
+    away_last_10: str | None = None
+    # The game's lead highlight from fct_daily_highlights; null before it is Final.
+    lead_highlight: str | None = None
+    lead_highlight_detail: str | None = None
+    # "Knicks" for headlines; conference tells a Finals series (East v West)
+    # from an earlier playoff round.
+    home_team_nickname: str | None = None
+    home_team_conference: str | None = None
+    away_team_nickname: str | None = None
+    away_team_conference: str | None = None
 
 
 class GameResult(BaseModel):
@@ -195,6 +227,32 @@ class TeamGameResult(GameResult):
     team_score: int | None = None
     opponent_score: int | None = None
     is_win: bool | None = None
+
+
+class TeamSeasonGame(BaseModel):
+    """One game of a team's season in any state, from that team's side."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    game_id: UUID
+    season: str
+    season_type: str | None = None
+    game_date: date
+    start_time_et: time | None = None
+    status: str
+    national_tv: str | None = None
+    is_home: bool
+    opponent_team_id: UUID
+    opponent_abbreviation: str | None = None
+    opponent_name: str | None = None
+    # Null until Final.
+    team_score: int | None = None
+    opponent_score: int | None = None
+    result: str | None = None
+    # The champion model's pregame estimate for this team; null until scored.
+    win_probability: float | None = None
+    # Played the day before, in any season type.
+    is_back_to_back: bool = False
 
 
 class BoxScoreRow(BaseModel):

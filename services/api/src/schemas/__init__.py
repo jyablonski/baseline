@@ -17,6 +17,7 @@ from schemas.admin import (
 from schemas.game import (
     BoxScoreRow,
     GameCollapse,
+    GameDetail,
     GameFlow,
     GameHighlight,
     GameResult,
@@ -26,6 +27,7 @@ from schemas.game import (
     ScheduledGame,
     TeamGameResult,
 )
+from schemas.injury import GameInjury, PlayerInjury
 from schemas.player import (
     BackToBackStats,
     GameLogEntry,
@@ -90,6 +92,8 @@ __all__ = [
     "SocialSummary",
     "DbtStatus",
     "GameCollapse",
+    "GameDetail",
+    "GameInjury",
     "GameFlow",
     "GameHighlight",
     "GameLogEntry",
@@ -108,6 +112,7 @@ __all__ = [
     "PlayByPlayEvent",
     "PlayerComparison",
     "PlayerDetail",
+    "PlayerInjury",
     "PlayerSeasonStats",
     "PlayerSummary",
     "PlayerValue",

@@ -62,7 +62,7 @@ Local `compose run` bind-mounts models and SQL, so YAML and SQL edits need no re
 
 **Staging** views mirror source tables one-to-one. **Intermediate** models do the real work — enriched game logs, contract and injury name matching, transaction participant resolution, play-by-play parsing and scoring.
 
-**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_player_mvp_scores`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`, `fct_reddit_entity_mentions`, `fct_reddit_flair`, `fct_transactions`, `fct_transaction_participants`, `fct_prediction_scorecard` (per-model evaluation metrics; see [ml.md](ml.md)), `fct_game_upsets`, and `fct_daily_highlights` (both below).
+**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_player_mvp_scores`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`, `fct_reddit_entity_mentions`, `fct_reddit_flair`, `fct_transactions`, `fct_transaction_participants`, `fct_prediction_scorecard` (per-model evaluation metrics; see [ml.md](ml.md)), `fct_game_upsets`, `fct_daily_highlights`, and the injury marts (all below).
 
 Materialization is a real decision here — see `services/dbt/AGENTS.md` for the policy. Two things to know:
 
@@ -120,6 +120,17 @@ Every threshold and weight is a `highlight_*` var in `services/dbt/dbt_project.y
 
 Served by REST (`GET /api/v1/games/highlights`, one lead highlight per game for a day), Cube (`daily_highlights`), and MCP (`get_daily_highlights`). The home page shows the featured ones as cards and each game's lead headline under its score.
 
+### Injuries
+
+The scraper writes every injury scrape twice: an upsert into `source.player_injuries` (the current report, leavers deleted) and an append into `source.player_injuries_history`, one row per player, team, and scrape date. Basketball-Reference has no per-date archive, so the history only covers days the scrape ran: games before it began have no report, and that is not backfillable.
+
+- **Status** is parsed from the note's lead by the `injury_status` macro: `Out`, `Day To Day`, `Out For Season`, or `Listed` for anything else, never a guess. `injury_detail` is the body part in the first parentheses.
+- **Notable** (`int_player_notability`) means within the team's top `injury_notable_team_rank` (2) or the league's top `injury_notable_league_rank` (30) by average Regular Season game score, with at least `injury_notable_min_games` (3) games. Game score, not the MVP score, because the MVP score's availability penalty would demote exactly the injured stars this is for. A player notable this season or last counts, so opening night is not empty; a star who missed all of last season is not flagged until they have played this season.
+- **`fct_player_injuries`** is the current report with status, body part, and `is_notable`.
+- **`fct_game_injuries`** is one row per game and listed player for either team. A game reads the newest snapshot at most `injury_snapshot_max_age_days` (2) before the earlier of its date and today: a played game gets the report from that morning, an upcoming one today's, and a missed scrape does not leave a gap while a stale one is not trusted. Upcoming games only reach `injury_upcoming_days` (7) ahead. Once Final, `played` says whether the listed player logged minutes. It is the morning report, not the official inactive list: late scratches and returns are missed.
+
+Served by REST: `GET /api/v1/injuries` (current, `team_id` and `notable` filters), `GET /api/v1/games/{id}/injuries`, injury fields on `GET /api/v1/players/{id}`, and `home_notable_out` / `away_notable_out` on the schedule and game rows (notable players `Out` or `Out For Season`). Cube and MCP still read the current report only.
+
 ### National TV
 
 `fct_games_schedule.national_tv` lists a game's national TV and streaming networks, comma-separated (`ESPN, ABC`). It is null for a local-only game or one ESPN has not listed.
@@ -134,7 +145,7 @@ The source is ESPN's public scoreboard JSON, the only thing taken from ESPN: nei
 
 **Only `POST /api/v1/query` goes through Cube**, and only Ask and MCP depend on it. There is no gold-SQL fallback for those, by design.
 
-Contracts and payroll have no route of their own: they arrive as columns on `dim_players` and `dim_teams`. Reddit is served by `/api/v1/social` and transactions by `/api/v1/transactions`. Odds and predictions ride on `GET /api/v1/schedule`: the champion row from `fct_game_predictions`, plus a per-game consensus from `fct_game_odds` (average vig-free home WP, a moneyline converted back from the average implied WP per side, and the median home spread). Only rows with a matched `game_id` count. `GET /api/v1/predictions/scorecard` serves `fct_prediction_scorecard`. Injuries have a gold mart but no REST route; they are reachable through Ask and MCP only.
+Contracts and payroll have no route of their own: they arrive as columns on `dim_players` and `dim_teams`. Reddit is served by `/api/v1/social` and transactions by `/api/v1/transactions`. Odds and predictions ride on `GET /api/v1/schedule`: the champion row from `fct_game_predictions`, plus a per-game consensus from `fct_game_odds` (average vig-free home WP, a moneyline converted back from the average implied WP per side, and the median home spread). Only rows with a matched `game_id` count. `GET /api/v1/predictions/scorecard` serves `fct_prediction_scorecard`. Injuries are under [Injuries](#injuries) above.
 
 ## Gotchas
 

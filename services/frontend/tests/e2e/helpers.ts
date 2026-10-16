@@ -432,6 +432,69 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         });
       }
 
+      // Before the /games and /teams branches, which would claim these URLs.
+      if (url.includes("/injuries")) {
+        const curry = {
+          player_id: "00000000-0000-4000-8000-000000000101",
+          player_name: "Stephen Curry",
+          team_id: 1610612744,
+          injury_status: "Out",
+          injury_detail: "Ankle",
+          description: "Out (Ankle) - Left ankle sprain.",
+          update_date: "2026-10-19",
+          is_notable: true,
+        };
+        const rows = empty
+          ? []
+          : url.includes("/games/0022500999/injuries")
+            ? [
+                {
+                  ...curry,
+                  game_id: "0022500999",
+                  side: "home",
+                  snapshot_date: "2026-10-20",
+                  played: null,
+                },
+              ]
+            : url.includes("/games/")
+              ? []
+              : [{ ...curry, team_abbreviation: "GSW" }];
+        return json({ data: rows, meta: { total: rows.length, limit: rows.length, offset: 0 } });
+      }
+
+      if (url.includes("/season-games")) {
+        const games = empty
+          ? []
+          : [
+              {
+                game_id: "0022400001",
+                season: "2025-26",
+                game_date: "2026-04-10",
+                status: "Final",
+                is_home: false,
+                opponent_team_id: 1610612741,
+                opponent_abbreviation: "CHI",
+                team_score: 112,
+                opponent_score: 104,
+                result: "W",
+                is_back_to_back: false,
+              },
+              {
+                game_id: "0022500999",
+                season: "2025-26",
+                game_date: "2026-04-11",
+                start_time_et: "22:00",
+                status: "Scheduled",
+                is_home: true,
+                opponent_team_id: 1610612747,
+                opponent_abbreviation: "LAL",
+                win_probability: 0.62,
+                is_back_to_back: true,
+              },
+            ];
+        return json({ data: games, meta: { total: games.length, limit: games.length, offset: 0 } });
+      }
+
       if (url.includes("/teams/") && url.includes("/games")) {
         return json({
           data: empty
@@ -633,6 +696,8 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                 home_moneyline: -150,
                 away_moneyline: 130,
                 home_spread: -3.5,
+                home_notable_out: ["Stephen Curry"],
+                away_notable_out: [],
               },
               ...(scheduleSecondDay
                 ? [
@@ -749,10 +814,12 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
             away_team_abbreviation: "MIA",
             home_score: 118,
             away_score: 115,
-            winning_team_abbreviation: "BOS",
             has_play_by_play: true,
             scoring_play_count: 97,
             max_lead: 21,
+            max_home_lead: 3,
+            max_away_lead: 21,
+            winning_team_abbreviation: "BOS",
             lead_changes: 4,
             ties: 3,
             home_lead_pct: 0.18,
@@ -847,6 +914,89 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
           data: filtered,
           meta: { total: filtered.length, limit: 10, offset: 0 },
         });
+      }
+
+      // One game by id. After /games/highlights and /games/collapses, which
+      // would otherwise read as an id.
+      const singleGame = url.match(/\/api\/v1\/games\/([^/?]+)(?:\?|$)/);
+      if (singleGame) {
+        const base = {
+          season: "2025-26",
+          season_type: "Regular Season",
+          home_wins: 0,
+          home_losses: 0,
+          away_wins: 0,
+          away_losses: 0,
+          home_streak: null,
+          home_last_10: null,
+          away_streak: null,
+          away_last_10: null,
+          lead_highlight: null,
+          lead_highlight_detail: null,
+        };
+        const games: Record<string, Record<string, unknown>> = {
+          "0022400001": {
+            ...base,
+            game_id: "0022400001",
+            game_date: "2024-10-22",
+            status: "Final",
+            home_team_id: 1610612744,
+            away_team_id: 1610612747,
+            home_team_abbreviation: "GSW",
+            away_team_abbreviation: "LAL",
+            home_score: 120,
+            away_score: 110,
+          },
+          "0022400002": {
+            ...base,
+            game_id: "0022400002",
+            game_date: "2024-11-02",
+            status: "Final",
+            home_team_id: 1610612738,
+            away_team_id: 1610612748,
+            home_team_abbreviation: "BOS",
+            away_team_abbreviation: "MIA",
+            home_team_name: "Boston Celtics",
+            away_team_name: "Miami Heat",
+            home_score: 118,
+            away_score: 115,
+            home_win_probability: 0.55,
+            away_win_probability: 0.45,
+            lead_highlight: "BOS erase a 21-point deficit",
+          },
+          "0022500999": {
+            ...base,
+            game_id: "0022500999",
+            game_date: "2026-10-22",
+            start_time_et: "22:00",
+            status: "Scheduled",
+            home_team_id: 1610612744,
+            away_team_id: 1610612747,
+            home_team_abbreviation: "GSW",
+            away_team_abbreviation: "LAL",
+            home_team_name: "Golden State Warriors",
+            away_team_name: "Los Angeles Lakers",
+            arena: "Chase Center",
+            national_tv: "ESPN",
+            home_score: null,
+            away_score: null,
+            home_wins: 3,
+            home_losses: 1,
+            away_wins: 2,
+            away_losses: 2,
+            home_streak: "W2",
+            home_last_10: "3-1",
+            away_streak: "L1",
+            away_last_10: "2-2",
+            home_win_probability: 0.62,
+            away_win_probability: 0.38,
+            home_moneyline: -150,
+            away_moneyline: 130,
+            home_spread: -3.5,
+          },
+        };
+        const game = games[singleGame[1]];
+        return game ? json({ data: game }) : json({ detail: "Game not found" }, 404);
       }
 
       if (url.includes("/games")) {

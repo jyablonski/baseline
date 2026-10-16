@@ -537,3 +537,89 @@ def test_list_teams_game_record_overlay(client, session, mapping_row, query_resu
     assert row["record_source"] == "games"
     assert row["pts_scored_avg"] == 116.4
     assert row["pts_allowed_avg"] == 109.2
+
+
+@pytest.mark.unit
+def test_team_season_games(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(rows=[_team_row()]),
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": GAME_ONE,
+                        "season": "2024-25",
+                        "season_type": "Regular Season",
+                        "game_date": date(2024, 10, 22),
+                        "status": "Final",
+                        "is_home": False,
+                        "opponent_team_id": TEAM_CHI,
+                        "opponent_abbreviation": "CHI",
+                        "team_score": 118,
+                        "opponent_score": 110,
+                        "result": "W",
+                        "win_probability": 0.41,
+                        "is_back_to_back": False,
+                    }
+                ),
+                mapping_row(
+                    {
+                        "game_id": GAME_TWO,
+                        "season": "2024-25",
+                        "season_type": "Regular Season",
+                        "game_date": date(2024, 10, 23),
+                        "status": "Scheduled",
+                        "is_home": True,
+                        "opponent_team_id": TEAM_BOS,
+                        "opponent_abbreviation": "BOS",
+                        "team_score": None,
+                        "opponent_score": None,
+                        "result": None,
+                        "win_probability": None,
+                        "is_back_to_back": True,
+                    }
+                ),
+            ]
+        ),
+    ]
+    response = client.get(
+        f"/api/v1/teams/{TEAM_GSW}/season-games",
+        params={"season": "2024-25", "season_type": "regular season"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["meta"]["total"] == 2
+    played, upcoming = body["data"]
+    assert (played["result"], played["team_score"], played["is_home"]) == ("W", 118, False)
+    assert upcoming["result"] is None
+    assert upcoming["is_back_to_back"] is True
+    _, params = session.calls[-1]
+    assert params["season"] == "2024-25"
+    assert params["season_type"] == "Regular Season"
+
+
+@pytest.mark.unit
+def test_team_season_games_not_found(client, session, query_result) -> None:
+    session.queue = [query_result(rows=[])]
+    response = client.get(f"/api/v1/teams/{MISSING_ID}/season-games")
+    assert response.status_code == 404
+
+
+@pytest.mark.unit
+def test_team_season_games_rejects_invalid_season_type(client, session, query_result) -> None:
+    session.queue = [query_result(rows=[_team_row()])]
+    response = client.get(
+        f"/api/v1/teams/{TEAM_GSW}/season-games", params={"season_type": "Summer League"}
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.unit
+def test_team_season_games_sql_reads_every_state_and_flags_back_to_backs() -> None:
+    from queries.teams import LIST_TEAM_SEASON_GAMES
+
+    sql = str(LIST_TEAM_SEASON_GAMES)
+    assert "FROM gold.fct_games_schedule" in sql
+    assert "gold.fct_team_game_results" not in sql
+    assert "lag(fct_games_schedule.game_date) OVER" in sql
+    assert "THEN fct_game_predictions.model_wp" in sql

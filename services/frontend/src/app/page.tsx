@@ -366,9 +366,13 @@ function UpcomingList({
               key={game.game_id}
               className={cn(UPCOMING_GRID, "border-b border-rule-soft py-1.5 text-sm")}
             >
-              <span className="tabular text-ink-2">
+              <Link
+                href={`/games/${game.game_id}`}
+                className="tabular text-ink-2 hover:text-primary hover:underline"
+                title="Game preview"
+              >
                 {formatGameTime(game.game_date, game.start_time_et, timezone).time}
-              </span>
+              </Link>
               <TeamAbbrLink
                 teamId={game.away_team_id}
                 abbreviation={game.away_team_abbreviation ?? "Away"}

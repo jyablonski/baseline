@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: int_player_injury_history
+    description: Daily injury snapshots with status and body part parsed from the note, the same way as the current snapshot.
+    columns:
+      - name: player_id
+        description: Baseline player UUID.
+        data_tests:
+          - not_null
+      - name: team_id
+        description: Team listing the injury (Baseline team UUID).
+        data_tests:
+          - not_null
+      - name: injury_status
+        description: Status parsed by the injury_status macro.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Out", "Day To Day", "Out For Season", "Listed"]
+      - name: injury_detail
+        description: Body part from the note's parentheses.
+      - name: snapshot_date
+        description: Scrape date of the snapshot.
+        data_tests:
+          - not_null
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["player_id", "team_id", "snapshot_date"]

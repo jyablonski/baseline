@@ -209,7 +209,9 @@ function Sheet({ name, image, sheet }: { name: string; image: string | null; she
                   data-testid="open-pick"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium">{pickLabel(pick)}</p>
+                    <p className="font-medium">
+                      <PickGameLink pick={pick} />
+                    </p>
                     <p className="type-caption mt-0.5">
                       {tip.date}
                       {tip.zone ? ` · ${tip.time} ${tip.zone}` : ""}
@@ -259,7 +261,9 @@ function Settled({ picks }: { picks: UserPick[] }) {
             >
               {pick.result === "won" ? "W" : pick.result === "lost" ? "L" : "–"}
             </span>
-            <span className="font-medium">{pickLabel(pick)}</span>
+            <span className="font-medium">
+              <PickGameLink pick={pick} />
+            </span>
             <span className="type-caption">{finalScore(pick)}</span>
             <span className="type-caption tabular ml-auto w-14 text-right">
               {pick.stake ? formatMoney(pick.stake) : "–"}
@@ -286,5 +290,15 @@ function Settled({ picks }: { picks: UserPick[] }) {
         </button>
       ) : null}
     </section>
+  );
+}
+
+/** A pick's label, linking to its game unless the game has left the schedule. */
+function PickGameLink({ pick }: { pick: UserPick }) {
+  if (pick.result === "void") return <>{pickLabel(pick)}</>;
+  return (
+    <Link href={`/games/${pick.game_id}`} className="hover:text-primary hover:underline">
+      {pickLabel(pick)}
+    </Link>
   );
 }

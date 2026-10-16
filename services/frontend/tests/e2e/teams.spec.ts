@@ -17,9 +17,11 @@ test("teams directory to profile shows cap position", async ({ page }) => {
 
   await page.getByRole("link", { name: "GSW" }).click();
   await expect(page.getByRole("heading", { name: "Golden State Warriors" })).toBeVisible();
-  await expect(page.getByText("Chase Center", { exact: true })).toBeVisible();
   await expect(page.getByText("Cap position").first()).toBeVisible();
   await expect(page.getByText("Regular Season")).toBeVisible();
+  // Arena and the game filters are on the list view.
+  await page.getByRole("button", { name: "list", exact: true }).click();
+  await expect(page.getByText("Chase Center", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Opponent")).toBeVisible();
   await expect(page.getByText("Arena city")).toHaveCount(0);
 });
@@ -58,7 +60,7 @@ test("teams page plots each team as a bare logo marker", async ({ page }) => {
 
 test("team profile filters games by opponent and Reset clears it", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/teams/1610612744");
+  await page.goto("/teams/1610612744?view=list");
   await expect(page.getByText("Filter games")).toBeVisible();
   // The Since filter was removed; Opponent is now the first control.
   await expect(page.getByText("Since")).toHaveCount(0);
@@ -72,7 +74,7 @@ test("team profile filters games by opponent and Reset clears it", async ({ page
 
 test("team profile home/away segmented control filters the record", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/teams/1610612744");
+  await page.goto("/teams/1610612744?view=list");
   await page.getByRole("button", { name: "home", exact: true }).click();
   await waitForApiCall(page, "location=home");
 
@@ -104,4 +106,39 @@ test("standings lists streak and last-ten columns for both conferences", async (
   await expect(page.getByRole("cell", { name: "W5", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "8-2", exact: true })).toBeVisible();
   await expectNo2010Range(page);
+});
+
+test("team profile opens on a season calendar whose games link to their pages", async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.goto("/teams/1610612744");
+  const calendar = page.getByTestId("season-calendar");
+  await expect(calendar.getByRole("heading", { name: "April 2026" })).toBeVisible();
+  await expect(page.getByText("Filter games")).toHaveCount(0);
+
+  const win = calendar.getByRole("link", { name: /Apr 10, 2026, at CHI, won 112–104/ });
+  await expect(win).toBeVisible();
+  await expect(calendar.getByRole("link", { name: /Apr 11, 2026, vs LAL/ })).toContainText("B2B");
+
+  await win.click();
+  await expect(page).toHaveURL(/\/games\/0022400001/);
+});
+
+test("team profile list view keeps the filters, and the choice is in the URL", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/teams/1610612744");
+  await expect(page.getByTestId("season-calendar")).toBeVisible();
+  await page.getByRole("button", { name: "list", exact: true }).click();
+  await expect(page).toHaveURL(/view=list/);
+  await expect(page.getByText("Filter games")).toBeVisible();
+  await expect(page.getByTestId("season-calendar")).toHaveCount(0);
+});
+
+test("team profile defaults to the list on a phone", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  await page.goto("/teams/1610612744");
+  await expect(page.getByText("Filter games")).toBeVisible();
+  await expect(page.getByTestId("season-calendar")).toHaveCount(0);
 });

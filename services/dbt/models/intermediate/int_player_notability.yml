@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: int_player_notability
+    description: >
+      Per player and season, whether their absence is worth flagging: within
+      their latest team's top injury_notable_team_rank or the league's top
+      injury_notable_league_rank by average Regular Season game score, with at
+      least injury_notable_min_games games. The injury marts also accept the
+      previous season's flag, so opening night is not empty.
+    columns:
+      - name: player_id
+        description: Baseline player UUID.
+        data_tests:
+          - not_null
+      - name: season
+        description: NBA season label, e.g. 2025-26.
+        data_tests:
+          - not_null
+      - name: team_id
+        description: The player's latest team that season.
+      - name: games_played
+        description: Regular Season games with a game score.
+      - name: avg_game_score
+        description: Average MVP game score over those games, before any availability penalty.
+      - name: league_rank
+        description: Rank by avg_game_score in the season, 1 best.
+      - name: team_rank
+        description: Rank by avg_game_score within the latest team, 1 best.
+      - name: is_notable
+        description: True inside either rank cutoff.
+        data_tests:
+          - not_null
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["player_id", "season"]

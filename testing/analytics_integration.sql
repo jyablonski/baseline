@@ -273,3 +273,38 @@ CREATE TABLE IF NOT EXISTS gold.fct_prediction_scorecard (
     market_brier            DOUBLE PRECISION,
     PRIMARY KEY (season, model_version)
 );
+
+CREATE TABLE IF NOT EXISTS gold.fct_player_injuries (
+    player_id               UUID NOT NULL,
+    team_id                 UUID NOT NULL,
+    team_abbreviation       VARCHAR(10),
+    player_name             VARCHAR(200),
+    player_name_normalized  VARCHAR(200),
+    update_date             DATE,
+    description             TEXT NOT NULL,
+    injury_status           TEXT NOT NULL,
+    injury_detail           TEXT,
+    is_notable              BOOLEAN NOT NULL,
+    source_url              VARCHAR(300),
+    scraped_at              TIMESTAMP,
+    match_method            TEXT,
+    PRIMARY KEY (player_id, team_id)
+);
+
+CREATE TABLE IF NOT EXISTS gold.fct_game_injuries (
+    game_id         UUID NOT NULL,
+    game_date       DATE,
+    season          VARCHAR(10),
+    team_id         UUID NOT NULL,
+    side            TEXT NOT NULL,
+    player_id       UUID NOT NULL,
+    player_name     VARCHAR(200),
+    injury_status   TEXT NOT NULL,
+    injury_detail   TEXT,
+    description     TEXT NOT NULL,
+    update_date     DATE,
+    snapshot_date   DATE NOT NULL,
+    is_notable      BOOLEAN NOT NULL,
+    played          BOOLEAN,
+    PRIMARY KEY (game_id, player_id)
+);
