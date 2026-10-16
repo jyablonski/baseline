@@ -1,0 +1,67 @@
+version: 2
+
+models:
+  - name: fct_game_injuries
+    description: >
+      One row per game and player on the injury report for either team. A game
+      uses the newest daily snapshot dated at most injury_snapshot_max_age_days
+      before the earlier of its date and today, so a past game shows the report
+      from that morning and an upcoming one today's. Upcoming games only reach
+      injury_upcoming_days ahead. Games before the snapshots began have no rows.
+      This is the morning report, not the official inactive list: played says
+      whether a listed player logged minutes once the game is Final.
+    columns:
+      - name: game_id
+        description: Baseline game UUID.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_games_schedule')
+                field: game_id
+      - name: game_date
+        description: Game date in Eastern Time.
+      - name: season
+        description: NBA season label.
+      - name: team_id
+        description: The team listing the player (Baseline team UUID).
+        data_tests:
+          - not_null
+      - name: side
+        description: home or away.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["home", "away"]
+      - name: player_id
+        description: Baseline player UUID.
+        data_tests:
+          - not_null
+      - name: player_name
+        description: Name as shown on the injury report.
+      - name: injury_status
+        description: Out, Day To Day, Out For Season, or Listed.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Out", "Day To Day", "Out For Season", "Listed"]
+      - name: injury_detail
+        description: Body part from the note's parentheses.
+      - name: description
+        description: The full injury note.
+      - name: update_date
+        description: Date Basketball-Reference last updated the note.
+      - name: snapshot_date
+        description: Scrape date of the snapshot the row came from.
+        data_tests:
+          - not_null
+      - name: is_notable
+        description: Notable in int_player_notability in the game's season or the one before.
+        data_tests:
+          - not_null
+      - name: played
+        description: Once the game is Final, whether the player logged minutes; null before.
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["game_id", "player_id"]

@@ -68,6 +68,19 @@ function tipOff(gameDate: string | null | undefined, startTimeEt: string | null 
 }
 
 /**
+ * Whether a game has tipped off. With no start time on file this is the start
+ * of game day, the same fallback the API uses to lock picks.
+ */
+export function hasTipped(
+  gameDate: string | null | undefined,
+  startTimeEt: string | null | undefined,
+  now = new Date()
+) {
+  const tip = tipOff(gameDate, startTimeEt || "00:00");
+  return tip != null && tip.getTime() <= now.getTime();
+}
+
+/**
  * A game's date, start time and zone label as one account wants to read them.
  *
  * The date moves with the time: a 10 PM Eastern tip is the next morning in

@@ -150,11 +150,28 @@ PLAYER_BY_ID = text(
         dim_players.current_contract_season,
         mvp_season.season AS mvp_season,
         regular_season_mvp.mvp_score,
-        regular_season_mvp.mvp_rank
+        regular_season_mvp.mvp_rank,
+        current_injuries.injury_status,
+        current_injuries.injury_detail,
+        current_injuries.description AS injury_description,
+        current_injuries.update_date AS injury_update_date
     FROM gold.dim_players
     CROSS JOIN mvp_season
     LEFT JOIN gold.dim_teams ON dim_players.team_id = dim_teams.team_id
     LEFT JOIN regular_season_mvp ON dim_players.player_id = regular_season_mvp.player_id
+    -- The mart is unique on player and team; a player listed by two teams
+    -- shows the newer note.
+    LEFT JOIN LATERAL (
+        SELECT
+            fct_player_injuries.injury_status,
+            fct_player_injuries.injury_detail,
+            fct_player_injuries.description,
+            fct_player_injuries.update_date
+        FROM gold.fct_player_injuries
+        WHERE fct_player_injuries.player_id = dim_players.player_id
+        ORDER BY fct_player_injuries.update_date DESC NULLS LAST
+        LIMIT 1
+    ) AS current_injuries ON TRUE
     WHERE dim_players.player_id = :player_id
     """
 )

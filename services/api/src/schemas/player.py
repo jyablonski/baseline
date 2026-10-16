@@ -53,6 +53,11 @@ class PlayerDetail(PlayerSummary):
     current_season_salary: int | None = None
     current_remaining_guaranteed: int | None = None
     current_contract_season: str | None = None
+    # On the current injury report; all null when not listed.
+    injury_status: str | None = None
+    injury_detail: str | None = None
+    injury_description: str | None = None
+    injury_update_date: date | None = None
 
 
 class GameLogEntry(BaseModel):

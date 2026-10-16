@@ -355,10 +355,12 @@ function ScheduleRow({
   return (
     <tr>
       <td className="tabular whitespace-nowrap">
-        <span className="block">{tip.date}</span>
-        <span className="block text-xs text-muted-foreground">
-          {tip.zone ? `${tip.time} ${tip.zone}` : tip.time}
-        </span>
+        <Link href={`/games/${game.game_id}`} className="group block" title="Game preview">
+          <span className="block group-hover:text-primary group-hover:underline">{tip.date}</span>
+          <span className="block text-xs text-muted-foreground">
+            {tip.zone ? `${tip.time} ${tip.zone}` : tip.time}
+          </span>
+        </Link>
       </td>
       <td>
         <span className="inline-flex flex-wrap items-center gap-1.5">
@@ -385,6 +387,8 @@ function ScheduleRow({
             <span className="font-semibold">{home}</span>
           )}
         </span>
+        <NotableOut abbreviation={away} names={game.away_notable_out} />
+        <NotableOut abbreviation={home} names={game.home_notable_out} />
       </td>
       <td className="whitespace-nowrap" data-testid="national-tv">
         {game.national_tv || "—"}
@@ -412,4 +416,14 @@ function ScheduleRow({
 function pairOrDash(away: string, home: string) {
   if (away === "—" || home === "—") return "—";
   return `${away} / ${home}`;
+}
+
+/** A notable player ruled out, under the matchup. Nothing for doubts or bench players. */
+function NotableOut({ abbreviation, names }: { abbreviation: string; names?: string[] }) {
+  if (!names || names.length === 0) return null;
+  return (
+    <span className="mt-1 block text-xs text-destructive" data-testid="notable-out">
+      {abbreviation}: {names.join(", ")} out
+    </span>
+  );
 }

@@ -20,6 +20,8 @@ import type {
   HeadToHeadComparison,
   LeagueGame,
   ListGamesParams,
+  GameDetail,
+  GameInjury,
   ListScheduleParams,
   PlayByPlayEvent,
   ScheduledGame,
@@ -29,6 +31,7 @@ import type {
   PaginatedResponse,
   PlayerComparison,
   PlayerDetail,
+  PlayerInjury,
   PlayerSeasonStats,
   PlayerSummary,
   PlayerValue,
@@ -40,6 +43,7 @@ import type {
   TeamGame,
   TeamGamesParams,
   TeamRecord,
+  TeamSeasonGame,
   TeamRecordParams,
   TeamSummary,
   WarehouseStatus,
@@ -337,6 +341,11 @@ export const api = {
       )
     ),
 
+  getTeamSeasonGames: async (id: string, params: { season?: string } = {}) =>
+    asPaginated<TeamSeasonGame>(
+      await fetchApi(`/api/v1/teams/${id}/season-games${buildQuery({ season: params.season })}`)
+    ),
+
   getTeamRecord: async (id: string, params: TeamRecordParams = {}) =>
     asData<TeamRecord>(
       await fetchApi(
@@ -430,6 +439,18 @@ export const api = {
 
   getGamePlayByPlay: async (gameId: string) =>
     asPaginated<PlayByPlayEvent>(await fetchApi(`/api/v1/games/${gameId}/play-by-play`)),
+
+  getGame: async (gameId: string) => asData<GameDetail>(await fetchApi(`/api/v1/games/${gameId}`)),
+
+  getGameInjuries: async (gameId: string) =>
+    asPaginated<GameInjury>(await fetchApi(`/api/v1/games/${gameId}/injuries`)),
+
+  listInjuries: async (params: { team_id?: string; notable?: boolean } = {}) =>
+    asPaginated<PlayerInjury>(
+      await fetchApi(
+        `/api/v1/injuries${buildQuery({ team_id: params.team_id, notable: params.notable })}`
+      )
+    ),
 
   getGameFlow: async (gameId: string) =>
     asData<GameFlow>(await fetchApi(`/api/v1/games/${gameId}/flow`)),

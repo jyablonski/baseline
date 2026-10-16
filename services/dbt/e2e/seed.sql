@@ -123,6 +123,20 @@ INSERT INTO source.player_injuries (
     ('11111111-1111-4111-8111-111111111111', '7bf8726a-a852-452d-b81f-14839127c5fb', 'Stephen Curry', 'stephen curry', '2024-10-26', 'Out (Ankle) - Left ankle sprain',
      'https://www.basketball-reference.com/friv/injuries.fcgi', NOW());
 
+-- Daily injury snapshots. 10/24 covers the 10/25 game (one-day gap) and is
+-- too old for 10/27; Curry's "Probable" note is not a status we know. 10/30 is
+-- the morning of the game Curry sits out.
+INSERT INTO source.player_injuries_history (
+    player_id, team_id, player_name, player_name_normalized, update_date, description,
+    source_url, snapshot_date, scraped_at
+) VALUES
+    ('22222222-2222-4222-8222-222222222222', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'Kawhi Leonard', 'kawhi leonard', '2024-10-24', 'Day To Day (Knee) - Soreness',
+     'https://www.basketball-reference.com/friv/injuries.fcgi', '2024-10-24', NOW()),
+    ('11111111-1111-4111-8111-111111111111', '7bf8726a-a852-452d-b81f-14839127c5fb', 'Stephen Curry', 'stephen curry', '2024-10-24', 'Probable (Rest) - Maintenance',
+     'https://www.basketball-reference.com/friv/injuries.fcgi', '2024-10-24', NOW()),
+    ('11111111-1111-4111-8111-111111111111', '7bf8726a-a852-452d-b81f-14839127c5fb', 'Stephen Curry', 'stephen curry', '2024-10-29', 'Out (Ankle) - Left ankle sprain',
+     'https://www.basketball-reference.com/friv/injuries.fcgi', '2024-10-30', NOW());
+
 INSERT INTO source.game_odds (
     odds_event_id, commence_time, home_team_name, away_team_name, game_id,
     bookmaker, market, home_price, away_price, home_implied_wp, away_implied_wp,

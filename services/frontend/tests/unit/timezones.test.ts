@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatGameTime, formatScrapedAt, isTimezone, TIMEZONES } from "@/lib/timezones";
+import { formatGameTime, formatScrapedAt, hasTipped, isTimezone, TIMEZONES } from "@/lib/timezones";
 
 describe("formatGameTime", () => {
   it("shows Eastern by default, exactly as the game is stored", () => {
@@ -76,5 +76,23 @@ describe("formatScrapedAt", () => {
   it("falls back to a dash without a usable timestamp", () => {
     expect(formatScrapedAt(null, null)).toBe("—");
     expect(formatScrapedAt("nope", null)).toBe("—");
+  });
+});
+
+describe("hasTipped", () => {
+  it("compares the Eastern tip-off to now", () => {
+    // 7:30 PM EDT is 23:30 UTC.
+    expect(hasTipped("2026-10-22", "19:30", new Date("2026-10-22T23:29:00Z"))).toBe(false);
+    expect(hasTipped("2026-10-22", "19:30", new Date("2026-10-22T23:30:00Z"))).toBe(true);
+  });
+
+  it("locks from the start of game day with no tip time, as the API does", () => {
+    // Midnight EDT is 04:00 UTC.
+    expect(hasTipped("2026-10-22", null, new Date("2026-10-22T03:59:00Z"))).toBe(false);
+    expect(hasTipped("2026-10-22", null, new Date("2026-10-22T04:00:00Z"))).toBe(true);
+  });
+
+  it("is false without a usable date", () => {
+    expect(hasTipped(null, "19:30")).toBe(false);
   });
 });

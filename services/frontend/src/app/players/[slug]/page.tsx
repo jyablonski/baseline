@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { StatBarChart } from "@/components/charts/stat-bar-chart";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
+import { InjuryPill } from "@/components/injuries/injury-list";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import {
@@ -177,6 +178,17 @@ function PlayerProfile() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="type-entity">{loadedPlayer.full_name}</h1>
+          {loadedPlayer.injury_status ? (
+            <p
+              className="mt-2 flex flex-wrap items-center gap-2 text-sm"
+              data-testid="player-injury"
+            >
+              <InjuryPill status={loadedPlayer.injury_status} detail={loadedPlayer.injury_detail} />
+              {loadedPlayer.injury_description ? (
+                <span className="text-ink-2">{loadedPlayer.injury_description}</span>
+              ) : null}
+            </p>
+          ) : null}
           <p className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
             {identity.map((item, index) => (
               <span key={`${item}-${index}`} className="inline-flex items-center gap-2">

@@ -246,3 +246,106 @@ LIST_TEAM_GAMES = text(
     LIMIT :limit OFFSET :offset
     """
 )
+
+# Every game of one team's season in any state, for the team calendar. Without
+# a season, the newest one the team has on the schedule. The back-to-back flag
+# is computed over all the team's games before season_type narrows them, so a
+# playoff opener the night after a play-in game still counts.
+LIST_TEAM_SEASON_GAMES = text(
+    """
+    WITH target_seasons AS (
+        SELECT
+            coalesce(
+                CAST(:season AS text),
+                (
+                    SELECT max(fct_games_schedule.season)
+                    FROM gold.fct_games_schedule
+                    WHERE
+                        fct_games_schedule.home_team_id = :team_id
+                        OR fct_games_schedule.away_team_id = :team_id
+                )
+            ) AS season
+    ),
+
+    team_games AS (
+        SELECT
+            fct_games_schedule.game_id,
+            fct_games_schedule.season,
+            fct_games_schedule.season_type,
+            fct_games_schedule.game_date,
+            fct_games_schedule.start_time_et,
+            fct_games_schedule.status,
+            fct_games_schedule.national_tv,
+            fct_games_schedule.home_team_id = :team_id AS is_home,
+            CASE
+                WHEN fct_games_schedule.home_team_id = :team_id THEN fct_games_schedule.away_team_id
+                ELSE fct_games_schedule.home_team_id
+            END AS opponent_team_id,
+            CASE
+                WHEN fct_games_schedule.home_team_id = :team_id THEN fct_games_schedule.away_team_abbreviation
+                ELSE fct_games_schedule.home_team_abbreviation
+            END AS opponent_abbreviation,
+            CASE
+                WHEN fct_games_schedule.home_team_id = :team_id THEN fct_games_schedule.away_team_name
+                ELSE fct_games_schedule.home_team_name
+            END AS opponent_name,
+            CASE
+                WHEN fct_games_schedule.home_team_id = :team_id THEN fct_games_schedule.home_score
+                ELSE fct_games_schedule.away_score
+            END AS team_score,
+            CASE
+                WHEN fct_games_schedule.home_team_id = :team_id THEN fct_games_schedule.away_score
+                ELSE fct_games_schedule.home_score
+            END AS opponent_score,
+            coalesce(
+                fct_games_schedule.game_date
+                - lag(fct_games_schedule.game_date) OVER (ORDER BY fct_games_schedule.game_date) = 1,
+                FALSE
+            ) AS is_back_to_back
+        FROM gold.fct_games_schedule
+        INNER JOIN target_seasons
+            ON target_seasons.season = fct_games_schedule.season
+        WHERE
+            fct_games_schedule.home_team_id = :team_id
+            OR fct_games_schedule.away_team_id = :team_id
+    )
+
+    SELECT
+        team_games.game_id,
+        team_games.season,
+        team_games.season_type,
+        team_games.game_date,
+        team_games.start_time_et,
+        team_games.status,
+        team_games.national_tv,
+        team_games.is_home,
+        team_games.opponent_team_id,
+        team_games.opponent_abbreviation,
+        team_games.opponent_name,
+        team_games.team_score,
+        team_games.opponent_score,
+        CASE
+            WHEN
+                team_games.status <> 'Final'
+                OR team_games.team_score IS NULL
+                OR team_games.opponent_score IS NULL
+                THEN NULL
+            WHEN team_games.team_score > team_games.opponent_score THEN 'W'
+            ELSE 'L'
+        END AS result,
+        -- The champion's pregame estimate, from this team's side.
+        CASE
+            WHEN team_games.is_home THEN fct_game_predictions.model_wp
+            ELSE fct_game_predictions.away_wp
+        END AS win_probability,
+        team_games.is_back_to_back
+    FROM team_games
+    LEFT JOIN gold.fct_game_predictions
+        ON fct_game_predictions.game_id = team_games.game_id
+    WHERE CAST(:season_type AS text) IS NULL OR team_games.season_type = :season_type
+    ORDER BY
+        team_games.game_date,
+        team_games.start_time_et NULLS LAST,
+        team_games.game_id
+    """
+)

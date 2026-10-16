@@ -9,6 +9,7 @@ from ids import (
     GAME_SCHEDULE_TWO,
     GAME_THREE,
     GAME_TWO,
+    MISSING_ID,
     PLAYER_CURRY,
     PLAYER_KAWHI,
     TEAM_GSW,
@@ -152,6 +153,120 @@ def test_schedule_carries_predictions_and_consensus_odds(integration_client) -> 
         "odds_bookmaker_count",
     ):
         assert bare[key] is None
+
+
+@pytest.mark.integration
+def test_game_detail_matches_schedule_row(integration_client) -> None:
+    schedule = integration_client.get("/api/v1/schedule", params={"season": "2024-25"})
+    listed = {row["game_id"]: row for row in schedule.json()["data"]}[GAME_SCHEDULE]
+
+    response = integration_client.get(f"/api/v1/games/{GAME_SCHEDULE}")
+    assert response.status_code == 200
+    game = response.json()["data"]
+    # The single game and the schedule share their SQL, so they must agree.
+    for key, value in listed.items():
+        assert game[key] == value, key
+    assert game["home_score"] is None
+    # Entering a game after every seeded Final: GSW split with LAC, LAC also beat CHI.
+    assert (game["home_wins"], game["home_losses"]) == (1, 1)
+    assert (game["away_wins"], game["away_losses"]) == (2, 1)
+    assert game["home_streak"] == "W5"
+    assert game["away_last_10"] == "6-4"
+    assert game["lead_highlight"] is None
+
+
+@pytest.mark.integration
+def test_game_detail_final(integration_client) -> None:
+    first = integration_client.get(f"/api/v1/games/{GAME_ONE}").json()["data"]
+    assert first["status"] == "Final"
+    assert (first["home_score"], first["away_score"]) == (120, 110)
+    # Opening night: nothing played before it, and no runner-up highlight.
+    assert (first["home_wins"], first["home_losses"], first["away_wins"], first["away_losses"]) == (
+        0,
+        0,
+        0,
+        0,
+    )
+    assert first["lead_highlight"] == "Stephen Curry scores 42"
+    assert (first["home_team_nickname"], first["home_team_conference"]) == ("Warriors", "West")
+    assert (first["away_team_nickname"], first["away_team_conference"]) == ("Clippers", "West")
+    # Form is today's, so a played game never shows it.
+    assert first["home_streak"] is None
+
+    third = integration_client.get(f"/api/v1/games/{GAME_THREE}").json()["data"]
+    # The game itself is excluded: LAC (home) 1-1, GSW 1-0 going in.
+    assert (third["home_wins"], third["home_losses"]) == (1, 1)
+    assert (third["away_wins"], third["away_losses"]) == (1, 0)
+
+    assert integration_client.get(f"/api/v1/games/{MISSING_ID}").status_code == 404
+
+
+@pytest.mark.integration
+def test_team_season_games(integration_client) -> None:
+    response = integration_client.get(
+        f"/api/v1/teams/{TEAM_GSW}/season-games", params={"season": "2024-25"}
+    )
+    assert response.status_code == 200
+    games = response.json()["data"]
+    # The two seeded Finals GSW played, then its two upcoming games, in date order.
+    assert [game["game_id"] for game in games] == [
+        GAME_ONE,
+        GAME_THREE,
+        GAME_SCHEDULE,
+        GAME_SCHEDULE_TWO,
+    ]
+    first, third, home_next, away_next = games
+    assert (first["is_home"], first["result"], first["team_score"]) == (True, "W", 120)
+    assert (third["is_home"], third["result"], third["opponent_score"]) == (False, "L", 118)
+    assert third["opponent_abbreviation"] == "LAC"
+    assert home_next["result"] is None
+    assert home_next["win_probability"] == pytest.approx(0.6)
+    # The away side of the same prediction.
+    assert away_next["is_home"] is False
+    # CURRENT_DATE + 14, then + 15: a back-to-back.
+    assert (home_next["is_back_to_back"], away_next["is_back_to_back"]) == (False, True)
+
+    # No season: the team's newest on the schedule.
+    latest = integration_client.get(f"/api/v1/teams/{TEAM_GSW}/season-games")
+    assert [game["game_id"] for game in latest.json()["data"]] == [
+        game["game_id"] for game in games
+    ]
+    other = integration_client.get(
+        f"/api/v1/teams/{TEAM_GSW}/season-games", params={"season_type": "Playoffs"}
+    )
+    assert other.json()["data"] == []
+
+
+@pytest.mark.integration
+def test_injuries(integration_client) -> None:
+    current = integration_client.get("/api/v1/injuries").json()["data"]
+    assert [(row["player_name"], row["injury_status"]) for row in current] == [
+        ("Stephen Curry", "Out"),
+        ("Kawhi Leonard", "Day To Day"),
+    ]
+    gsw = integration_client.get("/api/v1/injuries", params={"team_id": TEAM_GSW}).json()["data"]
+    assert [row["player_name"] for row in gsw] == ["Stephen Curry"]
+
+    final = integration_client.get(f"/api/v1/games/{GAME_ONE}/injuries").json()["data"]
+    assert [(row["player_name"], row["side"], row["played"]) for row in final] == [
+        ("Kawhi Leonard", "away", False)
+    ]
+    # Home side first, then the away side.
+    upcoming = integration_client.get(f"/api/v1/games/{GAME_SCHEDULE}/injuries").json()["data"]
+    assert [row["side"] for row in upcoming] == ["home", "away"]
+    assert integration_client.get(f"/api/v1/games/{GAME_THREE}/injuries").json()["data"] == []
+
+    # The schedule chips: only the notable player ruled out, not the doubt.
+    schedule = integration_client.get("/api/v1/schedule", params={"season": "2024-25"}).json()
+    by_id = {row["game_id"]: row for row in schedule["data"]}
+    assert by_id[GAME_SCHEDULE]["home_notable_out"] == ["Stephen Curry"]
+    assert by_id[GAME_SCHEDULE]["away_notable_out"] == []
+    assert by_id[GAME_SCHEDULE_TWO]["home_notable_out"] == []
+    game = integration_client.get(f"/api/v1/games/{GAME_SCHEDULE}").json()["data"]
+    assert game["home_notable_out"] == ["Stephen Curry"]
+
+    player = integration_client.get(f"/api/v1/players/{PLAYER_CURRY}").json()["data"]
+    assert (player["injury_status"], player["injury_detail"]) == ("Out", "Ankle")
 
 
 @pytest.mark.integration

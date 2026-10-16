@@ -2,12 +2,15 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
+import { InjuryList } from "@/components/injuries/injury-list";
 import { CapPosition } from "@/components/teams/cap-position";
+import { SeasonCalendar } from "@/components/teams/season-calendar";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamLogo } from "@/components/team-logo";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { useProfile } from "@/hooks/use-profile";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
@@ -24,10 +27,12 @@ import {
 } from "@/lib/format";
 import { lastTenFromGames, streakFromGames } from "@/lib/team-form";
 import { formatGameTime } from "@/lib/timezones";
-import type { TeamGame } from "@/lib/types";
+import type { PlayerInjury, TeamGame, TeamSeasonGame } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const GAME_PAGE_SIZE = 10;
+// Tailwind's sm breakpoint: below it seven columns are too narrow for a game.
+const CALENDAR_MEDIA = "(min-width: 640px)";
 const SCHEDULE_PAGE_SIZE = GAME_PAGE_SIZE;
 
 export default function TeamProfilePage() {
@@ -41,6 +46,8 @@ export default function TeamProfilePage() {
 function TeamProfile() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const routeSlug = params.slug;
   const isLegacyRoute = isLegacyEntityId(routeSlug);
   const { season: requestedSeason, isLoading: seasonsLoading } = useSeason();
@@ -51,6 +58,15 @@ function TeamProfile() {
   const [gamesPage, setGamesPage] = useState(0);
   const [schedulePage, setSchedulePage] = useState(0);
   const season = seasonOverride ?? requestedSeason;
+  // ?view= wins; without it, the calendar on wide screens and the list on phones.
+  const wide = useMediaQuery(CALENDAR_MEDIA, true);
+  const requestedView = searchParams.get("view");
+  const view =
+    requestedView === "calendar" || requestedView === "list"
+      ? requestedView
+      : wide
+        ? "calendar"
+        : "list";
 
   const teamsQuery = useQuery({
     queryKey: ["teams"],
@@ -71,9 +87,12 @@ function TeamProfile() {
 
   useEffect(() => {
     if (team && routeSlug !== slugifyName(team.team_name)) {
-      router.replace(withSeason(teamHref(team.team_name), season));
+      // Carry the chosen view through the move to the canonical URL.
+      const canonical = withSeason(teamHref(team.team_name), season);
+      const join = canonical.includes("?") ? "&" : "?";
+      router.replace(requestedView ? `${canonical}${join}view=${requestedView}` : canonical);
     }
-  }, [routeSlug, router, season, team]);
+  }, [requestedView, routeSlug, router, season, team]);
 
   const recordParams = {
     season: season || undefined,
@@ -104,6 +123,16 @@ function TeamProfile() {
         offset: schedulePage * SCHEDULE_PAGE_SIZE,
       }),
     enabled: Boolean(teamId && season),
+  });
+  const seasonGamesQuery = useQuery({
+    queryKey: ["team", teamId, "season-games", season],
+    queryFn: () => api.getTeamSeasonGames(teamId, { season: season || undefined }),
+    enabled: Boolean(teamId) && !seasonsLoading && view === "calendar",
+  });
+  const injuriesQuery = useQuery({
+    queryKey: ["team", teamId, "injuries"],
+    queryFn: () => api.listInjuries({ team_id: teamId }),
+    enabled: Boolean(teamId),
   });
   const overallQuery = useQuery({
     queryKey: ["team", teamId, "record", "overall", recordParams],
@@ -181,6 +210,12 @@ function TeamProfile() {
     setSeasonOverride(null);
     setOpponentId("");
     setLocation("all");
+  }
+
+  function setView(next: "calendar" | "list") {
+    const query = new URLSearchParams(searchParams.toString());
+    query.set("view", next);
+    router.replace(`${pathname}?${query}`, { scroll: false });
   }
 
   function resetPages() {
@@ -267,193 +302,276 @@ function TeamProfile() {
 
       <CapPosition team={team} />
 
-      <div className="flex flex-wrap items-end gap-3 border-y border-border py-3">
-        <p className="mr-2 type-eyebrow">Filter games</p>
-        <LabeledSelect
-          label="Opponent"
-          value={opponentId}
-          onChange={(value) => {
-            setOpponentId(value);
-            resetPages();
-          }}
-          options={[
-            { value: "", label: "Any" },
-            ...opponents.map((item) => ({ value: String(item.team_id), label: item.abbreviation })),
-          ]}
-        />
-        <div className="flex border border-input">
-          {(["all", "home", "away"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => {
-                setLocation(value);
+      <TeamInjuries
+        injuries={injuriesQuery.data?.data}
+        isLoading={injuriesQuery.isLoading}
+        error={injuriesQuery.error}
+      />
+
+      <div className="flex border border-input self-start" role="group" aria-label="Games view">
+        {(["calendar", "list"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={view === value}
+            onClick={() => setView(value)}
+            className={cn("seg-btn", view === value && "seg-btn-active")}
+          >
+            {value}
+          </button>
+        ))}
+      </div>
+
+      {view === "calendar" ? (
+        <section>
+          <h2 className="type-module mb-3">
+            {seasonGamesTitle(season, seasonGamesQuery.data?.data)}
+          </h2>
+          {seasonGamesQuery.isLoading ? (
+            <LoadingState label="Loading season…" />
+          ) : seasonGamesQuery.isError ? (
+            <ErrorState message={queryErrorMessage(seasonGamesQuery.error)} />
+          ) : (seasonGamesQuery.data?.data ?? []).length === 0 ? (
+            <EmptyState message="No games on the schedule for this season yet." />
+          ) : (
+            <SeasonCalendar
+              key={`${teamId}-${season}`}
+              games={seasonGamesQuery.data?.data ?? []}
+              timezone={timezone}
+            />
+          )}
+        </section>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-end gap-3 border-y border-border py-3">
+            <p className="mr-2 type-eyebrow">Filter games</p>
+            <LabeledSelect
+              label="Opponent"
+              value={opponentId}
+              onChange={(value) => {
+                setOpponentId(value);
                 resetPages();
               }}
-              className={cn("seg-btn", location === value && "seg-btn-active")}
-            >
-              {value}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="h-8 px-2 text-sm text-muted-foreground hover:text-foreground"
-          onClick={resetFilters}
-        >
-          Reset
-        </button>
-      </div>
-
-      <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-        <section>
-          <h2 className="type-module">
-            {gamesTotal ? `${formatNumber(gamesTotal)} games` : "Game results"}
-            {overall
-              ? ` · ${formatRecordWithWinPct(overall.wins, overall.losses, overall.win_pct)}`
-              : " · —"}
-          </h2>
-          {gamesQuery.isLoading ? (
-            <LoadingState label="Loading games…" />
-          ) : gamesQuery.isError ? (
-            <ErrorState message={queryErrorMessage(gamesQuery.error)} />
-          ) : games.length === 0 ? (
-            <EmptyState message="No games match these filters." />
-          ) : (
-            <table className="data-table mt-3">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Opp</th>
-                  <th>Res</th>
-                  <th className="text-right">Score</th>
-                  <th className="text-right">Margin</th>
-                  <th>Arena</th>
-                  <th>PBP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {games.map((game) => {
-                  const view = normalizeTeamGame(game, teamId);
-                  return (
-                    <tr key={game.game_id}>
-                      <td className="tabular">{formatDate(view.game_date)}</td>
-                      <td className="font-semibold">{view.opponent}</td>
-                      <td
-                        className={cn(
-                          "font-medium",
-                          view.result === "W" && "text-primary",
-                          view.result === "L" && "text-destructive"
-                        )}
-                      >
-                        {view.result ?? "—"}
-                      </td>
-                      <td className="tabular text-right">
-                        {view.teamScore != null && view.oppScore != null
-                          ? `${view.teamScore}–${view.oppScore}`
-                          : "—"}
-                      </td>
-                      <td className="tabular text-right">{formatSignedMargin(view.margin)}</td>
-                      <td className="text-muted-foreground">{view.arena}</td>
-                      <td>
-                        <Link
-                          href={withSeason(`/games/${game.game_id}`, view.season)}
-                          className="text-primary hover:underline"
-                        >
-                          PBP
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-          <PageControls
-            from={gamesFrom}
-            to={gamesTo}
-            total={gamesTotal}
-            page={gamesPage}
-            onPage={setGamesPage}
-          />
-        </section>
-
-        <aside>
-          <div className="border border-border p-4">
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="type-module">Remaining schedule</h2>
-              {scheduleTotal > 0 ? (
-                <span className="text-xs text-muted-foreground">
-                  {formatNumber(scheduleTotal)} games
-                </span>
-              ) : null}
-            </div>
-            {remainingScheduleQuery.isLoading ? (
-              <LoadingState label="Loading remaining schedule…" />
-            ) : remainingScheduleQuery.isError ? (
-              <ErrorState message={queryErrorMessage(remainingScheduleQuery.error)} />
-            ) : remainingSchedule.length === 0 ? (
-              <EmptyState message="No remaining games match these filters." />
-            ) : (
-              <div className="mt-3 divide-y divide-border">
-                {remainingSchedule.map((game) => {
-                  const isHome = game.home_team_id === teamId;
-                  const opponentTeamId = isHome ? game.away_team_id : game.home_team_id;
-                  const opponentAbbreviation = isHome
-                    ? game.away_team_abbreviation
-                    : game.home_team_abbreviation;
-                  const opponentName = isHome ? game.away_team_name : game.home_team_name;
-                  const tip = formatGameTime(game.game_date, game.start_time_et, timezone);
-                  return (
-                    <div key={game.game_id} className="py-2 first:pt-0 last:pb-0">
-                      <div className="flex justify-between gap-3 text-sm">
-                        <span className="whitespace-nowrap font-medium">{tip.date}</span>
-                        <span className="whitespace-nowrap tabular text-muted-foreground">
-                          {tip.zone ? `${tip.time} ${tip.zone}` : tip.time}
-                        </span>
-                      </div>
-                      <p className="mt-1 flex items-center gap-1.5 text-sm">
-                        <span className="shrink-0 text-muted-foreground">
-                          {isHome ? "vs" : "@"}
-                        </span>
-                        {opponentTeamId ? (
-                          <Link
-                            href={withSeason(
-                              teamHref(opponentName ?? opponentAbbreviation ?? ""),
-                              season
-                            )}
-                            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap font-semibold hover:text-primary"
-                          >
-                            <TeamLogo teamId={opponentTeamId} abbreviation={opponentAbbreviation} />
-                            {opponentAbbreviation ?? "Opponent"}
-                          </Link>
-                        ) : (
-                          <span className="whitespace-nowrap font-semibold">
-                            {opponentAbbreviation ?? "Opponent"}
-                          </span>
-                        )}
-                      </p>
-                      {game.arena || game.arena_city ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {game.arena || game.arena_city}
-                        </p>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <PageControls
-              from={scheduleFrom}
-              to={scheduleTo}
-              total={scheduleTotal}
-              page={schedulePage}
-              onPage={setSchedulePage}
+              options={[
+                { value: "", label: "Any" },
+                ...opponents.map((item) => ({
+                  value: String(item.team_id),
+                  label: item.abbreviation,
+                })),
+              ]}
             />
+            <div className="flex border border-input">
+              {(["all", "home", "away"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    setLocation(value);
+                    resetPages();
+                  }}
+                  className={cn("seg-btn", location === value && "seg-btn-active")}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="h-8 px-2 text-sm text-muted-foreground hover:text-foreground"
+              onClick={resetFilters}
+            >
+              Reset
+            </button>
           </div>
-        </aside>
-      </div>
+
+          <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+            <section>
+              <h2 className="type-module">
+                {gamesTotal ? `${formatNumber(gamesTotal)} games` : "Game results"}
+                {overall
+                  ? ` · ${formatRecordWithWinPct(overall.wins, overall.losses, overall.win_pct)}`
+                  : " · —"}
+              </h2>
+              {gamesQuery.isLoading ? (
+                <LoadingState label="Loading games…" />
+              ) : gamesQuery.isError ? (
+                <ErrorState message={queryErrorMessage(gamesQuery.error)} />
+              ) : games.length === 0 ? (
+                <EmptyState message="No games match these filters." />
+              ) : (
+                <table className="data-table mt-3">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Opp</th>
+                      <th>Res</th>
+                      <th className="text-right">Score</th>
+                      <th className="text-right">Margin</th>
+                      <th>Arena</th>
+                      <th>PBP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {games.map((game) => {
+                      const view = normalizeTeamGame(game, teamId);
+                      return (
+                        <tr key={game.game_id}>
+                          <td className="tabular">{formatDate(view.game_date)}</td>
+                          <td className="font-semibold">{view.opponent}</td>
+                          <td
+                            className={cn(
+                              "font-medium",
+                              view.result === "W" && "text-primary",
+                              view.result === "L" && "text-destructive"
+                            )}
+                          >
+                            {view.result ?? "—"}
+                          </td>
+                          <td className="tabular text-right">
+                            {view.teamScore != null && view.oppScore != null
+                              ? `${view.teamScore}–${view.oppScore}`
+                              : "—"}
+                          </td>
+                          <td className="tabular text-right">{formatSignedMargin(view.margin)}</td>
+                          <td className="text-muted-foreground">{view.arena}</td>
+                          <td>
+                            <Link
+                              href={withSeason(`/games/${game.game_id}`, view.season)}
+                              className="text-primary hover:underline"
+                            >
+                              PBP
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+              <PageControls
+                from={gamesFrom}
+                to={gamesTo}
+                total={gamesTotal}
+                page={gamesPage}
+                onPage={setGamesPage}
+              />
+            </section>
+
+            <aside>
+              <div className="border border-border p-4">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2 className="type-module">Remaining schedule</h2>
+                  {scheduleTotal > 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                      {formatNumber(scheduleTotal)} games
+                    </span>
+                  ) : null}
+                </div>
+                {remainingScheduleQuery.isLoading ? (
+                  <LoadingState label="Loading remaining schedule…" />
+                ) : remainingScheduleQuery.isError ? (
+                  <ErrorState message={queryErrorMessage(remainingScheduleQuery.error)} />
+                ) : remainingSchedule.length === 0 ? (
+                  <EmptyState message="No remaining games match these filters." />
+                ) : (
+                  <div className="mt-3 divide-y divide-border">
+                    {remainingSchedule.map((game) => {
+                      const isHome = game.home_team_id === teamId;
+                      const opponentTeamId = isHome ? game.away_team_id : game.home_team_id;
+                      const opponentAbbreviation = isHome
+                        ? game.away_team_abbreviation
+                        : game.home_team_abbreviation;
+                      const opponentName = isHome ? game.away_team_name : game.home_team_name;
+                      const tip = formatGameTime(game.game_date, game.start_time_et, timezone);
+                      return (
+                        <div key={game.game_id} className="py-2 first:pt-0 last:pb-0">
+                          <div className="flex justify-between gap-3 text-sm">
+                            <span className="whitespace-nowrap font-medium">{tip.date}</span>
+                            <span className="whitespace-nowrap tabular text-muted-foreground">
+                              {tip.zone ? `${tip.time} ${tip.zone}` : tip.time}
+                            </span>
+                          </div>
+                          <p className="mt-1 flex items-center gap-1.5 text-sm">
+                            <span className="shrink-0 text-muted-foreground">
+                              {isHome ? "vs" : "@"}
+                            </span>
+                            {opponentTeamId ? (
+                              <Link
+                                href={withSeason(
+                                  teamHref(opponentName ?? opponentAbbreviation ?? ""),
+                                  season
+                                )}
+                                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap font-semibold hover:text-primary"
+                              >
+                                <TeamLogo
+                                  teamId={opponentTeamId}
+                                  abbreviation={opponentAbbreviation}
+                                />
+                                {opponentAbbreviation ?? "Opponent"}
+                              </Link>
+                            ) : (
+                              <span className="whitespace-nowrap font-semibold">
+                                {opponentAbbreviation ?? "Opponent"}
+                              </span>
+                            )}
+                          </p>
+                          {game.arena || game.arena_city ? (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {game.arena || game.arena_city}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <PageControls
+                  from={scheduleFrom}
+                  to={scheduleTo}
+                  total={scheduleTotal}
+                  page={schedulePage}
+                  onPage={setSchedulePage}
+                />
+              </div>
+            </aside>
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+/** "2026-27 season · 3–1", the record counted from the games' own results. */
+function seasonGamesTitle(season: string, games: TeamSeasonGame[] | undefined) {
+  const label = `${games?.[0]?.season ?? season} season`;
+  if (!games) return label;
+  const wins = games.filter((game) => game.result === "W").length;
+  const losses = games.filter((game) => game.result === "L").length;
+  return `${label} · ${formatRecord(wins, losses)}`;
+}
+
+function TeamInjuries({
+  injuries,
+  isLoading,
+  error,
+}: {
+  injuries: PlayerInjury[] | undefined;
+  isLoading: boolean;
+  error: unknown;
+}) {
+  return (
+    <section>
+      <h2 className="type-module border-b border-rule-strong pb-2">Injury report</h2>
+      {isLoading ? (
+        <LoadingState label="Loading injuries…" />
+      ) : error ? (
+        <ErrorState message={queryErrorMessage(error)} />
+      ) : !injuries || injuries.length === 0 ? (
+        <p className="py-3 text-sm text-ink-2">Nobody on the injury report.</p>
+      ) : (
+        <InjuryList injuries={injuries} />
+      )}
+    </section>
   );
 }
 

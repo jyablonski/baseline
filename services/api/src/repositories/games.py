@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from queries.games import (
     GAME_EXISTS,
+    GAME_ON_SCHEDULE,
+    GET_GAME,
     GET_GAME_FLOW,
     LIST_BIGGEST_COLLAPSES,
     LIST_BOX_SCORE,
@@ -63,12 +65,20 @@ class GamesRepository:
             "opponent_team_id": opponent_team_id,
             "location": location,
             "arena_city": f"%{arena_city}%" if arena_city else None,
+            # The odds CTEs are shared with GET_GAME, which narrows them to one game.
+            "game_id": None,
             "limit": limit,
             "offset": offset,
         }
         total = self.db.execute(LIST_SCHEDULE_COUNT, params).scalar_one()
         rows = self.db.execute(LIST_SCHEDULE, params)
         return int(total), [_with_moneylines(dict(row._mapping)) for row in rows]
+
+    def get_game(self, game_id: UUID) -> dict | None:
+        row = self.db.execute(GET_GAME, {"game_id": game_id}).first()
+        if row is None:
+            return None
+        return _with_moneylines(dict(row._mapping))
 
     def list_biggest_collapses(
         self, *, season: str | None, blown_lead_team: str | None, limit: int
@@ -95,6 +105,9 @@ class GamesRepository:
     def game_exists(self, game_id: UUID) -> bool:
         value = self.db.execute(GAME_EXISTS, {"game_id": game_id}).scalar()
         return bool(value)
+
+    def game_on_schedule(self, game_id: UUID) -> bool:
+        return bool(self.db.execute(GAME_ON_SCHEDULE, {"game_id": game_id}).scalar())
 
     def list_play_by_play(self, game_id: UUID) -> list[dict]:
         rows = self.db.execute(LIST_PLAY_BY_PLAY, {"game_id": game_id})

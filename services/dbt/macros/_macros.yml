@@ -24,3 +24,24 @@ macros:
       - name: expression
         type: string
         description: Integer SQL expression (usually a column reference) to render.
+
+  - name: injury_status
+    description: SQL expression mapping a Basketball-Reference injury note to its status (Out, Day To Day, Out For Season) from the text before the first parenthesis, case-insensitively. Any other lead is Listed, never a guess.
+    arguments:
+      - name: description
+        type: string
+        description: SQL expression holding the injury note.
+
+  - name: injury_detail
+    description: SQL expression for the body part in the note's first parentheses ("Ankle" from "Out (Ankle) - ..."); null when there is none.
+    arguments:
+      - name: description
+        type: string
+        description: SQL expression holding the injury note.
+
+  - name: previous_season
+    description: SQL expression for the season label before the given one ("2026-27" gives "2025-26").
+    arguments:
+      - name: season
+        type: string
+        description: SQL expression holding a season label.

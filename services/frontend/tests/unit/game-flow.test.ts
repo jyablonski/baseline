@@ -2,13 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatBiggestRunCaption,
-  formatComebackBadge,
   formatFlowTooltipLabel,
   formatFlowTooltipPlay,
   formatFlowTooltipScore,
   formatGameClock,
   formatGameOption,
-  formatLeadShare,
   formatMatchupTitle,
   parseIsoClockToSeconds,
   periodLabel,
@@ -89,11 +87,7 @@ describe("biggest-run and matchup display", () => {
     ).toBe("NYK @ SAS (W)");
   });
 
-  it("formats lead share and picker labels", () => {
-    expect(formatLeadShare("home", "SAS", 0.84)).toBe("Home (SAS) led 84% of game");
-    expect(formatLeadShare("away", "NYK", null)).toBe("Away (NYK) led — of game");
-    expect(formatLeadShare("home", undefined, Number.NaN)).toBe("Home led — of game");
-    expect(formatLeadShare("away", null, 84)).toBe("Away led 84% of game");
+  it("formats picker labels and axis ticks", () => {
     expect(formatGameOption({ game_id: "1" })).toBe("Away @ Home");
     expect(quarterAxisTicks(null)[0]).toEqual({ seconds: 0, label: "Q1" });
   });
@@ -275,44 +269,5 @@ describe("selectBiggestRun", () => {
       { away: 10, home: 0, elapsed: 300 },
     ]);
     expect(selectBiggestRun(earlierWins, teams)?.biggest_run_start_seconds).toBe(0);
-  });
-});
-
-describe("formatComebackBadge", () => {
-  it("narrates a comeback with the entering-fourth deficit", () => {
-    expect(
-      formatComebackBadge({
-        largest_lead_blown: 29,
-        comeback_team_abbreviation: "NYK",
-        winner_margin_entering_fourth: -15,
-      })
-    ).toBe("NYK erased a 29-point deficit, down 15 entering Q4");
-  });
-
-  it("omits the tail when the winner already led entering the fourth", () => {
-    expect(
-      formatComebackBadge({
-        largest_lead_blown: 14,
-        comeback_team_abbreviation: "DET",
-        winner_margin_entering_fourth: 3,
-      })
-    ).toBe("DET erased a 14-point deficit");
-  });
-
-  it("calls out a wire-to-wire win instead", () => {
-    expect(
-      formatComebackBadge({
-        largest_lead_blown: 0,
-        is_wire_to_wire: true,
-        winning_team_abbreviation: "SAS",
-      })
-    ).toBe("SAS led wire to wire");
-  });
-
-  it("stays quiet for the ordinary few-point swing", () => {
-    expect(
-      formatComebackBadge({ largest_lead_blown: 6, comeback_team_abbreviation: "MIA" })
-    ).toBeNull();
-    expect(formatComebackBadge({ largest_lead_blown: null })).toBeNull();
   });
 });

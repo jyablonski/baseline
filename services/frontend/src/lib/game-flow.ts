@@ -74,18 +74,6 @@ export function formatMatchupTitle(flow: {
   return `${away}${awayWon ? " (W)" : ""} @ ${home}${homeWon ? " (W)" : ""}`;
 }
 
-export function formatLeadShare(
-  side: "home" | "away",
-  abbreviation: string | null | undefined,
-  pct: number | null | undefined
-): string {
-  const label = side === "home" ? "Home" : "Away";
-  const team = abbreviation ? ` (${abbreviation})` : "";
-  if (pct == null || Number.isNaN(pct)) return `${label}${team} led — of game`;
-  const shown = pct <= 1 ? Math.round(pct * 100) : Math.round(pct);
-  return `${label}${team} led ${shown}% of game`;
-}
-
 export function formatGameOption(game: {
   game_id: string;
   game_date?: string;
@@ -312,26 +300,7 @@ function isBetterRun(
   return candidate.start < current.start;
 }
 
-// Only leads worth narrating: the median game swings a few points, so a badge on
-// every "erased a 3-point deficit" would be noise. 10 matches the blown-leads
+// Only leads worth narrating: the median game swings a few points, so a
+// turning point on every "trailed by 3" would be noise. 10 matches the blown-leads
 // threshold used by the team_game_flow Cube measures.
-const NOTABLE_LEAD = 10;
-
-export function formatComebackBadge(flow: {
-  largest_lead_blown?: number | null;
-  comeback_team_abbreviation?: string | null;
-  is_wire_to_wire?: boolean | null;
-  winning_team_abbreviation?: string | null;
-  winner_margin_entering_fourth?: number | null;
-}): string | null {
-  if (flow.is_wire_to_wire) {
-    return flow.winning_team_abbreviation
-      ? `${flow.winning_team_abbreviation} led wire to wire`
-      : null;
-  }
-  const blown = flow.largest_lead_blown;
-  if (blown == null || blown < NOTABLE_LEAD || !flow.comeback_team_abbreviation) return null;
-  const entering = flow.winner_margin_entering_fourth;
-  const tail = entering != null && entering < 0 ? `, down ${Math.abs(entering)} entering Q4` : "";
-  return `${flow.comeback_team_abbreviation} erased a ${blown}-point deficit${tail}`;
-}
+export const NOTABLE_LEAD = 10;

@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 import pytest
 from ids import (
@@ -332,6 +333,119 @@ def test_list_schedule_sql_filters_upcoming() -> None:
     assert "fct_game_odds.market = 'spreads'" in sql
     assert "gold.fct_games_schedule" in str(LIST_SCHEDULE_COUNT)
     assert "gold.fct_games_schedule" in str(LIST_SEASONS)
+
+
+@pytest.mark.unit
+def test_get_game_scheduled(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": GAME_SCHEDULE,
+                        "season": "2026-27",
+                        "season_type": "Regular Season",
+                        "game_date": date(2026, 10, 22),
+                        "status": "Scheduled",
+                        "home_team_id": TEAM_GSW,
+                        "home_team_abbreviation": "GSW",
+                        "away_team_id": TEAM_LAL,
+                        "away_team_abbreviation": "LAL",
+                        "home_win_probability": 0.62,
+                        "away_win_probability": 0.38,
+                        "home_implied_wp": 0.6,
+                        "away_implied_wp": 0.4,
+                        "home_score": None,
+                        "away_score": None,
+                        "home_wins": 3,
+                        "home_losses": 1,
+                        "away_wins": 0,
+                        "away_losses": 4,
+                        "home_streak": "W2",
+                        "home_last_10": "3-1",
+                        "lead_highlight": None,
+                    }
+                )
+            ]
+        )
+    ]
+    response = client.get(f"/api/v1/games/{GAME_SCHEDULE}")
+    assert response.status_code == 200
+    row = response.json()["data"]
+    assert row["status"] == "Scheduled"
+    assert row["home_score"] is None
+    assert row["home_moneyline"] == -150
+    assert row["away_moneyline"] == 150
+    assert "home_implied_wp" not in row
+    assert (row["home_wins"], row["home_losses"]) == (3, 1)
+    assert row["home_streak"] == "W2"
+    assert row["away_streak"] is None
+    _, params = session.calls[-1]
+    assert params == {"game_id": UUID(GAME_SCHEDULE)}
+
+
+@pytest.mark.unit
+def test_get_game_final_without_odds(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": GAME_ONE,
+                        "season": "2024-25",
+                        "game_date": date(2024, 10, 22),
+                        "status": "Final",
+                        "home_team_id": TEAM_GSW,
+                        "away_team_id": TEAM_LAL,
+                        "home_score": 120,
+                        "away_score": 110,
+                        "home_wins": 0,
+                        "home_losses": 0,
+                        "away_wins": 0,
+                        "away_losses": 0,
+                        "lead_highlight": "Stephen Curry scores 42",
+                        "lead_highlight_detail": "42 pts",
+                    }
+                )
+            ]
+        )
+    ]
+    response = client.get(f"/api/v1/games/{GAME_ONE}")
+    assert response.status_code == 200
+    row = response.json()["data"]
+    assert (row["home_score"], row["away_score"]) == (120, 110)
+    assert row["home_moneyline"] is None
+    assert row["home_win_probability"] is None
+    assert row["lead_highlight"] == "Stephen Curry scores 42"
+
+
+@pytest.mark.unit
+def test_get_game_404(client, session, query_result) -> None:
+    session.queue = [query_result([])]
+    response = client.get(f"/api/v1/games/{MISSING_ID}")
+    assert response.status_code == 404
+
+
+@pytest.mark.unit
+def test_fixed_game_paths_are_not_read_as_a_game_id(client, session, query_result) -> None:
+    session.queue = [query_result([])]
+    assert client.get("/api/v1/games/highlights").status_code == 200
+    assert client.get("/api/v1/games/not-a-uuid").status_code == 422
+
+
+@pytest.mark.unit
+def test_get_game_sql_shares_schedule_odds_and_derives_pregame_records() -> None:
+    from queries.games import GET_GAME, LIST_SCHEDULE
+
+    sql = str(GET_GAME)
+    assert "fct_game_odds.market = 'h2h'" in sql
+    assert "LEFT JOIN gold.fct_game_predictions" in sql
+    # Records come from results before the game, never today's standings.
+    assert "fct_team_game_results.game_date < target_games.game_date" in sql
+    assert "THEN home_standings.streak END AS home_streak" in sql
+    assert "fct_daily_highlights.game_rank = 1" in sql
+    assert "fct_games_schedule.game_id = :game_id" in sql
+    assert ":game_id" in str(LIST_SCHEDULE)
 
 
 @pytest.mark.unit

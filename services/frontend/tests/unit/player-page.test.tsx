@@ -43,6 +43,9 @@ vi.mock("@/lib/api", () => ({
       mvp_season: "2025-26",
       mvp_score: 22.8,
       mvp_rank: 7,
+      injury_status: "Day To Day",
+      injury_detail: "Ankle",
+      injury_description: "Day To Day (Ankle) - Sprained his left ankle on Monday.",
     }),
     getPlayerBackToBacks: async () => ({
       player_id: "player-1",
@@ -96,6 +99,9 @@ describe("player profile", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Stephen Curry" })).toBeInTheDocument();
     });
+    const injury = screen.getByTestId("player-injury");
+    expect(injury).toHaveTextContent("Day To Day · Ankle");
+    expect(injury).toHaveTextContent("Sprained his left ankle on Monday.");
     const identity = screen.getByText("GSW").parentElement;
     expect(identity).toHaveTextContent("GSW");
     expect(identity).toHaveTextContent("#30");

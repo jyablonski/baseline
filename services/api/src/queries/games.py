@@ -72,6 +72,15 @@ GAME_EXISTS = text(
     """
 )
 
+# Any game on the schedule, in any state. GAME_EXISTS covers Finals only.
+GAME_ON_SCHEDULE = text(
+    """
+    SELECT 1
+    FROM gold.fct_games_schedule
+    WHERE fct_games_schedule.game_id = :game_id
+    """
+)
+
 LIST_PLAY_BY_PLAY = text(
     """
     SELECT
@@ -249,9 +258,10 @@ LIST_SCHEDULE_COUNT = text(
     """
 )
 
-LIST_SCHEDULE = text(
-    f"""
-    WITH home_teams AS (
+# The CTEs, columns, and joins every schedule-shaped read shares, so the
+# schedule list and the single game cannot disagree about a game's odds.
+SCHEDULE_CTES = """
+    home_teams AS (
         SELECT
             team_id,
             arena_name,
@@ -276,6 +286,7 @@ LIST_SCHEDULE = text(
         WHERE
             fct_game_odds.market = 'h2h'
             AND fct_game_odds.game_id IS NOT NULL
+            AND (CAST(:game_id AS uuid) IS NULL OR fct_game_odds.game_id = :game_id)
         GROUP BY fct_game_odds.game_id
     ),
 
@@ -288,10 +299,29 @@ LIST_SCHEDULE = text(
             fct_game_odds.market = 'spreads'
             AND fct_game_odds.game_id IS NOT NULL
             AND fct_game_odds.spread_home IS NOT NULL
+            AND (CAST(:game_id AS uuid) IS NULL OR fct_game_odds.game_id = :game_id)
         GROUP BY fct_game_odds.game_id
-    )
+    ),
 
-    SELECT
+    -- Notable players ruled out, per side, for the schedule's injury chip.
+    -- Day To Day is left off on purpose: a chip for every doubt means nothing.
+    notable_absences AS (
+        SELECT
+            fct_game_injuries.game_id,
+            array_agg(fct_game_injuries.player_name ORDER BY fct_game_injuries.player_name)
+                FILTER (WHERE fct_game_injuries.side = 'home') AS home_notable_out,
+            array_agg(fct_game_injuries.player_name ORDER BY fct_game_injuries.player_name)
+                FILTER (WHERE fct_game_injuries.side = 'away') AS away_notable_out
+        FROM gold.fct_game_injuries
+        WHERE
+            fct_game_injuries.is_notable
+            AND fct_game_injuries.injury_status IN ('Out', 'Out For Season')
+            AND (CAST(:game_id AS uuid) IS NULL OR fct_game_injuries.game_id = :game_id)
+        GROUP BY fct_game_injuries.game_id
+    )
+"""
+
+SCHEDULE_COLUMNS = """
         fct_games_schedule.game_id,
         fct_games_schedule.season,
         fct_games_schedule.season_type,
@@ -326,8 +356,12 @@ LIST_SCHEDULE = text(
         moneyline_odds.away_implied_wp,
         moneyline_odds.odds_bookmaker_count,
         moneyline_odds.odds_updated_at,
-        spread_odds.home_spread
-    FROM gold.fct_games_schedule
+        spread_odds.home_spread,
+        coalesce(notable_absences.home_notable_out, ARRAY[]::text[]) AS home_notable_out,
+        coalesce(notable_absences.away_notable_out, ARRAY[]::text[]) AS away_notable_out
+"""
+
+SCHEDULE_JOINS = """
     LEFT JOIN home_teams
         ON home_teams.team_id = fct_games_schedule.home_team_id
     -- One row per game: the mart keeps only the champion model's latest as_of.
@@ -337,12 +371,164 @@ LIST_SCHEDULE = text(
         ON moneyline_odds.game_id = fct_games_schedule.game_id
     LEFT JOIN spread_odds
         ON spread_odds.game_id = fct_games_schedule.game_id
+    LEFT JOIN notable_absences
+        ON notable_absences.game_id = fct_games_schedule.game_id
+"""
+
+LIST_SCHEDULE = text(
+    f"""
+    WITH {SCHEDULE_CTES}
+
+    SELECT
+        {SCHEDULE_COLUMNS}
+    FROM gold.fct_games_schedule
+    {SCHEDULE_JOINS}
     WHERE {SCHEDULE_FILTERS}
     ORDER BY
         fct_games_schedule.game_date ASC,
         fct_games_schedule.start_time_et ASC NULLS LAST,
         fct_games_schedule.game_id ASC
     LIMIT :limit OFFSET :offset
+    """
+)
+
+# One game in any state: the schedule row plus what only a single game needs.
+# Records are each team's W-L in that season and season type *entering* the
+# game, from Final results dated before it. Today's fct_standings would be
+# wrong for a past game, since it is a season-to-date upsert. Form (streak and
+# last 10) has no as-of version, so it is only filled in before the game.
+GET_GAME = text(
+    f"""
+    WITH {SCHEDULE_CTES},
+
+    target_games AS (
+        SELECT
+            fct_games_schedule.game_id,
+            fct_games_schedule.season,
+            fct_games_schedule.season_type,
+            fct_games_schedule.game_date,
+            fct_games_schedule.home_team_id,
+            fct_games_schedule.away_team_id
+        FROM gold.fct_games_schedule
+        WHERE fct_games_schedule.game_id = :game_id
+    ),
+
+    pregame_records AS (
+        SELECT
+            count(*) FILTER (
+                WHERE fct_team_game_results.winning_team_id = target_games.home_team_id
+            ) AS home_wins,
+            count(*) FILTER (
+                WHERE
+                    target_games.home_team_id IN (
+                        fct_team_game_results.home_team_id,
+                        fct_team_game_results.away_team_id
+                    )
+                    AND fct_team_game_results.winning_team_id <> target_games.home_team_id
+            ) AS home_losses,
+            count(*) FILTER (
+                WHERE fct_team_game_results.winning_team_id = target_games.away_team_id
+            ) AS away_wins,
+            count(*) FILTER (
+                WHERE
+                    target_games.away_team_id IN (
+                        fct_team_game_results.home_team_id,
+                        fct_team_game_results.away_team_id
+                    )
+                    AND fct_team_game_results.winning_team_id <> target_games.away_team_id
+            ) AS away_losses
+        FROM target_games
+        INNER JOIN gold.fct_team_game_results
+            ON fct_team_game_results.season = target_games.season
+            AND fct_team_game_results.season_type IS NOT DISTINCT FROM target_games.season_type
+            AND fct_team_game_results.game_date < target_games.game_date
+            AND (
+                fct_team_game_results.home_team_id IN (target_games.home_team_id, target_games.away_team_id)
+                OR fct_team_game_results.away_team_id IN (target_games.home_team_id, target_games.away_team_id)
+            )
+    ),
+
+    home_standings AS (
+        SELECT
+            fct_standings.team_id,
+            fct_standings.season,
+            fct_standings.streak,
+            fct_standings.last_10
+        FROM gold.fct_standings
+        WHERE fct_standings.season_type = 'Regular Season'
+    ),
+
+    away_standings AS (
+        SELECT
+            fct_standings.team_id,
+            fct_standings.season,
+            fct_standings.streak,
+            fct_standings.last_10
+        FROM gold.fct_standings
+        WHERE fct_standings.season_type = 'Regular Season'
+    ),
+
+    home_team_details AS (
+        SELECT
+            dim_teams.team_id,
+            dim_teams.nickname,
+            dim_teams.conference
+        FROM gold.dim_teams
+    ),
+
+    away_team_details AS (
+        SELECT
+            dim_teams.team_id,
+            dim_teams.nickname,
+            dim_teams.conference
+        FROM gold.dim_teams
+    ),
+
+    lead_highlights AS (
+        SELECT
+            fct_daily_highlights.game_id,
+            fct_daily_highlights.headline,
+            fct_daily_highlights.detail
+        FROM gold.fct_daily_highlights
+        WHERE
+            fct_daily_highlights.game_id = :game_id
+            AND fct_daily_highlights.game_rank = 1
+    )
+
+    SELECT
+        {SCHEDULE_COLUMNS},
+        fct_games_schedule.home_score,
+        fct_games_schedule.away_score,
+        pregame_records.home_wins,
+        pregame_records.home_losses,
+        pregame_records.away_wins,
+        pregame_records.away_losses,
+        CASE WHEN fct_games_schedule.status <> 'Final' THEN home_standings.streak END AS home_streak,
+        CASE WHEN fct_games_schedule.status <> 'Final' THEN home_standings.last_10 END AS home_last_10,
+        CASE WHEN fct_games_schedule.status <> 'Final' THEN away_standings.streak END AS away_streak,
+        CASE WHEN fct_games_schedule.status <> 'Final' THEN away_standings.last_10 END AS away_last_10,
+        lead_highlights.headline AS lead_highlight,
+        lead_highlights.detail AS lead_highlight_detail,
+        home_team_details.nickname AS home_team_nickname,
+        home_team_details.conference AS home_team_conference,
+        away_team_details.nickname AS away_team_nickname,
+        away_team_details.conference AS away_team_conference
+    FROM gold.fct_games_schedule
+    {SCHEDULE_JOINS}
+    CROSS JOIN pregame_records
+    LEFT JOIN home_standings
+        ON home_standings.team_id = fct_games_schedule.home_team_id
+        AND home_standings.season = fct_games_schedule.season
+    LEFT JOIN away_standings
+        ON away_standings.team_id = fct_games_schedule.away_team_id
+        AND away_standings.season = fct_games_schedule.season
+    LEFT JOIN lead_highlights
+        ON lead_highlights.game_id = fct_games_schedule.game_id
+    LEFT JOIN home_team_details
+        ON home_team_details.team_id = fct_games_schedule.home_team_id
+    LEFT JOIN away_team_details
+        ON away_team_details.team_id = fct_games_schedule.away_team_id
+    WHERE fct_games_schedule.game_id = :game_id
     """
 )
 
