@@ -183,13 +183,36 @@ jobs:
             IMAGE_PREFIX=${{ needs.images.outputs.prefix }}
             IMAGE_TAG=${{ github.sha }}
 
+  # From the runner, not the server: prod-health already passed on the box, so
+  # this covers DNS, TLS, Caddy routing, and that this sha is what's served.
+  smoke:
+    name: Smoke Test Production
+    if: vars.ENABLE_OCI_DEPLOY == 'true' && github.event_name != 'pull_request'
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Smoke test the live site
+        run: make prod-smoke EXPECTED_SHA=${{ github.sha }}
+
   # Fires on main pushes only, and `always()` so a failed job still reports.
   # Needs every job: `contains(needs.*.result, 'failure')` is what picks the
   # template, so anything omitted here cannot turn the message red.
   notify:
     name: Slack Notification
     needs:
-      [quality, frontend, frontend-e2e, dbt-e2e, dbt-score, python, admin-jobs-e2e, images, deploy]
+      [
+        quality,
+        frontend,
+        frontend-e2e,
+        dbt-e2e,
+        dbt-score,
+        python,
+        admin-jobs-e2e,
+        images,
+        deploy,
+        smoke,
+      ]
     if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:

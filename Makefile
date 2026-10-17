@@ -6,7 +6,7 @@
 	refresh-daily refresh-daily-once seed-demo seed-demo-clean \
 	prod-config prod-up prod-migrate prod-dbt prod-deploy prod-release prod-build prod-pull prod-pull-tools prod-record-deploy \
 	prod-pipeline-status prod-pipeline-enable prod-pipeline-disable prod-refresh prod-refresh-daily prod-refresh-daily-once \
-	prod-health prod-prune prod-check-freshness check-freshness prod-caddy-reload \
+	prod-health prod-smoke prod-prune prod-check-freshness check-freshness prod-caddy-reload \
 	prod-scrape prod-ml prod-ml-backfill prod-ml-train prod-ml-snapshot admin-jobs prod-admin-jobs test-admin-jobs quality \
 	db-backup prod-db-backup db-restore-test db-restore prod-db-restore test-backups
 
@@ -242,6 +242,11 @@ prod-health: ## Fail the deploy if api, frontend, cube, or mcp did not come back
 
 # Dangling layers only. `-a` would delete the previous release's images and
 # with them the fast rollback path.
+# From outside the box, unlike prod-health: CI runs this after deploy. Pass
+# EXPECTED_SHA=<sha> to also assert that commit is the one being served.
+prod-smoke: ## Read-only checks against PUBLIC_URL (DNS, TLS, Caddy routes, deployed sha)
+	EXPECTED_SHA="$(EXPECTED_SHA)" ./scripts/smoke-test.sh
+
 prod-prune: ## Drop dangling layers left behind by the last build
 	docker image prune -f
 
