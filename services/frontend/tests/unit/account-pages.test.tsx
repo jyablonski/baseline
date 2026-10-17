@@ -491,8 +491,15 @@ describe("picks page", () => {
             result: "won",
             home_score: 108,
             away_score: 112,
+            is_upset: true,
           }),
-          pick({ game_id: "fav", result: "won", home_score: 120, away_score: 110 }),
+          pick({
+            game_id: "fav",
+            result: "won",
+            home_score: 120,
+            away_score: 110,
+            is_upset: false,
+          }),
           pick({
             game_id: "lost",
             picked_team_id: "away",
@@ -502,6 +509,8 @@ describe("picks page", () => {
             result: "lost",
             home_score: 101,
             away_score: 97,
+            // An upset, but on the wrong side of it.
+            is_upset: true,
           }),
           pick({
             game_id: "void",
@@ -555,6 +564,9 @@ describe("picks page", () => {
     expect(within(lost).getByText("−$50")).toHaveClass("text-destructive");
     expect(within(voided).getByText("No longer scheduled")).toBeInTheDocument();
     expect(within(voided).getByTitle("Void")).toBeInTheDocument();
+    // Only a won pick on an upset is tagged.
+    expect(within(dog).getByTestId("called-upset")).toHaveTextContent("Called the upset");
+    expect(screen.getAllByTestId("called-upset")).toHaveLength(1);
   });
 
   it("names the best call by its score when nothing was staked on it", async () => {

@@ -265,6 +265,14 @@ function Settled({ picks }: { picks: UserPick[] }) {
               <PickGameLink pick={pick} />
             </span>
             <span className="type-caption">{finalScore(pick)}</span>
+            {pick.result === "won" && pick.is_upset ? (
+              <span
+                className="type-eyebrow tracking-normal text-primary"
+                data-testid="called-upset"
+              >
+                Called the upset
+              </span>
+            ) : null}
             <span className="type-caption tabular ml-auto w-14 text-right">
               {pick.stake ? formatMoney(pick.stake) : "–"}
             </span>

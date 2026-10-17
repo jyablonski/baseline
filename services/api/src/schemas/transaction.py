@@ -25,6 +25,8 @@ class Transaction(BaseModel):
     team_names: list[str] = Field(default_factory=list)
     team_abbreviations: list[str] = Field(default_factory=list)
     player_names: list[str] = Field(default_factory=list)
+    # Only the players matched to a Baseline UUID, under Baseline's name for them.
+    linked_player_names: list[str] = Field(default_factory=list)
 
 
 class TransactionParticipant(BaseModel):

@@ -20,7 +20,16 @@ PARTICIPANT_ROLLUP = """
         ) AS team_abbreviations,
         array_agg(
             participants.display_name ORDER BY participants.display_name
-        ) FILTER (WHERE participants.participant_type = 'player') AS player_names
+        ) FILTER (WHERE participants.participant_type = 'player') AS player_names,
+        -- Baseline's own name for each player matched to a UUID: the only ones
+        -- a player page can be found by.
+        array_agg(
+            participants.player_name ORDER BY participants.player_name
+        ) FILTER (
+            WHERE participants.participant_type = 'player'
+              AND participants.player_id IS NOT NULL
+              AND participants.player_name IS NOT NULL
+        ) AS linked_player_names
     FROM gold.fct_transaction_participants AS participants
     WHERE participants.transaction_key = transactions.transaction_key
 """
@@ -61,7 +70,8 @@ LIST_TRANSACTIONS = text(
         transactions.source_url,
         coalesce(rollup.team_names, ARRAY[]::text[]) AS team_names,
         coalesce(rollup.team_abbreviations, ARRAY[]::text[]) AS team_abbreviations,
-        coalesce(rollup.player_names, ARRAY[]::text[]) AS player_names
+        coalesce(rollup.player_names, ARRAY[]::text[]) AS player_names,
+        coalesce(rollup.linked_player_names, ARRAY[]::text[]) AS linked_player_names
     FROM gold.fct_transactions AS transactions
     LEFT JOIN LATERAL ({PARTICIPANT_ROLLUP}) AS rollup ON TRUE
     {TRANSACTIONS_FILTER}
@@ -117,7 +127,8 @@ GET_TRANSACTION = text(
         transactions.source_url,
         coalesce(rollup.team_names, ARRAY[]::text[]) AS team_names,
         coalesce(rollup.team_abbreviations, ARRAY[]::text[]) AS team_abbreviations,
-        coalesce(rollup.player_names, ARRAY[]::text[]) AS player_names
+        coalesce(rollup.player_names, ARRAY[]::text[]) AS player_names,
+        coalesce(rollup.linked_player_names, ARRAY[]::text[]) AS linked_player_names
     FROM gold.fct_transactions AS transactions
     LEFT JOIN LATERAL ({PARTICIPANT_ROLLUP}) AS rollup ON TRUE
     WHERE transactions.transaction_key = :transaction_key

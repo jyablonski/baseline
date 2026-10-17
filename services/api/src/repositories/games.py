@@ -19,6 +19,7 @@ from queries.games import (
     LIST_SCHEDULE,
     LIST_SCHEDULE_COUNT,
     LIST_SEASONS,
+    LIST_UPSETS,
 )
 
 
@@ -86,6 +87,13 @@ class GamesRepository:
         rows = self.db.execute(
             LIST_BIGGEST_COLLAPSES,
             {"season": season, "blown_lead_team": blown_lead_team, "limit": limit},
+        )
+        return [dict(row._mapping) for row in rows]
+
+    def list_upsets(self, *, season: str | None, season_type: str | None, limit: int) -> list[dict]:
+        rows = self.db.execute(
+            LIST_UPSETS,
+            {"season": season, "season_type": season_type, "limit": limit},
         )
         return [dict(row._mapping) for row in rows]
 

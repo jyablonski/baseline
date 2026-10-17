@@ -53,4 +53,4 @@ CORS allows `http://localhost:3000`; production is same-origin through Caddy.
 
 ## Not built
 
-A standalone per-game predictions API (win probability ships only as schedule columns), a transactions page, always-on scraper/dbt/ml on the VM.
+A standalone per-game predictions API (win probability ships only as schedule columns), a dedicated transactions page (transactions sit on team and player pages), always-on scraper/dbt/ml on the VM.

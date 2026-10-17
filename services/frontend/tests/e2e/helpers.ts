@@ -60,6 +60,31 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         });
       }
 
+      if (url.includes("/api/v1/transactions")) {
+        return json({
+          data: empty
+            ? []
+            : [
+                {
+                  transaction_key: "tx-1",
+                  transaction_date: "2025-07-06",
+                  season: "2025-26",
+                  description:
+                    "The Golden State Warriors signed Stephen Curry to a contract extension.",
+                  team_count: 1,
+                  player_count: 1,
+                  source_url:
+                    "https://www.basketball-reference.com/leagues/NBA_2026_transactions.html",
+                  team_names: ["Golden State Warriors"],
+                  team_abbreviations: ["GSW"],
+                  player_names: ["Stephen Curry"],
+                  linked_player_names: ["Stephen Curry"],
+                },
+              ],
+          meta: { total: empty ? 0 : 1, limit: 10, offset: 0 },
+        });
+      }
+
       if (url.includes("/status")) {
         return json({
           data: empty
@@ -916,8 +941,37 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         });
       }
 
-      // One game by id. After /games/highlights and /games/collapses, which
-      // would otherwise read as an id.
+      if (url.includes("/games/upsets")) {
+        return json({
+          data: empty
+            ? []
+            : [
+                {
+                  game_id: "0022400001",
+                  season: "2025-26",
+                  season_type: "Regular Season",
+                  game_date: "2024-10-22",
+                  home_team_id: 1610612744,
+                  home_team_abbreviation: "GSW",
+                  away_team_id: 1610612747,
+                  away_team_abbreviation: "LAL",
+                  home_score: 120,
+                  away_score: 110,
+                  winning_team_id: 1610612744,
+                  winner_location: "home",
+                  winner_market_wp: 0.31,
+                  model_winner_wp: 0.47,
+                  upset_magnitude: 1.17,
+                  upset_rank: 1,
+                  model_called_upset: false,
+                },
+              ],
+          meta: { total: empty ? 0 : 1, limit: 25, offset: 0 },
+        });
+      }
+
+      // One game by id. After /games/highlights, /games/collapses and
+      // /games/upsets, which would otherwise read as an id.
       const singleGame = url.match(/\/api\/v1\/games\/([^/?]+)(?:\?|$)/);
       if (singleGame) {
         const base = {

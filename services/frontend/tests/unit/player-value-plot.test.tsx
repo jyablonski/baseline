@@ -239,14 +239,21 @@ describe("player value scatter pieces", () => {
       <PlayerValueTooltip active payload={[{ payload: plotted() }]} />
     );
     expect(container).toHaveTextContent("Jaren Jackson Jr. · MEM");
-    expect(container).toHaveTextContent("MVP 20.0 (#40) · $30M");
+    expect(container).toHaveTextContent("MVP Score: 20.0 (#40) · $30M");
     expect(container).toHaveTextContent("Average · 60 games");
+    // Average stays the muted line color; the other groups take their dot color.
+    expect(screen.getByText("Average")).not.toHaveAttribute("style");
+
+    rerender(
+      <PlayerValueTooltip active payload={[{ payload: plotted({ category: "overpaid" }) }]} />
+    );
+    expect(screen.getByText("Overpaid")).toHaveStyle({ color: "#9B2C22" });
 
     rerender(
       <PlayerValueTooltip active payload={[{ payload: plotted({ team_abbreviation: null }) }]} />
     );
     expect(container).not.toHaveTextContent("·  ·");
-    expect(container).toHaveTextContent("Jaren Jackson Jr.MVP");
+    expect(container).toHaveTextContent("Jaren Jackson Jr.MVP Score:");
 
     rerender(<PlayerValueTooltip active={false} payload={[{ payload: plotted() }]} />);
     expect(container).toBeEmptyDOMElement();

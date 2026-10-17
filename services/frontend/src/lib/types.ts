@@ -491,6 +491,11 @@ export type GameDetail = ScheduledGame & {
   /** East or West; a playoff series across them is the Finals. */
   home_team_conference?: string | null;
   away_team_conference?: string | null;
+  /** Null unless the game is Final with a captured pregame line. */
+  is_upset?: boolean | null;
+  /** The winner's market win probability from that morning's line. */
+  winner_market_wp?: number | null;
+  model_called_upset?: boolean | null;
 };
 
 export type ScorecardRow = {
@@ -563,6 +568,46 @@ export type GameCollapse = {
   winner_margin_entering_fourth?: number | null;
   lead_changes?: number | null;
   overtime_periods?: number | null;
+};
+
+// A Final game the market underdog won, biggest surprise first.
+export type GameUpset = {
+  game_id: string;
+  season: string;
+  season_type?: string | null;
+  game_date: string;
+  home_team_id: string;
+  home_team_abbreviation?: string | null;
+  away_team_id: string;
+  away_team_abbreviation?: string | null;
+  home_score?: number | null;
+  away_score?: number | null;
+  winning_team_id?: string | null;
+  winner_location?: string | null;
+  /** The morning line, not a true close. */
+  winner_market_wp: number;
+  /** The champion model's pregame WP for the winner, when it scored the game. */
+  model_winner_wp?: number | null;
+  upset_magnitude: number;
+  upset_rank?: number | null;
+  model_called_upset?: boolean | null;
+};
+
+// One Basketball-Reference transactions-log entry. The description is free
+// prose; only the participants Baseline matched are safe to link.
+export type Transaction = {
+  transaction_key: string;
+  transaction_date: string;
+  season: string;
+  description: string;
+  team_count: number;
+  player_count: number;
+  source_url: string;
+  team_names: string[];
+  team_abbreviations: string[];
+  player_names: string[];
+  /** Players matched to a Baseline UUID, under Baseline's name for them. */
+  linked_player_names: string[];
 };
 
 // A game's lead highlight for the day; the featured few are the home page cards.
@@ -845,6 +890,8 @@ export type UserPick = {
   profit: number | null;
   /** Did the model's favourite win? Null while open or when the model had no pick. */
   model_correct: boolean | null;
+  /** Did the market underdog win? Null when no pregame line was captured. */
+  is_upset?: boolean | null;
   game_date: string | null;
   start_time_et: string | null;
   game_status: string | null;

@@ -1,6 +1,6 @@
 -- Seeded gold mart rows for API/MCP integration tests (no dbt required).
 
-TRUNCATE gold.fct_game_injuries, gold.fct_player_injuries, gold.fct_daily_highlights, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
+TRUNCATE gold.fct_transaction_participants, gold.fct_transactions, gold.fct_game_upsets, gold.fct_game_injuries, gold.fct_player_injuries, gold.fct_daily_highlights, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
          gold.fct_standings, gold.fct_player_mvp_scores, gold.fct_player_season_stats, gold.fct_player_game_logs,
          gold.fct_team_game_results, gold.fct_games_schedule, gold.dim_players, gold.dim_teams
          RESTART IDENTITY CASCADE;
@@ -221,3 +221,59 @@ INSERT INTO gold.fct_game_injuries (
     ('00000000-0000-4000-8000-000000000204', CURRENT_DATE + 14, '2024-25', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'away',
      '00000000-0000-4000-8000-000000000102', 'Kawhi Leonard', 'Day To Day', 'Knee', 'Day To Day (Knee) - Soreness',
      CURRENT_DATE - 2, CURRENT_DATE, TRUE, NULL);
+
+-- GAME_ONE: GSW won at 30%, a line the model disagreed with. GAME_THREE: LAC
+-- won at 42% with the model on GSW. GAME_TWO: the favourite won.
+INSERT INTO gold.fct_game_upsets (
+    game_id, season, season_type, game_date,
+    home_team_id, home_team_abbreviation, away_team_id, away_team_abbreviation,
+    home_score, away_score, winning_team_id, winner_location,
+    favorite_team_id, underdog_team_id, underdog_team_abbreviation,
+    home_market_wp, away_market_wp, underdog_market_wp, winner_market_wp,
+    underdog_fair_moneyline, bookmaker_count, is_upset, upset_magnitude,
+    model_version, model_home_wp, model_winner_wp, upset_rank, model_called_upset
+) VALUES
+    ('00000000-0000-4000-8000-000000000201', '2024-25', 'Regular Season', '2024-10-22',
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC',
+     120, 110, '7bf8726a-a852-452d-b81f-14839127c5fb', 'home',
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW',
+     0.30, 0.70, 0.30, 0.30, 233, 6, TRUE, 1.204, 'elo-v1', 0.55, 0.55, 1, TRUE),
+    ('00000000-0000-4000-8000-000000000202', '2024-25', 'Regular Season', '2024-10-23',
+     'a96f53b4-0f5c-4cb6-8b88-21ba05224cae', 'CHI', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC',
+     105, 112, 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'away',
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'a96f53b4-0f5c-4cb6-8b88-21ba05224cae', 'CHI',
+     0.30, 0.70, 0.30, 0.70, 233, 6, FALSE, 0.357, 'elo-v1', 0.35, 0.65, NULL, FALSE),
+    ('00000000-0000-4000-8000-000000000203', '2024-25', 'Regular Season', '2024-10-25',
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW',
+     118, 115, 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'home',
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC',
+     0.42, 0.58, 0.42, 0.42, 138, 5, TRUE, 0.868, 'elo-v1', 0.40, 0.40, 2, FALSE);
+
+-- A trade naming one player Baseline matched (Curry) and one it could not, and
+-- an older GSW signing.
+INSERT INTO gold.fct_transactions (
+    transaction_key, transaction_date, season, description, team_count, player_count, source_url
+) VALUES
+    ('tx-trade', '2025-07-06', '2025-26',
+     'The Golden State Warriors traded Stephen Curry and Unmatched Prospect to the LA Clippers.',
+     2, 2, 'https://www.basketball-reference.com/leagues/NBA_2026_transactions.html'),
+    ('tx-signing', '2025-07-01', '2025-26',
+     'The Golden State Warriors signed Stephen Curry to a contract extension.',
+     1, 1, 'https://www.basketball-reference.com/leagues/NBA_2026_transactions.html');
+
+INSERT INTO gold.fct_transaction_participants (
+    transaction_key, transaction_date, season, participant_type, direction, bref_slug,
+    display_name, player_id, team_id, team_abbreviation, player_name, match_method
+) VALUES
+    ('tx-trade', '2025-07-06', '2025-26', 'team', 'from', 'GSW', 'Golden State Warriors',
+     NULL, '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', NULL, 'external_id'),
+    ('tx-trade', '2025-07-06', '2025-26', 'team', 'to', 'LAC', 'LA Clippers',
+     NULL, 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', NULL, 'external_id'),
+    ('tx-trade', '2025-07-06', '2025-26', 'player', 'none', 'curryst01', 'Stephen Curry',
+     '00000000-0000-4000-8000-000000000101', NULL, NULL, 'Stephen Curry', 'external_id'),
+    ('tx-trade', '2025-07-06', '2025-26', 'player', 'none', 'prospun01', 'Unmatched Prospect',
+     NULL, NULL, NULL, NULL, 'unmatched'),
+    ('tx-signing', '2025-07-01', '2025-26', 'team', 'none', 'GSW', 'Golden State Warriors',
+     NULL, '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', NULL, 'external_id'),
+    ('tx-signing', '2025-07-01', '2025-26', 'player', 'none', 'curryst01', 'Stephen Curry',
+     '00000000-0000-4000-8000-000000000101', NULL, NULL, 'Stephen Curry', 'external_id');

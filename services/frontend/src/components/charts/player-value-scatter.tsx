@@ -108,10 +108,21 @@ export function PlayerValueTooltip({
         {point.team_abbreviation ? ` · ${point.team_abbreviation}` : ""}
       </p>
       <p style={{ margin: 0, paddingTop: 4 }}>
-        MVP {formatStat(point.mvp_score)} (#{point.mvp_rank}) · {formatUsdMillions(point.salary)}
+        MVP Score: {formatStat(point.mvp_score)} (#{point.mvp_rank}) ·{" "}
+        {formatUsdMillions(point.salary)}
       </p>
       <p style={{ margin: 0, paddingTop: 2, color: "#5C574F" }}>
-        {CATEGORY_LABEL[point.category]} · {point.games_played} games
+        {/* Average's dot color is too pale to read as text, so it keeps the muted line color. */}
+        <span
+          style={
+            point.category === "fair"
+              ? undefined
+              : { color: CATEGORY_COLOR[point.category], fontWeight: 600 }
+          }
+        >
+          {CATEGORY_LABEL[point.category]}
+        </span>{" "}
+        · {point.games_played} games
       </p>
     </div>
   );

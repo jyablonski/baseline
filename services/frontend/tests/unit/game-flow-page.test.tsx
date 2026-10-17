@@ -615,6 +615,24 @@ describe("game page states", () => {
       "Market Had NYK at 55% before tip-off · Called it",
     ]);
     expect(screen.queryByRole("heading", { name: "Who wins?" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("upset-note")).not.toBeInTheDocument();
+  });
+
+  it("badges an upset with the winner's morning line, and says when the model saw it", async () => {
+    finalWithoutFlow();
+    getGame.mockResolvedValue({
+      ...FINALS_GAME,
+      season_type: "Regular Season",
+      is_upset: true,
+      winner_market_wp: 0.28,
+      model_called_upset: true,
+    });
+    renderPage();
+
+    const note = await screen.findByTestId("upset-note");
+    expect(note).toHaveTextContent("Upset NYK won at 28% on the morning line");
+    expect(note).toHaveTextContent("The model had NYK favoured");
+    expect(note).not.toHaveTextContent(/closing/i);
   });
 
   it("tells a Finals game as the series: game number, record, and the clincher", async () => {

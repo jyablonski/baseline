@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const getPlayerGameLog = vi.fn();
+const listTransactions = vi.fn();
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/players/stephen-curry",
@@ -12,6 +13,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/api", () => ({
   api: {
+    listTransactions: (...args: unknown[]) => listTransactions(...args),
     findPlayerBySlug: async () => ({
       player_id: "player-1",
       full_name: "Stephen Curry",
@@ -65,6 +67,7 @@ import { Providers } from "@/components/providers";
 
 describe("player profile", () => {
   it("uses full identity metadata, recent points, and PBP log links", async () => {
+    listTransactions.mockResolvedValue({ data: [], meta: { total: 0, limit: 10, offset: 0 } });
     getPlayerGameLog.mockResolvedValue({
       data: [
         {
@@ -122,5 +125,39 @@ describe("player profile", () => {
       "href",
       "/games/game-1?season=2025-26"
     );
+    // No transactions on file: the section is left out entirely.
+    expect(listTransactions).toHaveBeenCalledWith({ player_id: "player-1", limit: 10, offset: 0 });
+    expect(screen.queryByRole("heading", { name: "Transactions" })).not.toBeInTheDocument();
+  });
+
+  it("shows the player's transactions once there are any", async () => {
+    getPlayerGameLog.mockResolvedValue({ data: [], meta: { total: 0, limit: 10, offset: 0 } });
+    listTransactions.mockResolvedValue({
+      data: [
+        {
+          transaction_key: "tx-1",
+          transaction_date: "2025-07-06",
+          season: "2025-26",
+          description: "The Golden State Warriors signed Stephen Curry to a contract extension.",
+          team_count: 1,
+          player_count: 1,
+          source_url: "https://www.basketball-reference.com/leagues/NBA_2026_transactions.html",
+          team_names: ["Golden State Warriors"],
+          team_abbreviations: ["GSW"],
+          player_names: ["Stephen Curry"],
+          linked_player_names: ["Stephen Curry"],
+        },
+      ],
+      meta: { total: 1, limit: 10, offset: 0 },
+    });
+    render(
+      <Providers>
+        <PlayerProfilePage />
+      </Providers>
+    );
+    expect(await screen.findByRole("heading", { name: "Transactions" })).toBeInTheDocument();
+    expect(
+      screen.getByText("The Golden State Warriors signed Stephen Curry to a contract extension.")
+    ).toBeInTheDocument();
   });
 });

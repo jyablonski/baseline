@@ -16,6 +16,7 @@ import {
   ThisSeasonPanel,
 } from "@/components/games/game-summary";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
+import { Badge } from "@/components/ui/badge";
 import { usePicks } from "@/hooks/use-picks";
 import { useProfile } from "@/hooks/use-profile";
 import { useSeasonMeetings } from "@/hooks/use-season-meetings";
@@ -229,6 +230,7 @@ function RecapSummary({
         {/* A non-breaking space holds the line's height while it waits. */}
         {meetingsLoading ? "\u00a0" : recapHeadline(game, meetings)}
       </h2>
+      <UpsetNote game={game} />
       {cards.length > 0 ? (
         <div
           className="grid border-y border-rule sm:grid-cols-3 sm:divide-x sm:divide-rule"
@@ -256,6 +258,25 @@ function RecapSummary({
         </p>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * "Upset: BOS won at 28%". The line is the morning scrape, not a close, so the
+ * copy never calls it the closing line.
+ */
+function UpsetNote({ game }: { game: GameDetail }) {
+  if (!game.is_upset || game.winner_market_wp == null) return null;
+  const winner = homeWon(game) ? game.home_team_abbreviation : game.away_team_abbreviation;
+  return (
+    <div className="text-center text-sm text-ink-2" data-testid="upset-note">
+      <p>
+        <Badge variant="destructive">Upset</Badge>{" "}
+        <span className="font-semibold text-foreground">{winner}</span> won at{" "}
+        {formatProbability(game.winner_market_wp)} on the morning line
+      </p>
+      {game.model_called_upset ? <p className="mt-1">The model had {winner} favoured</p> : null}
+    </div>
   );
 }
 
