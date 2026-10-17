@@ -9,6 +9,7 @@ import {
   capScale,
   capTier,
   capTierLabel,
+  capTimingNotes,
   formatCapDistance,
   layoutCapBarMarkers,
   resolveCapFlags,
@@ -54,7 +55,8 @@ describe("CBA apron rules", () => {
 
   it("marks first-apron restrictions without inventing a tax bill", () => {
     const firstApron = capRestrictions(3);
-    expect(firstApron.find((row) => row.id === "taxpayer_mle")?.allowed).toBe(false);
+    // First-apron teams keep the taxpayer MLE; only the 2nd apron loses it.
+    expect(firstApron.find((row) => row.id === "taxpayer_mle")?.allowed).toBe(true);
     expect(firstApron.find((row) => row.id === "sign_and_trade")?.allowed).toBe(false);
     expect(firstApron.find((row) => row.id === "buyouts")?.allowed).toBe(false);
     expect(firstApron.find((row) => row.id === "aggregation")?.allowed).toBe(true);
@@ -64,6 +66,7 @@ describe("CBA apron rules", () => {
     const secondApron = capRestrictions(4);
     expect(secondApron.find((row) => row.id === "aggregation")?.allowed).toBe(false);
     expect(secondApron.find((row) => row.id === "future_firsts")?.allowed).toBe(false);
+    expect(secondApron.find((row) => row.id === "taxpayer_mle")?.allowed).toBe(false);
 
     const underTax = capRestrictions(1);
     expect(underTax.every((row) => row.allowed)).toBe(true);
@@ -136,5 +139,32 @@ describe("CBA apron rules", () => {
     expect(
       layoutCapBarMarkers([{ id: "tax", label: "Tax", value: null }], { min: 0, max: 1 })
     ).toEqual([]);
+  });
+});
+
+describe("capTimingNotes", () => {
+  it("says nothing under the tax", () => {
+    expect(capTimingNotes(1, "2026-27")).toEqual([]);
+  });
+
+  it("dates the tax bill from the season over the tax", () => {
+    expect(capTimingNotes(2, "2026-27")).toEqual([
+      { label: "Tax bill", text: "Set by payroll on the regular season's last day (April 2027)." },
+    ]);
+  });
+
+  it("names the pick a 2nd-apron finish would freeze", () => {
+    const notes = capTimingNotes(4, "2026-27");
+    expect(notes.map((note) => note.label)).toEqual(["Tax bill", "Apron limits", "Pick freeze"]);
+    // 2024-25 froze 2032, so 2026-27 freezes 2034.
+    expect(notes[2].text).toBe(
+      "Still over the 2nd apron on that day? Their 2034 first-round pick can't be traded."
+    );
+  });
+
+  it("falls back to undated wording without a season", () => {
+    const notes = capTimingNotes(4, null);
+    expect(notes[0].text).toBe("Set by payroll on the regular season's last day.");
+    expect(notes[2].text).toContain("A first-round pick can't be traded.");
   });
 });

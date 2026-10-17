@@ -33,6 +33,14 @@ describe("cap position", () => {
     expect(screen.getByText(/To get under the tax: shed/)).toBeInTheDocument();
     expect(screen.getByText(/not a tax bill/i)).toBeInTheDocument();
     expect(screen.queryByText(/tax bill of/i)).not.toBeInTheDocument();
+    // A first-apron team: the tax date and the per-transaction apron note, no pick freeze.
+    const timing = screen.getByTestId("cap-timing");
+    expect(timing).toHaveTextContent("When it counts");
+    expect(timing).toHaveTextContent(
+      "Tax bill: Set by payroll on the regular season's last day (April 2027)."
+    );
+    expect(timing).toHaveTextContent("Apron limits: Apply now, to every trade and signing.");
+    expect(timing).not.toHaveTextContent(/Pick freeze/);
   });
 
   it("shows an empty snapshot when payroll is missing", () => {

@@ -512,7 +512,10 @@ GET_GAME = text(
         home_team_details.nickname AS home_team_nickname,
         home_team_details.conference AS home_team_conference,
         away_team_details.nickname AS away_team_nickname,
-        away_team_details.conference AS away_team_conference
+        away_team_details.conference AS away_team_conference,
+        fct_game_upsets.is_upset,
+        fct_game_upsets.winner_market_wp,
+        fct_game_upsets.model_called_upset
     FROM gold.fct_games_schedule
     {SCHEDULE_JOINS}
     CROSS JOIN pregame_records
@@ -528,6 +531,9 @@ GET_GAME = text(
         ON home_team_details.team_id = fct_games_schedule.home_team_id
     LEFT JOIN away_team_details
         ON away_team_details.team_id = fct_games_schedule.away_team_id
+    -- Only Final games with a captured pregame line have a row.
+    LEFT JOIN gold.fct_game_upsets
+        ON fct_game_upsets.game_id = fct_games_schedule.game_id
     WHERE fct_games_schedule.game_id = :game_id
     """
 )
@@ -574,6 +580,49 @@ LIST_BIGGEST_COLLAPSES = text(
     ORDER BY
         fct_game_flow.largest_lead_blown DESC,
         fct_game_flow.game_date DESC
+    LIMIT :limit
+    """
+)
+
+
+# Games the market underdog won, biggest surprise first. upset_magnitude is the
+# winner's surprisal, comparable across seasons and season types, whereas
+# upset_rank restarts within each season x season_type. Without a season this
+# is the newest season that has any upsets.
+LIST_UPSETS = text(
+    """
+    WITH latest_season AS (
+        SELECT max(fct_game_upsets.season) AS season
+        FROM gold.fct_game_upsets
+        WHERE fct_game_upsets.is_upset
+    )
+    SELECT
+        fct_game_upsets.game_id,
+        fct_game_upsets.season,
+        fct_game_upsets.season_type,
+        fct_game_upsets.game_date,
+        fct_game_upsets.home_team_id,
+        fct_game_upsets.home_team_abbreviation,
+        fct_game_upsets.away_team_id,
+        fct_game_upsets.away_team_abbreviation,
+        fct_game_upsets.home_score,
+        fct_game_upsets.away_score,
+        fct_game_upsets.winning_team_id,
+        fct_game_upsets.winner_location,
+        fct_game_upsets.winner_market_wp,
+        fct_game_upsets.model_winner_wp,
+        fct_game_upsets.upset_magnitude,
+        fct_game_upsets.upset_rank,
+        fct_game_upsets.model_called_upset
+    FROM gold.fct_game_upsets
+    CROSS JOIN latest_season
+    WHERE
+        fct_game_upsets.is_upset
+        AND fct_game_upsets.season = coalesce(CAST(:season AS text), latest_season.season)
+        AND (CAST(:season_type AS text) IS NULL OR fct_game_upsets.season_type = :season_type)
+    ORDER BY
+        fct_game_upsets.upset_magnitude DESC,
+        fct_game_upsets.game_date DESC
     LIMIT :limit
     """
 )

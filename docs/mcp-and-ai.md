@@ -92,6 +92,6 @@ Do not add a gold-SQL helper to the API or MCP.
 
 Streaming, production LLM hardening, Cube SQL API and pre-aggregates, a historical paid-salary ledger, and a named `get_reddit_comments` tool.
 
-Injuries, odds, PBP, Reddit, transactions, and Elo WP are queryable here but have no dedicated page in the UI.
+Injuries, odds, PBP, Reddit, transactions, upsets, and Elo WP are queryable here but have no dedicated page in the UI; they appear as sections of other pages.
 
 Draft picks are prose on the transactions page with no link, so they are never participants. A player named inside a pick clause ("... was later selected") _is_ linked and is kept.

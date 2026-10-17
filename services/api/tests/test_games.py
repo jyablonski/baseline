@@ -531,6 +531,70 @@ def test_biggest_collapses_query_excludes_wire_to_wire() -> None:
     )
 
 
+@pytest.mark.unit
+def test_list_upsets(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": GAME_TWO,
+                        "season": "2026-27",
+                        "season_type": "Regular Season",
+                        "game_date": date(2026, 11, 2),
+                        "home_team_id": TEAM_NYK,
+                        "home_team_abbreviation": "NYK",
+                        "away_team_id": TEAM_SAS,
+                        "away_team_abbreviation": "SAS",
+                        "home_score": 99,
+                        "away_score": 104,
+                        "winning_team_id": TEAM_SAS,
+                        "winner_location": "away",
+                        "winner_market_wp": 0.28,
+                        "model_winner_wp": 0.52,
+                        "upset_magnitude": 1.273,
+                        "upset_rank": 1,
+                        "model_called_upset": True,
+                    }
+                )
+            ]
+        )
+    ]
+    response = client.get("/api/v1/games/upsets?season=2026-27&season_type=regular-season&limit=5")
+    assert response.status_code == 200
+    upset = response.json()["data"][0]
+    assert upset["winner_market_wp"] == 0.28
+    assert upset["model_called_upset"] is True
+    _, params = session.calls[-1]
+    assert params == {"season": "2026-27", "season_type": "Regular Season", "limit": 5}
+
+
+@pytest.mark.unit
+def test_list_upsets_is_empty_before_any_lines(client, session, query_result) -> None:
+    session.queue = [query_result([])]
+    response = client.get("/api/v1/games/upsets")
+    # Not captured by /{game_id}, and an empty list rather than an error.
+    assert response.status_code == 200
+    assert response.json() == {"data": [], "meta": {"total": 0, "limit": 25, "offset": 0}}
+    _, params = session.calls[-1]
+    assert params["season"] is None
+
+
+@pytest.mark.unit
+def test_list_upsets_rejects_an_unknown_season_type(client) -> None:
+    assert client.get("/api/v1/games/upsets?season_type=preseason").status_code == 400
+
+
+@pytest.mark.unit
+def test_upsets_query_ranks_only_upsets_by_magnitude() -> None:
+    from queries.games import LIST_UPSETS
+
+    sql = str(LIST_UPSETS)
+    assert "WHERE\n        fct_game_upsets.is_upset\n" in sql
+    assert "fct_game_upsets.upset_magnitude DESC" in sql
+    assert "coalesce(CAST(:season AS text), latest_season.season)" in sql
+
+
 BOX_SCORE_ROW = {
     "player_id": PLAYER_KAWHI,
     "player_name": "Kawhi Leonard",

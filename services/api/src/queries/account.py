@@ -234,13 +234,17 @@ LIST_PICKS = text(
                 AND fct_games_schedule.away_score IS NOT NULL
                 THEN (fct_game_predictions.model_wp >= 0.5)
                 = (fct_games_schedule.home_score > fct_games_schedule.away_score)
-        END AS model_correct
+        END AS model_correct,
+        -- Null when the game had no captured pregame line, so it can't be graded as one.
+        fct_game_upsets.is_upset
     FROM source.picks
     LEFT JOIN gold.fct_games_schedule
         ON fct_games_schedule.game_id = picks.game_id
     -- One row per game: the mart keeps only the champion model's latest as_of.
     LEFT JOIN gold.fct_game_predictions
         ON fct_game_predictions.game_id = picks.game_id
+    LEFT JOIN gold.fct_game_upsets
+        ON fct_game_upsets.game_id = picks.game_id
     WHERE picks.user_id = :user_id
     ORDER BY
         fct_games_schedule.game_date DESC NULLS LAST,

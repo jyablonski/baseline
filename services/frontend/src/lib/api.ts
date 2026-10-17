@@ -15,6 +15,8 @@ import type {
   GameLogEntry,
   GameLogParams,
   GameCollapse,
+  GameUpset,
+  Transaction,
   GameFlow,
   GameHighlight,
   HeadToHeadComparison,
@@ -422,6 +424,31 @@ export const api = {
           season: params.season,
           blown_lead_team: params.blown_lead_team,
           limit: params.limit ?? 10,
+        })}`
+      )
+    ),
+
+  listUpsets: async (params: { season?: string; season_type?: string; limit?: number } = {}) =>
+    asPaginated<GameUpset>(
+      await fetchApi(
+        `/api/v1/games/upsets${buildQuery({
+          season: params.season,
+          season_type: params.season_type,
+          limit: params.limit,
+        })}`
+      )
+    ),
+
+  listTransactions: async (
+    params: { team_abbreviation?: string; player_id?: string; limit?: number; offset?: number } = {}
+  ) =>
+    asPaginated<Transaction>(
+      await fetchApi(
+        `/api/v1/transactions${buildQuery({
+          team_abbreviation: params.team_abbreviation,
+          player_id: params.player_id,
+          limit: params.limit,
+          offset: params.offset,
         })}`
       )
     ),

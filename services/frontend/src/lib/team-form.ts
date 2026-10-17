@@ -45,3 +45,27 @@ export function standingsSeed(row: {
 }): number | null {
   return row.playoff_seed ?? row.conference_rank ?? null;
 }
+
+type PhaseGame = { season_type?: string | null };
+
+/** Play-in only applies to teams on its slate: played one, or scheduled for one. */
+export function showsPlayIn(playInGames: number, seasonGames: PhaseGame[]) {
+  return playInGames > 0 || seasonGames.some((game) => game.season_type === "PlayIn");
+}
+
+/**
+ * Playoffs mean nothing before April of the season's second year ("2026-27" ->
+ * April 2027). From then on the KPI shows, "—" for a team that missed them.
+ */
+export function showsPlayoffs(
+  season: string | null | undefined,
+  playoffGames: number,
+  seasonGames: PhaseGame[],
+  now = new Date()
+) {
+  if (playoffGames > 0 || seasonGames.some((game) => game.season_type === "Playoffs")) return true;
+  const startYear = Number.parseInt(season ?? "", 10);
+  if (!Number.isFinite(startYear)) return false;
+  // Month index 3 is April.
+  return now >= new Date(startYear + 1, 3, 1);
+}

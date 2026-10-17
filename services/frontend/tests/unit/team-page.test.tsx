@@ -2,12 +2,12 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const replace = vi.fn();
-let search = "view=list";
+let teamOverrides: Record<string, unknown> = {};
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/teams/denver-nuggets",
   useRouter: () => ({ push: vi.fn(), replace }),
-  useSearchParams: () => new URLSearchParams(search),
+  useSearchParams: () => new URLSearchParams(),
   useParams: () => ({ slug: "denver-nuggets" }),
 }));
 
@@ -70,6 +70,7 @@ vi.mock("@/lib/api", () => ({
       over_luxury_tax: true,
       over_first_apron: true,
       over_second_apron: false,
+      ...teamOverrides,
     }),
     getTeamGames: async () => ({
       data: [
@@ -93,10 +94,6 @@ vi.mock("@/lib/api", () => ({
       ],
       meta: { total: 88, limit: 200, offset: 0 },
     }),
-    listSchedule: async () => ({
-      data: [],
-      meta: { total: 0, limit: 10, offset: 0 },
-    }),
     listInjuries: async () => ({
       data: [
         {
@@ -112,6 +109,24 @@ vi.mock("@/lib/api", () => ({
         },
       ],
       meta: { total: 1, limit: 1, offset: 0 },
+    }),
+    listTransactions: async () => ({
+      data: [
+        {
+          transaction_key: "tx-1",
+          transaction_date: "2025-07-06",
+          season: "2025-26",
+          description: "The Denver Nuggets traded a pick to the Minnesota Timberwolves.",
+          team_count: 2,
+          player_count: 0,
+          source_url: "https://www.basketball-reference.com/leagues/NBA_2026_transactions.html",
+          team_names: ["Denver Nuggets", "Minnesota Timberwolves"],
+          team_abbreviations: ["DEN", "MIN"],
+          player_names: [],
+          linked_player_names: [],
+        },
+      ],
+      meta: { total: 1, limit: 10, offset: 0 },
     }),
     getTeamRecord: async () => ({ wins: 56, losses: 32, win_pct: 0.636, games: 88 }),
     getTeamSeasonGames: async () => ({
@@ -166,19 +181,19 @@ import TeamProfilePage from "@/app/teams/[slug]/page";
 import { Providers } from "@/components/providers";
 
 beforeEach(() => {
-  search = "view=list";
+  teamOverrides = {};
   replace.mockClear();
 });
 
 describe("team profile", () => {
-  it("shows header form, cap position, filtered games, and a signed Margin", async () => {
+  it("shows header form, cap position, and injuries", async () => {
     render(
       <Providers>
         <TeamProfilePage />
       </Providers>
     );
     await waitFor(() => {
-      expect(screen.getByRole("option", { name: "MIN" })).toBeInTheDocument();
+      expect(screen.getByText("Streak W1")).toBeInTheDocument();
     });
 
     expect(screen.getByRole("link", { name: "Teams" })).toHaveAttribute("href", "/teams");
@@ -214,27 +229,15 @@ describe("team profile", () => {
     expect(screen.getByText("Taxpayer mid-level exception")).toBeInTheDocument();
 
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
-    // Games filter by opponent and home/away only.
-    expect(screen.getByText("Opponent")).toBeInTheDocument();
-    expect(screen.queryByText("Arena city")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "88 games · 56–32 | 63.6%" })).toBeInTheDocument();
-    expect(screen.getByText("Margin")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "PBP" })).toHaveAttribute(
-      "href",
-      "/games/0042500314?season=2025-26"
-    );
-    expect(screen.queryByText("MRG")).not.toBeInTheDocument();
-    expect(screen.getByText("-12")).toBeInTheDocument();
-    expect(screen.queryByText("+12")).not.toBeInTheDocument();
-    expect(screen.getByText("Remaining schedule")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "home" }));
-    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
-    expect(screen.getByRole("button", { name: "all" })).toHaveClass("seg-btn-active");
+    const moves = await screen.findByRole("region", { name: "Recent moves" });
+    expect(moves).toHaveTextContent(
+      "The Denver Nuggets traded a pick to the Minnesota Timberwolves."
+    );
+    expect(moves).toHaveTextContent("Trade");
   });
 
-  it("opens on the season calendar by default, newest month with games first", async () => {
-    search = "";
+  it("shows the season calendar, newest month with games first", async () => {
     render(
       <Providers>
         <TeamProfilePage />
@@ -245,13 +248,9 @@ describe("team profile", () => {
     // Every game is behind us, so it opens on the last one's month.
     expect(within(calendar).getByRole("heading", { name: "April 2026" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "2025-26 season · 1–1" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "calendar" })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
-    // The list view's filters and sidebar are not shown.
+    // The calendar is the only games view: no toggle, filters, or list sidebar.
+    expect(screen.queryByRole("group", { name: "Games view" })).not.toBeInTheDocument();
     expect(screen.queryByText("Remaining schedule")).not.toBeInTheDocument();
-    expect(screen.queryByText("Opponent")).not.toBeInTheDocument();
 
     const loss = within(calendar).getByRole("link", { name: /Apr 10, 2026, at MIN, lost 98–110/ });
     expect(loss).toHaveAttribute("href", "/games/g-april-loss");
@@ -268,8 +267,27 @@ describe("team profile", () => {
     ).toBeInTheDocument();
     // March holds the first game, so there is nothing earlier to page to.
     expect(within(calendar).getByRole("button", { name: "← Prev" })).toBeDisabled();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "list" }));
-    expect(replace).toHaveBeenCalledWith("/teams/denver-nuggets?view=list", { scroll: false });
+  it("hides Play-in and Playoffs for a team not in them before April", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 9, 17) });
+    teamOverrides = {
+      record_season: "2026-27",
+      season_record: { wins: 0, losses: 0, games: 0, win_pct: 0 },
+      play_in_record: null,
+      playoff_record: null,
+    };
+    render(
+      <Providers>
+        <TeamProfilePage />
+      </Providers>
+    );
+    expect(await screen.findByTestId("team-kpi-regular-season")).toHaveTextContent(
+      "2026-27 Regular Season"
+    );
+    expect(screen.queryByTestId("team-kpi-play-in")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("team-kpi-playoffs")).not.toBeInTheDocument();
+    expect(screen.getByTestId("team-kpi-last-10")).toBeInTheDocument();
+    vi.useRealTimers();
   });
 });

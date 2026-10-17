@@ -8,17 +8,19 @@
  *
  * Current (what the UI asserts):
  * - Tier from those three flags (highest flag wins if they disagree).
- * - Binary allowed/restricted for taxpayer MLE, sign-and-trade, buyouts
- *   above the minimum, aggregation, taking back more salary than sent,
- *   and trading a future first-round pick.
+ * - Binary allowed/restricted for the taxpayer MLE, sign-and-trade,
+ *   signing bought-out players paid over the non-taxpayer MLE, aggregation,
+ *   taking back more salary than sent, and trading the first-round pick
+ *   seven drafts out.
  *
  * Planned / not modeled: repeater tax, BAE dollar amounts, cash-in-trade
  * limits, TPE generation, frozen-pick calendars, exception dollar values.
  *
  * Sources: 2023 NBA CBA 101; league apron FAQ. First-apron teams cannot
- * take back more salary than they send (100% match). Second-apron teams
- * also lose aggregation and face the 7-year / consecutive-year first-round
- * pick freeze — treated here as restricted future firsts.
+ * take back more salary than they send (100% match) but keep the taxpayer
+ * MLE (using it hard-caps them at the second apron). Second-apron teams
+ * lose the MLE entirely and aggregation, and cannot trade their first-round
+ * pick seven drafts out; other future firsts stay tradable.
  */
 
 import { formatUsdMillions } from "@/lib/format";
@@ -48,10 +50,10 @@ export type CapRestriction = {
 export const CAP_RESTRICTIONS: { id: CapRestrictionId; label: string }[] = [
   { id: "taxpayer_mle", label: "Taxpayer mid-level exception" },
   { id: "sign_and_trade", label: "Sign-and-trade acquisitions" },
-  { id: "buyouts", label: "Buyout signings above the minimum" },
+  { id: "buyouts", label: "Buyout signings over the mid-level" },
   { id: "aggregation", label: "Aggregating salaries in trade" },
   { id: "salary_matching", label: "Taking back more salary than sent" },
-  { id: "future_firsts", label: "Trading a future first-round pick" },
+  { id: "future_firsts", label: "Trading the first-round pick 7 drafts out" },
 ];
 
 const ALLOWED_BY_TIER: Record<CapTier, Record<CapRestrictionId, boolean>> = {
@@ -72,7 +74,7 @@ const ALLOWED_BY_TIER: Record<CapTier, Record<CapRestrictionId, boolean>> = {
     future_firsts: true,
   },
   3: {
-    taxpayer_mle: false,
+    taxpayer_mle: true,
     sign_and_trade: false,
     buyouts: false,
     aggregation: true,
@@ -347,3 +349,36 @@ export const CAP_BAND_CLASS: Record<CapBandTone, string> = {
   first: "bg-loss-bar",
   second: "bg-destructive",
 };
+
+/**
+ * When a tier's costs actually land, for the tier's own rules only. The tax
+ * bill and the 2nd-apron pick freeze are judged on payroll at the end of the
+ * regular season; apron limits bite on each transaction made while over.
+ * The frozen pick is the first-rounder seven drafts after the season ends
+ * (2024-25 froze 2032).
+ */
+export function capTimingNotes(
+  tier: CapTier,
+  season: string | null | undefined
+): { label: string; text: string }[] {
+  const startYear = Number.parseInt(season ?? "", 10);
+  const endYear = Number.isFinite(startYear) ? startYear + 1 : null;
+  const seasonEnd = endYear
+    ? `the regular season's last day (April ${endYear})`
+    : "the regular season's last day";
+  const notes: { label: string; text: string }[] = [];
+  if (tier >= 2) {
+    notes.push({ label: "Tax bill", text: `Set by payroll on ${seasonEnd}.` });
+  }
+  if (tier >= 3) {
+    notes.push({ label: "Apron limits", text: "Apply now, to every trade and signing." });
+  }
+  if (tier === 4) {
+    const pick = endYear ? `their ${endYear + 7} first-round pick` : "a first-round pick";
+    notes.push({
+      label: "Pick freeze",
+      text: `Still over the 2nd apron on that day? ${pick[0].toUpperCase()}${pick.slice(1)} can't be traded.`,
+    });
+  }
+  return notes;
+}

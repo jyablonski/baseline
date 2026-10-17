@@ -122,6 +122,10 @@ def extra_games(postgres_engine):
             text("DELETE FROM gold.fct_game_predictions WHERE game_id = ANY(CAST(:ids AS uuid[]))"),
             {"ids": [GAME_WON, GAME_LOST]},
         )
+        conn.execute(
+            text("DELETE FROM gold.fct_game_upsets WHERE game_id = ANY(CAST(:ids AS uuid[]))"),
+            {"ids": [GAME_WON, GAME_LOST]},
+        )
         conn.execute(text("TRUNCATE source.users CASCADE"))
 
 
@@ -962,3 +966,46 @@ def test_deleting_an_account_takes_its_rows_with_it(client, postgres_engine) -> 
                 {"user_id": user_id},
             ).scalar_one()
             assert count == 0, table
+
+
+def test_picks_flag_upsets_only_where_a_line_was_captured(client, postgres_engine) -> None:
+    headers = _sign_up(client)
+    user_id = headers["X-Baseline-User"]
+    with postgres_engine.begin() as conn:
+        # GAME_WON: GSW was favoured and won. GAME_LOST: LAC won as the underdog.
+        for game_id, is_upset, winner, winner_location in (
+            (GAME_WON, False, TEAM_GSW, "home"),
+            (GAME_LOST, True, TEAM_LAC, "away"),
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO gold.fct_game_upsets (game_id, season, game_date, home_team_id, "
+                    "away_team_id, winning_team_id, winner_location, home_market_wp, is_upset, "
+                    "upset_magnitude) VALUES (:game_id, '2024-25', CURRENT_DATE - 2, :home, :away, "
+                    ":winner, :winner_location, 0.7, :is_upset, 1.0) ON CONFLICT DO NOTHING"
+                ),
+                {
+                    "game_id": game_id,
+                    "home": TEAM_GSW,
+                    "away": TEAM_LAC,
+                    "winner": winner,
+                    "winner_location": winner_location,
+                    "is_upset": is_upset,
+                },
+            )
+        for game_id, team_id in ((GAME_WON, TEAM_GSW), (GAME_LOST, TEAM_LAC)):
+            conn.execute(
+                text(
+                    "INSERT INTO source.picks (user_id, game_id, picked_team_id) "
+                    "VALUES (:user_id, :game_id, :team_id)"
+                ),
+                {"user_id": user_id, "game_id": game_id, "team_id": team_id},
+            )
+    # No line was ever captured for an open game: it keeps its pick, with no flag.
+    assert _pick(client, headers, GAME_SCHEDULE, TEAM_LAC).status_code == 200
+
+    picks = client.get("/api/v1/account/picks", headers=headers).json()["data"]["picks"]
+    by_game = {pick["game_id"]: pick for pick in picks}
+    assert (by_game[GAME_LOST]["result"], by_game[GAME_LOST]["is_upset"]) == ("won", True)
+    assert (by_game[GAME_WON]["result"], by_game[GAME_WON]["is_upset"]) == ("won", False)
+    assert by_game[GAME_SCHEDULE]["is_upset"] is None

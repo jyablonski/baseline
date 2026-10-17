@@ -202,6 +202,60 @@ def test_game_detail_final(integration_client) -> None:
 
 
 @pytest.mark.integration
+def test_upsets(integration_client) -> None:
+    response = integration_client.get("/api/v1/games/upsets")
+    assert response.status_code == 200
+    upsets = response.json()["data"]
+    # The favourite's win (GAME_TWO) is not listed; biggest surprise first.
+    assert [row["game_id"] for row in upsets] == [GAME_ONE, GAME_THREE]
+    assert upsets[0]["winner_market_wp"] == 0.3
+    assert upsets[0]["model_called_upset"] is True
+    assert upsets[1]["model_winner_wp"] == 0.4
+
+    playoffs = integration_client.get("/api/v1/games/upsets", params={"season_type": "Playoffs"})
+    assert playoffs.json()["data"] == []
+    other = integration_client.get("/api/v1/games/upsets", params={"season": "2019-20"})
+    assert other.json()["data"] == []
+
+
+@pytest.mark.integration
+def test_transactions_link_only_matched_players(integration_client) -> None:
+    response = integration_client.get(
+        "/api/v1/transactions", params={"team_abbreviation": "lac", "limit": 10}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["meta"]["total"] == 1
+    trade = body["data"][0]
+    assert trade["team_abbreviations"] == ["GSW", "LAC"]
+    assert trade["player_names"] == ["Stephen Curry", "Unmatched Prospect"]
+    assert trade["linked_player_names"] == ["Stephen Curry"]
+
+    by_player = integration_client.get(
+        "/api/v1/transactions", params={"player_id": PLAYER_CURRY, "limit": 1}
+    ).json()
+    # Newest first, paged.
+    assert by_player["meta"]["total"] == 2
+    assert [row["transaction_key"] for row in by_player["data"]] == ["tx-trade"]
+
+
+@pytest.mark.integration
+def test_game_detail_carries_the_upset(integration_client) -> None:
+    first = integration_client.get(f"/api/v1/games/{GAME_ONE}").json()["data"]
+    assert (first["is_upset"], first["winner_market_wp"], first["model_called_upset"]) == (
+        True,
+        0.3,
+        True,
+    )
+    # An upset the model did not see coming either.
+    third = integration_client.get(f"/api/v1/games/{GAME_THREE}").json()["data"]
+    assert (third["is_upset"], third["model_called_upset"]) == (True, False)
+    # No line for a game that has not been played.
+    upcoming = integration_client.get(f"/api/v1/games/{GAME_SCHEDULE}").json()["data"]
+    assert (upcoming["is_upset"], upcoming["winner_market_wp"]) == (None, None)
+
+
+@pytest.mark.integration
 def test_team_season_games(integration_client) -> None:
     response = integration_client.get(
         f"/api/v1/teams/{TEAM_GSW}/season-games", params={"season": "2024-25"}

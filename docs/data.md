@@ -86,7 +86,7 @@ A house metric, not an official award model. Knobs are the `mvp_*` vars in `serv
 
 How the history is kept: `scrape-odds` never writes an event that has already tipped, because the feed carries in-play prices that would overwrite the pregame line. Its prune only deletes _unstarted_ events that left the feed. So a played game keeps its last pregame row in `source.game_odds`. With one morning scrape a day, that row is a morning line, not a true close.
 
-Served by Cube (`game_upsets`) and MCP (`get_biggest_upsets`). There is no REST route or page yet.
+Served by Cube (`game_upsets`), MCP (`get_biggest_upsets`), and REST: `GET /api/v1/games/upsets` lists upsets biggest first (`season`, `season_type`, `limit`; no `season` means the newest season with any), `GET /api/v1/games/{id}` carries `is_upset`, `winner_market_wp` and `model_called_upset`, and each pick from `GET /api/v1/account/picks` carries `is_upset`. All three are null or empty where no line was captured, never an error. The frontend shows them on `/predictions`, the game page and `/picks`.
 
 ### Daily highlights
 
@@ -145,7 +145,7 @@ The source is ESPN's public scoreboard JSON, the only thing taken from ESPN: nei
 
 **Only `POST /api/v1/query` goes through Cube**, and only Ask and MCP depend on it. There is no gold-SQL fallback for those, by design.
 
-Contracts and payroll have no route of their own: they arrive as columns on `dim_players` and `dim_teams`. Reddit is served by `/api/v1/social` and transactions by `/api/v1/transactions`. Odds and predictions ride on `GET /api/v1/schedule`: the champion row from `fct_game_predictions`, plus a per-game consensus from `fct_game_odds` (average vig-free home WP, a moneyline converted back from the average implied WP per side, and the median home spread). Only rows with a matched `game_id` count. `GET /api/v1/predictions/scorecard` serves `fct_prediction_scorecard`. Injuries are under [Injuries](#injuries) above.
+Contracts and payroll have no route of their own: they arrive as columns on `dim_players` and `dim_teams`. Reddit is served by `/api/v1/social` and transactions by `/api/v1/transactions`, whose rows carry `linked_player_names`: only the players matched to a Baseline UUID, under Baseline's name, which are the only ones the UI links. Odds and predictions ride on `GET /api/v1/schedule`: the champion row from `fct_game_predictions`, plus a per-game consensus from `fct_game_odds` (average vig-free home WP, a moneyline converted back from the average implied WP per side, and the median home spread). Only rows with a matched `game_id` count. `GET /api/v1/predictions/scorecard` serves `fct_prediction_scorecard`. Injuries are under [Injuries](#injuries) above.
 
 ## Gotchas
 

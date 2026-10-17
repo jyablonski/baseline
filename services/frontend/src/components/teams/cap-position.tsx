@@ -4,6 +4,7 @@ import {
   capDistances,
   capPercent,
   capRestrictions,
+  capTimingNotes,
   capScale,
   capTier,
   capTierLabel,
@@ -98,6 +99,7 @@ export function CapPosition({ team }: { team: CapPositionTeam }) {
     distances[0] ??
     null;
   const restrictions = tier ? capRestrictions(tier) : [];
+  const timingNotes = tier ? capTimingNotes(tier, team.current_contract_season) : [];
   const hasMoney = payroll != null || remaining != null || team.luxury_tax != null;
   const chartZones = new Set<CapBandTone>(
     [
@@ -286,6 +288,19 @@ export function CapPosition({ team }: { team: CapPositionTeam }) {
                       {item.allowed ? "✓" : "×"}
                     </span>
                     <span>{item.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {timingNotes.length > 0 ? (
+            <div className="mt-1 border-t border-border pt-4" data-testid="cap-timing">
+              <p className="type-eyebrow">When it counts</p>
+              <ul className="mt-2 space-y-1 text-sm text-ink-2">
+                {timingNotes.map((note) => (
+                  <li key={note.label}>
+                    <span className="font-medium text-foreground">{note.label}:</span> {note.text}
                   </li>
                 ))}
               </ul>

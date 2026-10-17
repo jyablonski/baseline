@@ -9,6 +9,7 @@ import { StatBarChart } from "@/components/charts/stat-bar-chart";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { InjuryPill } from "@/components/injuries/injury-list";
+import { TransactionList } from "@/components/transactions/transaction-list";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import {
@@ -442,6 +443,13 @@ function PlayerProfile() {
           </div>
         </aside>
       </div>
+
+      <TransactionList
+        title="Transactions"
+        filter={{ player_id: playerId }}
+        links="teams"
+        hideWhenEmpty
+      />
     </div>
   );
 }

@@ -70,6 +70,11 @@ class GameDetail(ScheduledGame):
     home_team_conference: str | None = None
     away_team_nickname: str | None = None
     away_team_conference: str | None = None
+    # From fct_game_upsets: null unless the game is Final with a captured
+    # pregame line. winner_market_wp is the winner's de-vigged market WP.
+    is_upset: bool | None = None
+    winner_market_wp: float | None = None
+    model_called_upset: bool | None = None
 
 
 class GameResult(BaseModel):
@@ -189,6 +194,30 @@ class GameCollapse(BaseModel):
     winner_margin_entering_fourth: int | None = None
     lead_changes: int | None = None
     overtime_periods: int | None = None
+
+
+class GameUpset(BaseModel):
+    """A Final game the market underdog won, from gold.fct_game_upsets."""
+
+    game_id: UUID
+    season: str
+    season_type: str | None = None
+    game_date: date
+    home_team_id: UUID
+    home_team_abbreviation: str | None = None
+    away_team_id: UUID
+    away_team_abbreviation: str | None = None
+    home_score: int | None = None
+    away_score: int | None = None
+    winning_team_id: UUID | None = None
+    winner_location: str | None = None
+    # The morning line, not a true close: see docs/data.md Upsets.
+    winner_market_wp: float
+    # The champion model's pregame WP for the winner; null when it never scored the game.
+    model_winner_wp: float | None = None
+    upset_magnitude: float
+    upset_rank: int | None = None
+    model_called_upset: bool | None = None
 
 
 class GameHighlight(BaseModel):

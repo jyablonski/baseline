@@ -15,6 +15,7 @@ from schemas import (
     GameHighlight,
     GameInjury,
     GameResult,
+    GameUpset,
     ItemResponse,
     PaginatedResponse,
     PaginationMeta,
@@ -87,6 +88,30 @@ def list_daily_highlights(
     )
 
 
+@router.get("/upsets", response_model=PaginatedResponse[GameUpset])
+def list_upsets(
+    season: Annotated[str | None, Query()] = None,
+    season_type: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    repo: GamesRepository = Depends(get_games_repository),
+) -> PaginatedResponse[GameUpset]:
+    """Games the market underdog won, biggest surprise first.
+
+    Without season this is the newest season with any upsets. Empty, not an
+    error, until Final games with captured pregame lines exist.
+    """
+    rows = repo.list_upsets(
+        season=season,
+        season_type=_validate_season_type(season_type),
+        limit=limit,
+    )
+    data = [GameUpset.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=limit, offset=0),
+    )
+
+
 @router.get("", response_model=PaginatedResponse[GameResult])
 def list_recent_games(
     season: Annotated[str | None, Query()] = None,
@@ -108,7 +133,7 @@ def list_recent_games(
     )
 
 
-# Declared after the fixed paths above: /collapses and /highlights would
+# Declared after the fixed paths above: /collapses, /highlights and /upsets would
 # otherwise be parsed as a game id and fail UUID validation.
 @router.get("/{game_id}", response_model=ItemResponse[GameDetail])
 def get_game(

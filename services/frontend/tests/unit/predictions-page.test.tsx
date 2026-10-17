@@ -1,9 +1,10 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const scorecard = vi.hoisted(() => ({
   rows: [] as Record<string, unknown>[],
 }));
+const listUpsets = vi.hoisted(() => vi.fn());
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/predictions",
@@ -17,6 +18,11 @@ vi.mock("@/lib/api", () => ({
       champion_model_version: "elo-v0",
       rows: scorecard.rows,
     }),
+    listSeasons: async () => ({
+      data: [{ season: "2026-27" }, { season: "2025-26" }],
+      meta: { total: 2, limit: 2, offset: 0 },
+    }),
+    listUpsets: (...args: unknown[]) => listUpsets(...args),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
 }));
@@ -39,6 +45,31 @@ const ELO = {
   market_logloss: 0.6204,
   market_brier: 0.2133,
 };
+
+const UPSET = {
+  game_id: "g-upset",
+  season: "2026-27",
+  season_type: "Regular Season",
+  game_date: "2026-11-02",
+  home_team_id: "t-nyk",
+  home_team_abbreviation: "NYK",
+  away_team_id: "t-sas",
+  away_team_abbreviation: "SAS",
+  home_score: 99,
+  away_score: 104,
+  winning_team_id: "t-sas",
+  winner_location: "away",
+  winner_market_wp: 0.28,
+  model_winner_wp: 0.52,
+  upset_magnitude: 1.27,
+  upset_rank: 1,
+  model_called_upset: true,
+};
+
+beforeEach(() => {
+  listUpsets.mockReset();
+  listUpsets.mockResolvedValue({ data: [], meta: { total: 0, limit: 25, offset: 0 } });
+});
 
 describe("predictions page", () => {
   it("scores each model against the market and always-home baselines", async () => {
@@ -81,5 +112,35 @@ describe("predictions page", () => {
       expect(screen.getByText("No graded predictions yet")).toBeInTheDocument();
     });
     expect(screen.queryByText(/dbt|make |ml-train/i)).not.toBeInTheDocument();
+  });
+
+  it("lists the season's biggest upsets, each linked to its game", async () => {
+    scorecard.rows = [];
+    listUpsets.mockResolvedValue({ data: [UPSET], meta: { total: 1, limit: 25, offset: 0 } });
+    render(
+      <Providers>
+        <PredictionsPage />
+      </Providers>
+    );
+    const row = await screen.findByRole("row", { name: /SAS @ NYK/ });
+    expect(listUpsets).toHaveBeenCalledWith({ season: "2026-27", limit: 25 });
+    expect(within(row).getByRole("link", { name: "SAS @ NYK 104–99" })).toHaveAttribute(
+      "href",
+      "/games/g-upset"
+    );
+    expect(within(row).getByText("28%")).toBeInTheDocument();
+    expect(within(row).getByText("52%")).toBeInTheDocument();
+    expect(within(row).getByText("Called it")).toBeInTheDocument();
+    expect(screen.getByLabelText("Season")).toHaveValue("2026-27");
+  });
+
+  it("says so honestly when there are no upsets yet", async () => {
+    scorecard.rows = [];
+    render(
+      <Providers>
+        <PredictionsPage />
+      </Providers>
+    );
+    expect(await screen.findByText("No upsets yet this season")).toBeInTheDocument();
   });
 });

@@ -119,6 +119,8 @@ class Pick(BaseModel):
     profit: float | None = None
     # Did the model's favourite win? Null while open or when the model has no pick.
     model_correct: bool | None = None
+    # Did the market underdog win? Null when no pregame line was captured.
+    is_upset: bool | None = None
     game_date: date | None = None
     start_time_et: time | None = None
     game_status: str | None = None

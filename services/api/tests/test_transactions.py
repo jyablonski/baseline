@@ -18,6 +18,7 @@ def _transaction_row(**overrides) -> dict:
         "team_names": ["Atlanta Hawks", "Houston Rockets"],
         "team_abbreviations": ["ATL", "HOU"],
         "player_names": ["Clint Capela"],
+        "linked_player_names": ["Clint Capela"],
     }
     row.update(overrides)
     return row
@@ -57,6 +58,7 @@ def test_list_transactions(client, session, mapping_row, query_result) -> None:
     assert row["team_count"] == 14
     assert row["team_abbreviations"] == ["ATL", "HOU"]
     assert row["player_names"] == ["Clint Capela"]
+    assert row["linked_player_names"] == ["Clint Capela"]
 
 
 @pytest.mark.unit

@@ -308,3 +308,65 @@ CREATE TABLE IF NOT EXISTS gold.fct_game_injuries (
     played          BOOLEAN,
     PRIMARY KEY (game_id, player_id)
 );
+
+CREATE TABLE IF NOT EXISTS gold.fct_game_upsets (
+    game_id                     UUID PRIMARY KEY,
+    season                      VARCHAR(10) NOT NULL,
+    season_type                 VARCHAR(20),
+    game_date                   DATE NOT NULL,
+    commence_time               TIMESTAMPTZ,
+    home_team_id                UUID NOT NULL,
+    home_team_abbreviation      VARCHAR(5),
+    away_team_id                UUID NOT NULL,
+    away_team_abbreviation      VARCHAR(5),
+    home_score                  INTEGER,
+    away_score                  INTEGER,
+    winning_team_id             UUID,
+    winner_location             VARCHAR(10),
+    favorite_team_id            UUID,
+    underdog_team_id            UUID,
+    underdog_team_abbreviation  VARCHAR(5),
+    home_market_wp              NUMERIC NOT NULL,
+    away_market_wp              NUMERIC,
+    underdog_market_wp          NUMERIC,
+    winner_market_wp            NUMERIC,
+    home_best_moneyline         INTEGER,
+    away_best_moneyline         INTEGER,
+    underdog_best_moneyline     INTEGER,
+    underdog_fair_moneyline     INTEGER,
+    bookmaker_count             INTEGER,
+    line_scraped_at             TIMESTAMPTZ,
+    is_upset                    BOOLEAN NOT NULL,
+    upset_magnitude             NUMERIC NOT NULL,
+    model_version               TEXT,
+    model_home_wp               NUMERIC,
+    model_winner_wp             NUMERIC,
+    upset_rank                  BIGINT,
+    model_called_upset          BOOLEAN
+);
+
+CREATE TABLE IF NOT EXISTS gold.fct_transactions (
+    transaction_key     TEXT PRIMARY KEY,
+    transaction_date    DATE NOT NULL,
+    season              VARCHAR(10) NOT NULL,
+    description         TEXT NOT NULL,
+    team_count          INTEGER NOT NULL,
+    player_count        INTEGER NOT NULL,
+    source_url          TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gold.fct_transaction_participants (
+    transaction_key     TEXT NOT NULL,
+    transaction_date    DATE NOT NULL,
+    season              VARCHAR(10) NOT NULL,
+    participant_type    TEXT NOT NULL,
+    direction           TEXT NOT NULL,
+    bref_slug           TEXT NOT NULL,
+    display_name        TEXT NOT NULL,
+    player_id           UUID,
+    team_id             UUID,
+    team_abbreviation   VARCHAR(5),
+    player_name         VARCHAR(200),
+    match_method        TEXT NOT NULL,
+    scraped_at          TIMESTAMPTZ
+);
