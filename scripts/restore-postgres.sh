@@ -58,7 +58,9 @@ if [[ -z "$DUMP" || ! -f "$DUMP" ]]; then
 fi
 
 SCRATCH="nba-restore-test-$$"
-trap 'docker rm -f "$SCRATCH" >/dev/null 2>&1 || true' EXIT
+# `-v` matters: the postgres image declares a data VOLUME, and removing the
+# container ourselves pre-empts `--rm`, so without it every run leaks one.
+trap 'docker rm -fv "$SCRATCH" >/dev/null 2>&1 || true' EXIT
 
 scratch_sql() {
   docker exec "$SCRATCH" psql -X -A -t -h 127.0.0.1 -U postgres -d nba -v ON_ERROR_STOP=1 -c "$1"
@@ -112,7 +114,7 @@ restore_test() {
     ORDER BY n_live_tup DESC
     LIMIT 10
   "
-  docker rm -f "$container" >/dev/null
+  docker rm -fv "$container" >/dev/null
   echo "restore-postgres: restore-test ok (${DUMP})"
 }
 

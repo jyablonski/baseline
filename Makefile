@@ -28,6 +28,8 @@ BUILDX_BUILDER ?= nba
 # Public origin. Caddyfile hardcodes the same host (Caddy needs it for ACME).
 PUBLIC_HOST ?= baseline.jyablonski.dev
 PUBLIC_URL ?= https://$(PUBLIC_HOST)
+# prod-prune keeps unused images and build cache younger than this.
+PRUNE_UNTIL ?= 168h
 export PUBLIC_URL
 # Written by `prod-release` on the server: the exact registry coordinates the
 # last successful deploy installed. Host cron and one-shot scripts pick them up
@@ -238,15 +240,22 @@ prod-health: ## Fail the deploy if api, frontend, cube, or mcp did not come back
 	done; \
 	echo "prod-health: mcp never answered on mcp:8000" >&2; exit 1
 
-# Dangling layers only. `-a` would delete the previous release's images and
-# with them the fast rollback path.
 # From outside the box, unlike prod-health: CI runs this after deploy. Pass
 # EXPECTED_SHA=<sha> to also assert that commit is the one being served.
 prod-smoke: ## Read-only checks against PUBLIC_URL (DNS, TLS, Caddy routes, deployed sha)
 	EXPECTED_SHA="$(EXPECTED_SHA)" ./scripts/smoke-test.sh
 
-prod-prune: ## Drop dangling layers left behind by the last build
-	docker image prune -f
+# Every release is sha-tagged, so a dangling-only prune never removed anything
+# and each deploy left ~1 GB behind. `-a` drops any tag no container uses once
+# it is older than PRUNE_UNTIL. Images of running services are never removed,
+# and a rollback re-pulls its sha from the registry, so old tags on disk only
+# made rollbacks faster. Tool images (scraper/dbt/ml) have no container, so an
+# old-sha rollback can lose them here; prod-refresh re-pulls them before use.
+# Best effort (`-`): this runs after the health gate, and a prune hiccup must
+# not mark a healthy deploy as failed.
+prod-prune: ## Drop image tags and build cache older than PRUNE_UNTIL (default 7 days) that no container uses
+	-docker image prune -af --filter "until=$(PRUNE_UNTIL)"
+	-docker builder prune -af --filter "until=$(PRUNE_UNTIL)"
 
 down: ## Stop Tilt and tear down compose resources (also drops the nba buildx builder)
 	-$(TILT) down
