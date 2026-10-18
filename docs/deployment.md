@@ -69,11 +69,11 @@ cd /opt/nba && make prod-deploy IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=<sha>
 4. **Recreate Caddy** so Caddyfile changes take effect (a plain reload keeps the old file).
 5. **Health check** api, frontend, cube and mcp from inside the VM. Any failure stops the deploy.
 6. **Record the deploy** in `.env.deploy`, so the daily refresh uses the same images. This comes after the health check so a broken release never becomes the refresh image.
-7. **Prune** old image layers.
+7. **Prune** image tags and build cache older than `PRUNE_UNTIL` (default 7 days) that no container uses. Each release is a new sha tag, so without this every deploy leaves about 1 GB behind. Best effort: a failed prune does not fail the deploy.
 
 No step runs `compose down -v`, so the database survives every deploy.
 
-**Rollback**: on the server, run `make prod-release IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=<old-sha>`. No rebuild, no migration.
+**Rollback**: on the server, run `make prod-release IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=<old-sha>`. No rebuild, no migration. The old sha is pulled from GHCR, so it does not need to still be on disk after a prune.
 
 ## 4. Smoke test from GitHub
 
