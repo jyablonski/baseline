@@ -334,6 +334,20 @@ export type LeagueGame = {
   arena_city?: string | null;
   score_margin?: number | null;
   winning_team_id?: string | null;
+  /** East or West; a playoff series across them is the Finals. */
+  home_team_conference?: string | null;
+  away_team_conference?: string | null;
+  /** The game's number within its playoff series; null outside the playoffs. */
+  series_game_number?: number | null;
+  /** The game's top highlight headline, when it has one. */
+  lead_highlight?: string | null;
+};
+
+// A date with Final games, for the results date picker.
+export type GameDate = {
+  game_date: string;
+  season: string;
+  game_count: number;
 };
 
 export type SeasonInfo = {
@@ -430,6 +444,7 @@ export type ListStandingsParams = {
 export type ListGamesParams = {
   season?: string;
   season_type?: string;
+  game_date?: string;
   limit?: number;
   offset?: number;
 };
@@ -591,6 +606,47 @@ export type GameUpset = {
   upset_magnitude: number;
   upset_rank?: number | null;
   model_called_upset?: boolean | null;
+  /** No-vig American price for the winner on that line, e.g. 1100 for +1100. */
+  winner_fair_moneyline?: number | null;
+  /** Each team's W-L in this season and season type entering the game. */
+  home_wins?: number | null;
+  home_losses?: number | null;
+  away_wins?: number | null;
+  away_losses?: number | null;
+  /** Notable players ruled out; empty when none were. */
+  home_notable_out?: string[];
+  away_notable_out?: string[];
+};
+
+// A Final game ranked by how close it finished.
+export type ClosestGame = {
+  game_id: string;
+  season?: string | null;
+  game_date?: string | null;
+  home_team_abbreviation?: string | null;
+  home_score: number;
+  away_team_abbreviation?: string | null;
+  away_score: number;
+  winning_team_abbreviation?: string | null;
+  final_margin: number;
+  /** Null when the game has no play-by-play to count them from. */
+  lead_changes?: number | null;
+  overtime_periods?: number | null;
+};
+
+// A Final game ranked by its winning margin.
+export type LargestMarginGame = {
+  game_id: string;
+  season?: string | null;
+  game_date?: string | null;
+  home_team_abbreviation?: string | null;
+  home_score: number;
+  away_team_abbreviation?: string | null;
+  away_score: number;
+  winning_team_abbreviation?: string | null;
+  final_margin: number;
+  /** Null when the game has no play-by-play to tell. */
+  is_wire_to_wire?: boolean | null;
 };
 
 // One Basketball-Reference transactions-log entry. The description is free

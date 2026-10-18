@@ -7,15 +7,12 @@ from sqlalchemy.orm import Session
 from queries.social import (
     GET_POST,
     GET_SUMMARY,
-    LIST_AUTHORS,
-    LIST_COMPOSITION,
     LIST_ENTITIES,
     LIST_FACETS,
     LIST_FANBASES,
     LIST_POST_COMMENTS,
     LIST_POSTS,
     LIST_POSTS_COUNT,
-    LIST_RHYTHM,
     LIST_SOURCES,
     LIST_TAGS,
     POST_EXISTS,
@@ -132,12 +129,6 @@ class SocialRepository:
     def list_sources(self, **kwargs) -> list[dict]:
         return self._leaderboard(LIST_SOURCES, **kwargs)
 
-    def list_authors(self, **kwargs) -> list[dict]:
-        return self._leaderboard(LIST_AUTHORS, **kwargs)
-
-    def list_composition(self, **kwargs) -> list[dict]:
-        return self._leaderboard(LIST_COMPOSITION, **kwargs)
-
     def _windowed(
         self,
         statement,
@@ -154,9 +145,6 @@ class SocialRepository:
 
     def list_facets(self, **kwargs) -> list[dict]:
         return self._windowed(LIST_FACETS, **kwargs)
-
-    def list_rhythm(self, **kwargs) -> list[dict]:
-        return self._windowed(LIST_RHYTHM, **kwargs)
 
     def list_fanbases(
         self,

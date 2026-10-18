@@ -192,7 +192,7 @@ def test_get_summary(client, session, mapping_row, query_result) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("path", ["tags", "sources", "authors"])
+@pytest.mark.parametrize("path", ["tags", "sources"])
 def test_leaderboards(client, session, mapping_row, query_result, path) -> None:
     session.queue = [query_result([mapping_row(LEADER_ROW)])]
     response = client.get(f"/api/v1/social/{path}", params={"limit": 5})
@@ -203,22 +203,6 @@ def test_leaderboards(client, session, mapping_row, query_result, path) -> None:
     assert body["data"][0]["link_post_count"] == 19
     assert body["meta"]["limit"] == 5
     assert session.calls[0][1]["limit"] == 5
-
-
-@pytest.mark.unit
-def test_composition_splits_self_from_link(client, session, mapping_row, query_result) -> None:
-    session.queue = [
-        query_result(
-            [
-                mapping_row({**LEADER_ROW, "key": "self", "median_discussion_ratio": 2.53}),
-                mapping_row({**LEADER_ROW, "key": "link", "median_discussion_ratio": 0.15}),
-            ]
-        )
-    ]
-    response = client.get("/api/v1/social/composition")
-    assert response.status_code == 200
-    keys = [row["key"] for row in response.json()["data"]]
-    assert keys == ["self", "link"]
 
 
 @pytest.mark.unit
@@ -234,31 +218,6 @@ def test_facets(client, session, mapping_row, query_result) -> None:
     response = client.get("/api/v1/social/facets")
     assert response.status_code == 200
     assert response.json()["data"][0]["contested_post_count"] == 4
-
-
-@pytest.mark.unit
-def test_rhythm_returns_quiet_hours_as_zero(client, session, mapping_row, query_result) -> None:
-    session.queue = [
-        query_result(
-            [
-                mapping_row(
-                    {
-                        "hour_utc": hour,
-                        "post_count": 0 if hour else 3,
-                        "total_comments": 0 if hour else 112,
-                        "median_score": None if hour else 204.0,
-                    }
-                )
-                for hour in range(24)
-            ]
-        )
-    ]
-    response = client.get("/api/v1/social/rhythm")
-    assert response.status_code == 200
-    data = response.json()["data"]
-    assert len(data) == 24
-    assert data[1]["post_count"] == 0
-    assert data[1]["median_score"] is None
 
 
 @pytest.mark.unit
@@ -446,15 +405,12 @@ def test_statements_declare_only_intended_bind_params() -> None:
     from queries.social import (
         GET_POST,
         GET_SUMMARY,
-        LIST_AUTHORS,
-        LIST_COMPOSITION,
         LIST_ENTITIES,
         LIST_FACETS,
         LIST_FANBASES,
         LIST_POST_COMMENTS,
         LIST_POSTS,
         LIST_POSTS_COUNT,
-        LIST_RHYTHM,
         LIST_SOURCES,
         LIST_TAGS,
         POST_EXISTS,
@@ -477,10 +433,7 @@ def test_statements_declare_only_intended_bind_params() -> None:
         GET_SUMMARY: {"from_date", "to_date", "subreddit"},
         LIST_TAGS: {"from_date", "to_date", "subreddit", "limit"},
         LIST_SOURCES: {"from_date", "to_date", "subreddit", "limit"},
-        LIST_AUTHORS: {"from_date", "to_date", "subreddit", "limit"},
-        LIST_COMPOSITION: {"from_date", "to_date", "subreddit", "limit"},
         LIST_FACETS: {"from_date", "to_date", "subreddit"},
-        LIST_RHYTHM: {"from_date", "to_date", "subreddit"},
         LIST_ENTITIES: {"entity_type", "from_date", "to_date", "limit"},
         LIST_FANBASES: {"scope", "from_date", "to_date", "subreddit", "limit"},
     }

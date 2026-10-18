@@ -133,10 +133,7 @@ describe("game flow page", () => {
       expect(screen.getByText("No PBP data available.")).toBeInTheDocument();
     });
     expect(screen.getByText("There's no scoring timeline for this game.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "All recent final games →" })).toHaveAttribute(
-      "href",
-      "/games"
-    );
+    expect(screen.getByRole("link", { name: "All results →" })).toHaveAttribute("href", "/games");
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByText("Recent final games")).not.toBeInTheDocument();
     expect(screen.queryByText(/dbt/i)).not.toBeInTheDocument();
@@ -595,7 +592,7 @@ describe("game page states", () => {
 
   it("recaps a final: score, headline, standout, and how the calls did", async () => {
     finalWithoutFlow();
-    getGame.mockResolvedValue({ ...FINALS_GAME, season_type: "Regular Season" });
+    getGame.mockResolvedValue({ ...FINALS_GAME, season_type: "Cup" });
     renderPage();
 
     await waitFor(() => {
@@ -633,6 +630,8 @@ describe("game page states", () => {
     expect(note).toHaveTextContent("Upset NYK won at 28% on the morning line");
     expect(note).toHaveTextContent("The model had NYK favoured");
     expect(note).not.toHaveTextContent(/closing/i);
+    // A regular-season result has no headline: the scoreboard already says it.
+    expect(screen.queryByTestId("recap-headline")).not.toBeInTheDocument();
   });
 
   it("tells a Finals game as the series: game number, record, and the clincher", async () => {

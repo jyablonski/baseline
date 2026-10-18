@@ -1,5 +1,5 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/teams",
@@ -7,7 +7,8 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("season=2025-26"),
 }));
 
-const listTeams = vi.fn();
+const listTeams = vi.hoisted(() => vi.fn());
+const listStandings = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api", () => ({
   api: {
@@ -16,347 +17,140 @@ vi.mock("@/lib/api", () => ({
       meta: { total: 1, limit: 1, offset: 0 },
     }),
     listTeams: (...args: unknown[]) => listTeams(...args),
+    listStandings: (...args: unknown[]) => listStandings(...args),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
 }));
 
 import TeamsPage from "@/app/teams/page";
 import { Providers } from "@/components/providers";
-import type { TeamSummary } from "@/lib/types";
+import type { StandingRow } from "@/lib/types";
 
-const TEAM_IDS = {
-  BKN: "087804fc-096a-4432-b3cc-f20e5e37b1e7",
-  BOS: "7927412c-868d-4650-b329-bdc07b20358c",
-  DEN: "dee9acef-9d8a-4438-9a0d-fefcaf7cfe1a",
-  GSW: "7bf8726a-a852-452d-b81f-14839127c5fb",
-  MIN: "3cd9c269-597b-4eab-acb3-2d434f8b1280",
-  NYK: "3cbdd44d-e2b2-458a-81cd-b3008d5ebb5b",
-  OKC: "bc007f7f-f88d-4699-8325-e2f5a3e32183",
-  PHI: "8ea71a5c-0ade-41c4-8558-1e1f76990f9c",
-  POR: "250898d8-76ce-4f54-88de-ebcca751231d",
-  TOR: "8f941860-dc83-4289-8ed8-7ea9417d53b8",
-  UTA: "241af2e1-5322-427d-a549-9b318bba9cbf",
-};
+const EAST = ["DET", "BOS", "NYK", "CLE", "TOR", "ATL", "PHI", "ORL", "MIA", "CHI", "MIL"];
 
-function team(
-  partial: Partial<TeamSummary> & Pick<TeamSummary, "team_id" | "abbreviation" | "team_name">
-): TeamSummary {
+function standing(abbreviation: string, seed: number, conference = "East"): StandingRow {
   return {
-    conference: "East",
+    team_id: `t-${abbreviation}`,
+    abbreviation,
+    team_name: `${abbreviation} Team`,
+    season: "2025-26",
+    season_type: "Regular Season",
+    as_of_date: "2026-04-12",
+    conference,
     division: "Atlantic",
-    ...partial,
-  };
+    division_rank: null,
+    conference_rank: seed,
+    playoff_seed: seed,
+    wins: 70 - seed * 3,
+    losses: 12 + seed * 3,
+    win_pct: (70 - seed * 3) / 82,
+    games_back: seed === 1 ? 0 : (seed - 1) * 3,
+    conf_games_back: null,
+    streak: seed === 1 ? "W5" : "L1",
+    last_10: seed === 1 ? "8-2" : "5-5",
+  } as StandingRow;
 }
 
-function abbreviationOrder() {
-  return screen
-    .getAllByRole("link")
-    .map((link) => link.textContent)
-    .map((text) => text?.trim().match(/[A-Z]{3}/)?.[0])
-    .filter((text): text is string => Boolean(text));
+function renderPage() {
+  return render(
+    <Providers>
+      <TeamsPage />
+    </Providers>
+  );
 }
 
-describe("teams directory", () => {
-  it("shows Regular Season W–L from game results when official ranks are missing", async () => {
-    listTeams.mockResolvedValue({
-      data: [
-        {
-          team_id: TEAM_IDS.BOS,
-          abbreviation: "BOS",
-          team_name: "Boston Celtics",
-          conference: "East",
-          division: "Atlantic",
-          nickname: "Celtics",
-          wins: 56,
-          losses: 26,
-          win_pct: 0.683,
-          record_source: "games",
-        },
-      ],
-      meta: { total: 1, limit: 1, offset: 0 },
-    });
-    render(
-      <Providers>
-        <TeamsPage />
-      </Providers>
-    );
-    await waitFor(() => {
-      expect(screen.getByRole("link", { name: "BOS" })).toBeInTheDocument();
-    });
-    expect(screen.getByRole("link", { name: "BOS" })).toHaveTextContent("BOS");
-    expect(screen.getByRole("link", { name: "BOS" }).querySelector("img")).toHaveAttribute(
-      "src",
-      "https://cdn.nba.com/logos/nba/1610612738/primary/L/logo.svg"
-    );
-    expect(screen.getByRole("link", { name: "BOS" }).querySelector("img")).toHaveAttribute(
-      "width",
-      "24"
-    );
-    expect(listTeams).toHaveBeenCalledWith({ season: "2025-26" });
-    expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Teams" })).toBeInTheDocument();
-    expect(screen.getByText("56–26")).toBeInTheDocument();
-    expect(screen.getByText(".683")).toBeInTheDocument();
-    expect(screen.queryByText(/Official ranks aren't available yet/)).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(/Conference rank and Regular Season W–L are from game results/)
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText(/Official ranks were not ingested/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Official standings were not ingested/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/30 clubs/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Records shown for/)).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: /offensive vs defensive rating/i })
-    ).not.toBeInTheDocument();
+beforeEach(() => {
+  listTeams.mockReset();
+  listTeams.mockResolvedValue({ data: [], meta: { total: 0, limit: 30, offset: 0 } });
+  listStandings.mockReset();
+  // Out of order on purpose: the page sorts by seed.
+  const rows = [
+    ...EAST.map((abbr, index) => standing(abbr, index + 1)),
+    standing("OKC", 1, "West"),
+  ];
+  listStandings.mockResolvedValue({
+    data: rows.reverse(),
+    meta: { total: rows.length, limit: 30, offset: 0 },
   });
+});
 
-  it("shows official standings W–L when ranks are present", async () => {
-    listTeams.mockResolvedValue({
-      data: [
-        {
-          team_id: TEAM_IDS.BOS,
-          abbreviation: "BOS",
-          team_name: "Boston Celtics",
-          conference: "East",
-          division: "Atlantic",
-          nickname: "Celtics",
-          wins: 61,
-          losses: 21,
-          win_pct: 0.744,
-          record_source: "official",
-        },
-      ],
-      meta: { total: 1, limit: 1, offset: 0 },
-    });
-    render(
-      <Providers>
-        <TeamsPage />
-      </Providers>
-    );
-    await waitFor(() => {
-      expect(screen.getByText("61–21")).toBeInTheDocument();
-    });
-    expect(screen.queryByText(/Official ranks aren't available yet/)).not.toBeInTheDocument();
-    // The record and win % columns are labelled once per conference.
-    for (const conference of ["Eastern Conference", "Western Conference"]) {
-      const section = screen.getByRole("heading", { name: conference }).closest("section")!;
-      expect(within(section).getByText("W–L")).toBeInTheDocument();
-      expect(within(section).getByText("Win %")).toBeInTheDocument();
+describe("teams page", () => {
+  it("ranks each conference by seed with the full standings columns", async () => {
+    renderPage();
+    const east = await screen.findByRole("region", { name: "Eastern Conference" });
+    expect(listStandings).toHaveBeenCalledWith({ season: "2025-26" });
+    expect(screen.getByRole("heading", { name: "Teams", level: 1 })).toBeInTheDocument();
+    for (const header of ["W-L", "Win %", "GB", "Streak", "L10"]) {
+      expect(within(east).getByRole("columnheader", { name: header })).toBeInTheDocument();
     }
-  });
-
-  it("orders each division by Regular Season standings quality, not alphabetically", async () => {
-    listTeams.mockResolvedValue({
-      data: [
-        team({
-          team_id: TEAM_IDS.BKN,
-          abbreviation: "BKN",
-          team_name: "Brooklyn Nets",
-          nickname: "Nets",
-          wins: 20,
-          losses: 62,
-          win_pct: 0.244,
-        }),
-        team({
-          team_id: TEAM_IDS.BOS,
-          abbreviation: "BOS",
-          team_name: "Boston Celtics",
-          nickname: "Celtics",
-          wins: 56,
-          losses: 26,
-          win_pct: 0.683,
-        }),
-        team({
-          team_id: TEAM_IDS.NYK,
-          abbreviation: "NYK",
-          team_name: "New York Knicks",
-          nickname: "Knicks",
-          wins: 52,
-          losses: 29,
-          win_pct: 0.642,
-        }),
-        team({
-          team_id: TEAM_IDS.PHI,
-          abbreviation: "PHI",
-          team_name: "Philadelphia 76ers",
-          nickname: "76ers",
-          wins: 45,
-          losses: 37,
-          win_pct: 0.549,
-        }),
-        team({
-          team_id: TEAM_IDS.TOR,
-          abbreviation: "TOR",
-          team_name: "Toronto Raptors",
-          nickname: "Raptors",
-          wins: 46,
-          losses: 36,
-          win_pct: 0.561,
-        }),
-        team({
-          team_id: TEAM_IDS.DEN,
-          abbreviation: "DEN",
-          team_name: "Denver Nuggets",
-          conference: "West",
-          division: "Northwest",
-          nickname: "Nuggets",
-          wins: 54,
-          losses: 28,
-          win_pct: 0.659,
-        }),
-        team({
-          team_id: TEAM_IDS.MIN,
-          abbreviation: "MIN",
-          team_name: "Minnesota Timberwolves",
-          conference: "West",
-          division: "Northwest",
-          nickname: "Timberwolves",
-          wins: 49,
-          losses: 33,
-          win_pct: 0.598,
-        }),
-        team({
-          team_id: TEAM_IDS.OKC,
-          abbreviation: "OKC",
-          team_name: "Oklahoma City Thunder",
-          conference: "West",
-          division: "Northwest",
-          nickname: "Thunder",
-          wins: 64,
-          losses: 17,
-          win_pct: 0.79,
-        }),
-        team({
-          team_id: TEAM_IDS.POR,
-          abbreviation: "POR",
-          team_name: "Portland Trail Blazers",
-          conference: "West",
-          division: "Northwest",
-          nickname: "Trail Blazers",
-          wins: 42,
-          losses: 40,
-          win_pct: 0.512,
-        }),
-        team({
-          team_id: TEAM_IDS.UTA,
-          abbreviation: "UTA",
-          team_name: "Utah Jazz",
-          conference: "West",
-          division: "Northwest",
-          nickname: "Jazz",
-          wins: 22,
-          losses: 60,
-          win_pct: 0.268,
-        }),
-      ],
-      meta: { total: 10, limit: 10, offset: 0 },
-    });
-    render(
-      <Providers>
-        <TeamsPage />
-      </Providers>
+    const order = within(east)
+      .getAllByRole("row")
+      .slice(1)
+      .map((row) => within(row).getAllByRole("link")[0].textContent?.trim());
+    expect(order).toEqual(EAST);
+    const leader = within(east).getByText("DET Team").closest("tr") as HTMLElement;
+    expect(within(leader).getByText("67–15")).toBeInTheDocument();
+    expect(within(leader).getByText("W5")).toBeInTheDocument();
+    expect(within(leader).getByText("8-2")).toBeInTheDocument();
+    // Team links keep the season on screen.
+    expect(within(leader).getByRole("link", { name: "DET" })).toHaveAttribute(
+      "href",
+      "/teams/det-team?season=2025-26"
     );
-    await waitFor(() => {
-      expect(screen.getByRole("link", { name: "BOS" })).toBeInTheDocument();
-    });
-    expect(abbreviationOrder()).toEqual([
-      "BOS",
-      "NYK",
-      "TOR",
-      "PHI",
-      "BKN",
-      "OKC",
-      "DEN",
-      "MIN",
-      "POR",
-      "UTA",
-    ]);
+    expect(
+      within(screen.getByRole("region", { name: "Western Conference" })).getByText("OKC")
+    ).toBeInTheDocument();
   });
 
-  it("prefers official division rank over W–L when ranks are on the payload", async () => {
-    listTeams.mockResolvedValue({
-      data: [
-        team({
-          team_id: TEAM_IDS.BOS,
-          abbreviation: "BOS",
-          team_name: "Boston Celtics",
-          nickname: "Celtics",
-          wins: 56,
-          losses: 26,
-          win_pct: 0.683,
-          division_rank: 2,
-        }),
-        team({
-          team_id: TEAM_IDS.NYK,
-          abbreviation: "NYK",
-          team_name: "New York Knicks",
-          nickname: "Knicks",
-          wins: 52,
-          losses: 29,
-          win_pct: 0.642,
-          division_rank: 1,
-        }),
-      ],
-      meta: { total: 2, limit: 2, offset: 0 },
-    });
-    render(
-      <Providers>
-        <TeamsPage />
-      </Providers>
-    );
-    await waitFor(() => {
-      expect(screen.getByRole("link", { name: "NYK" })).toBeInTheDocument();
-    });
-    expect(abbreviationOrder()).toEqual(["NYK", "BOS"]);
+  it("rules off the playoff and play-in seeds, and nothing under the last row", async () => {
+    renderPage();
+    const east = await screen.findByRole("region", { name: "Eastern Conference" });
+    const ruled = within(east)
+      .getAllByRole("row")
+      .filter((row) => row.classList.contains("border-b-rule-strong"))
+      .map((row) => within(row).getAllByRole("link")[0].textContent?.trim());
+    // ATL is 6th, CHI 10th.
+    expect(ruled).toEqual(["ATL", "CHI"]);
+    // The West has one team, so no rule under it.
+    const west = screen.getByRole("region", { name: "Western Conference" });
+    expect(within(west).getByText("OKC").closest("tr")).not.toHaveClass("border-b-rule-strong");
   });
 
-  it("plots offensive vs defensive rating under the conference columns when averages exist", async () => {
+  it("plots offensive vs defensive rating under the standings", async () => {
     listTeams.mockResolvedValue({
       data: [
-        team({
-          team_id: TEAM_IDS.BOS,
+        {
+          team_id: "t-BOS",
           abbreviation: "BOS",
           team_name: "Boston Celtics",
-          nickname: "Celtics",
-          wins: 56,
-          losses: 26,
-          win_pct: 0.683,
+          conference: "East",
+          division: "Atlantic",
           pts_scored_avg: 116.4,
           pts_allowed_avg: 109.2,
-        }),
-        team({
-          team_id: TEAM_IDS.GSW,
-          abbreviation: "GSW",
-          team_name: "Golden State Warriors",
-          conference: "West",
-          division: "Pacific",
-          nickname: "Warriors",
-          wins: 50,
-          losses: 32,
-          win_pct: 0.61,
-          pts_scored_avg: 114.8,
-          pts_allowed_avg: 112.1,
-        }),
+        },
       ],
-      meta: { total: 2, limit: 2, offset: 0 },
+      meta: { total: 1, limit: 30, offset: 0 },
     });
-    render(
-      <Providers>
-        <TeamsPage />
-      </Providers>
-    );
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Eastern Conference" })).toBeInTheDocument();
-    });
-    const plotHeading = screen.getByRole("heading", {
-      name: "Team offensive vs defensive rating",
-    });
-    expect(plotHeading).toBeInTheDocument();
-    expect(screen.queryByText(/possession-adjusted ORtg/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/defensive axis is inverted/i)).not.toBeInTheDocument();
-    const east = screen.getByRole("heading", { name: "Eastern Conference" });
+    renderPage();
+    const plot = await screen.findByRole("heading", { name: "Team offensive vs defensive rating" });
+    const east = screen.getByRole("region", { name: "Eastern Conference" });
+    expect(east.compareDocumentPosition(plot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("explains an empty season", async () => {
+    listStandings.mockResolvedValue({ data: [], meta: { total: 0, limit: 30, offset: 0 } });
+    renderPage();
+    expect(await screen.findByText("No standings yet")).toBeInTheDocument();
     expect(
-      east.compareDocumentPosition(plotHeading) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+      screen.queryByRole("heading", { name: "Team offensive vs defensive rating" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows an error loading the standings", async () => {
+    listStandings.mockRejectedValue(new Error("API down"));
+    renderPage();
+    await waitFor(() => expect(screen.getByText("API down")).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 });

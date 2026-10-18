@@ -9,8 +9,9 @@ export function monthOf(date: string) {
   return date.slice(0, 7);
 }
 
-function utcDate(iso: string) {
-  return new Date(`${iso}T00:00:00Z`);
+/** Midnight UTC on an Eastern calendar date, so formatting never shifts the day. */
+export function utcDate(iso: string) {
+  return new Date(`${iso.slice(0, 10)}T00:00:00Z`);
 }
 
 function isoOf(date: Date) {

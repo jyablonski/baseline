@@ -81,6 +81,8 @@ DECLARE
   upset_check text;
   national_tv_check text;
   highlight_check text;
+  flow_check text;
+  lead_time_check text;
   injury_status_check text;
   game_injury_check text;
 BEGIN
@@ -265,6 +267,52 @@ BEGIN
   END IF;
   IF flow_max_lead IS NULL OR flow_max_lead < 1 THEN
     RAISE EXCEPTION 'expected game flow max_lead >= 1, got %', flow_max_lead;
+  END IF;
+
+  -- The game page's turning point and the /games notables read these columns,
+  -- so every one is checked against answers worked out by hand from seed.sql.
+  -- Margins are the winner's (half, q4); a dash is a period with no scoring.
+  --   10/22: GSW trailed 2-5 in Q1 (LAC blew 3), then an 11-0 run; nothing
+  --     was scored in Q2 or Q3.
+  --   10/23: CHI never led. Wire to wire, one tie, LAC's closing 4-0.
+  --   10/25: GSW led by 12 in Q2 and LAC trailed 9 entering Q4. The 14-2 GSW
+  --     run beats LAC's 11-0 by net margin.
+  --   4/20: tied after Q3, four lead changes in OT; two 5-0 runs tie on margin
+  --     and share, so the shorter LAC one wins.
+  SELECT string_agg(
+           game_date || ' ' || away_team_abbreviation || '@' || home_team_abbreviation ||
+           ' blown=' || largest_lead_blown ||
+           ' by=' || coalesce(blown_lead_team_abbreviation, '-') ||
+           ' back=' || coalesce(comeback_team_abbreviation, '-') ||
+           ' q=' || coalesce(blown_lead_period::text, '-') ||
+           ' half=' || coalesce(winner_halftime_margin::text, '-') ||
+           ' q4=' || coalesce(winner_margin_entering_fourth::text, '-') ||
+           ' changes=' || lead_changes || ' ties=' || ties ||
+           ' ot=' || overtime_periods || ' final=' || final_period ||
+           ' w2w=' || is_wire_to_wire ||
+           ' run=' || coalesce(biggest_run_label, '-') ||
+           ' max=' || max_home_lead || '/' || max_away_lead,
+           ' | ' ORDER BY game_date)
+  INTO flow_check
+  FROM gold.fct_game_flow;
+  IF flow_check IS DISTINCT FROM
+       '2024-10-22 LAC@GSW blown=3 by=LAC back=GSW q=1 half=- q4=- changes=0 ties=2 ot=0 final=4 w2w=false run=GSW 11-0 max=8/3'
+       ' | 2024-10-23 LAC@CHI blown=0 by=- back=- q=- half=3 q4=- changes=0 ties=1 ot=0 final=4 w2w=true run=LAC 4-0 max=0/7'
+       ' | 2024-10-25 GSW@LAC blown=12 by=GSW back=LAC q=2 half=-10 q4=-9 changes=2 ties=1 ot=0 final=4 w2w=false run=GSW 14-2 max=5/12'
+       ' | 2025-04-20 LAC@GSW blown=2 by=LAC back=GSW q=4 half=- q4=0 changes=4 ties=2 ot=1 final=5 w2w=false run=LAC 5-0 max=3/2'
+  THEN
+    RAISE EXCEPTION 'unexpected game flow: %', flow_check;
+  END IF;
+
+  -- 10/25 seconds by state: tied 0:00-1:00, GSW ahead until LAC's first lead
+  -- at 40:00, then LAC 1 min, GSW 1 min, tied 1 min, LAC the last 5.
+  SELECT home_lead_seconds::int || '/' || away_lead_seconds::int || '/' || tied_seconds::int
+         || '/' || game_elapsed_seconds::int
+  INTO lead_time_check
+  FROM gold.fct_game_flow
+  WHERE game_id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  IF lead_time_check IS DISTINCT FROM '360/2400/120/2880' THEN
+    RAISE EXCEPTION 'unexpected 10/25 lead time (home/away/tied/total): %', lead_time_check;
   END IF;
 
   SELECT count(*) INTO reddit_post_count FROM gold.fct_reddit_posts;

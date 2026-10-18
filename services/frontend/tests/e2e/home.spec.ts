@@ -44,8 +44,8 @@ test("home modules link out to their full views", async ({ page }) => {
   );
   await expect(page.getByRole("link", { name: "Social →" })).toHaveAttribute("href", "/social");
   await page.getByRole("link", { name: "Full standings →" }).click();
-  await expect(page).toHaveURL(/\/standings/);
-  await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
+  await expect(page).toHaveURL(/\/teams/);
+  await expect(page.getByRole("heading", { name: "Teams", level: 1 })).toBeVisible();
   await expect(page.getByText("Eastern Conference")).toBeVisible();
   await expect(page.getByText("Western Conference")).toBeVisible();
 });

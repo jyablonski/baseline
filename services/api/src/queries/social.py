@@ -308,7 +308,7 @@ GET_SUMMARY = text(SOCIAL_SUMMARY)
 
 
 def _leaderboard(key_expression: str) -> str:
-    """GROUP BY rollup shared by the tag, source, author, and composition boards.
+    """GROUP BY rollup shared by the tag and source boards.
 
     The FROM alias must stay `posts`: every fragment spliced in here, including
     the caller's key_expression, is written against that name.
@@ -358,10 +358,6 @@ def _leaderboard(key_expression: str) -> str:
 
 LIST_TAGS = text(_leaderboard(POST_TAG))
 LIST_SOURCES = text(_leaderboard(POST_SOURCE))
-LIST_AUTHORS = text(_leaderboard("posts.author"))
-# Self posts against links. Same rollup, two buckets, so the medians the UI
-# compares are computed the same way as everywhere else on the page.
-LIST_COMPOSITION = text(_leaderboard("CASE WHEN posts.is_self THEN 'self' ELSE 'link' END"))
 
 # Counts for the type chips. One pass, so the chips cannot disagree with the feed.
 LIST_FACETS = text(
@@ -385,46 +381,6 @@ LIST_FACETS = text(
     ORDER BY
         post_count DESC,
         content_type
-    """
-)
-
-# generate_series so a quiet hour is a zero rather than a gap the strip has to
-# guess at. Hours are UTC, matching created_utc.
-LIST_RHYTHM = text(
-    """
-    WITH hours AS (
-        SELECT generate_series(0, 23) AS hour_utc
-    ),
-    filtered AS (
-        SELECT
-            extract(hour FROM fct_reddit_posts.created_utc)::int AS hour_utc,
-            fct_reddit_posts.score,
-            fct_reddit_posts.num_comments
-        FROM gold.fct_reddit_posts
-        WHERE
-            (:from_date IS NULL OR fct_reddit_posts.created_utc >= CAST(:from_date AS date))
-          AND (:to_date IS NULL OR fct_reddit_posts.created_utc < CAST(:to_date AS date) + 1)
-          AND (:subreddit IS NULL OR lower(fct_reddit_posts.subreddit) = lower(:subreddit))
-    ),
-    rolled AS (
-        SELECT
-            hour_utc,
-            count(*) AS post_count,
-            sum(num_comments) AS total_comments,
-            round(
-                percentile_cont(0.5) WITHIN GROUP (ORDER BY score)::numeric
-            ) AS median_score
-        FROM filtered
-        GROUP BY hour_utc
-    )
-    SELECT
-        hours.hour_utc,
-        coalesce(rolled.post_count, 0) AS post_count,
-        coalesce(rolled.total_comments, 0) AS total_comments,
-        rolled.median_score
-    FROM hours
-    LEFT JOIN rolled ON rolled.hour_utc = hours.hour_utc
-    ORDER BY hours.hour_utc
     """
 )
 

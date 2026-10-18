@@ -5,10 +5,10 @@ macros:
     description: Uses a model's custom schema as-is instead of dbt's default target_schema + custom concatenation, so +schema gold builds into gold rather than gold_gold.
     arguments:
       - name: custom_schema_name
-        type: string
+        type: optional[string]
         description: The model's +schema config (silver or gold); none falls back to the profile target schema.
       - name: node
-        type: object
+        type: any
         description: The node being built. Required by dbt's macro signature; unused here.
 
   - name: normalize_player_name

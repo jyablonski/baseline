@@ -82,7 +82,12 @@ function ScheduleBody() {
         <div>
           <h1 className="type-page">Schedule</h1>
           <p className="mt-1 text-sm text-ink-2">
-            {season ? `${season} schedule` : "Upcoming schedule"} from today onward.
+            {season ? `${season} schedule` : "Upcoming schedule"} from today onward. Finished games
+            are under{" "}
+            <Link href="/games" className="underline underline-offset-2">
+              Games
+            </Link>
+            .
           </p>
           {features.picks && (signedOut || picks.sheet) ? (
             <p className="mt-1 flex flex-wrap gap-x-4 text-sm text-ink-2" data-testid="pick-intro">

@@ -7,9 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from dependencies import get_games_repository, get_injuries_repository
 from repositories.games import GamesRepository
 from repositories.injuries import InjuriesRepository
+from routers.params import normalize_team, validate_season_type
 from schemas import (
     BoxScoreRow,
+    ClosestGame,
     GameCollapse,
+    GameDate,
     GameDetail,
     GameFlow,
     GameHighlight,
@@ -17,6 +20,7 @@ from schemas import (
     GameResult,
     GameUpset,
     ItemResponse,
+    LargestMarginGame,
     PaginatedResponse,
     PaginationMeta,
     PlayByPlayEvent,
@@ -27,44 +31,79 @@ router = APIRouter()
 seasons_router = APIRouter()
 
 
-def _validate_season_type(season_type: str | None) -> str | None:
-    if season_type is None:
-        return None
-    key = season_type.strip().lower().replace("-", "").replace(" ", "")
-    mapping = {
-        "regularseason": "Regular Season",
-        "cup": "Cup",
-        "nbacup": "Cup",
-        "playoffs": "Playoffs",
-        "playin": "PlayIn",
-    }
-    if key not in mapping:
-        raise HTTPException(
-            status_code=400,
-            detail="season_type must be Regular Season, Cup, Playoffs, or PlayIn",
-        )
-    return mapping[key]
-
-
 @router.get("/collapses", response_model=PaginatedResponse[GameCollapse])
 def list_biggest_collapses(
     season: Annotated[str | None, Query()] = None,
-    blown_lead_team: Annotated[str | None, Query()] = None,
+    team: Annotated[
+        str | None, Query(description="Either side: the team that blew it or came back")
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
     repo: GamesRepository = Depends(get_games_repository),
 ) -> PaginatedResponse[GameCollapse]:
     """Games ranked by the biggest lead the losing team gave up."""
-    # Abbreviation, not team_id: gold.fct_game_flow denormalizes both sides to
-    # abbreviations and never carries the ids.
     rows = repo.list_biggest_collapses(
         season=season,
-        blown_lead_team=blown_lead_team.upper() if blown_lead_team else None,
+        team=normalize_team(team),
         limit=limit,
+        offset=offset,
     )
     data = [GameCollapse.model_validate(row) for row in rows]
     return PaginatedResponse(
         data=data,
-        meta=PaginationMeta(total=len(data), limit=limit, offset=0),
+        meta=PaginationMeta(total=len(data), limit=limit, offset=offset),
+    )
+
+
+@router.get("/closest", response_model=PaginatedResponse[ClosestGame])
+def list_closest_games(
+    season: Annotated[str | None, Query()] = None,
+    team: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    repo: GamesRepository = Depends(get_games_repository),
+) -> PaginatedResponse[ClosestGame]:
+    """Final games by smallest margin, then most lead changes, then most overtime."""
+    rows = repo.list_closest_games(
+        season=season, team=normalize_team(team), limit=limit, offset=offset
+    )
+    data = [ClosestGame.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=limit, offset=offset),
+    )
+
+
+@router.get("/largest-margins", response_model=PaginatedResponse[LargestMarginGame])
+def list_largest_margins(
+    season: Annotated[str | None, Query()] = None,
+    team: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    repo: GamesRepository = Depends(get_games_repository),
+) -> PaginatedResponse[LargestMarginGame]:
+    """Final games by winning margin, biggest first."""
+    rows = repo.list_largest_margins(
+        season=season, team=normalize_team(team), limit=limit, offset=offset
+    )
+    data = [LargestMarginGame.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=limit, offset=offset),
+    )
+
+
+@router.get("/dates", response_model=PaginatedResponse[GameDate])
+def list_game_dates(
+    season: Annotated[str | None, Query()] = None,
+    repo: GamesRepository = Depends(get_games_repository),
+) -> PaginatedResponse[GameDate]:
+    """Every date with a Final game, newest first. Unpaginated."""
+    rows = repo.list_game_dates(season=season)
+    data = [GameDate.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=len(data), offset=0),
     )
 
 
@@ -92,7 +131,9 @@ def list_daily_highlights(
 def list_upsets(
     season: Annotated[str | None, Query()] = None,
     season_type: Annotated[str | None, Query()] = None,
+    team: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
     repo: GamesRepository = Depends(get_games_repository),
 ) -> PaginatedResponse[GameUpset]:
     """Games the market underdog won, biggest surprise first.
@@ -102,13 +143,15 @@ def list_upsets(
     """
     rows = repo.list_upsets(
         season=season,
-        season_type=_validate_season_type(season_type),
+        season_type=validate_season_type(season_type),
+        team=normalize_team(team),
         limit=limit,
+        offset=offset,
     )
     data = [GameUpset.model_validate(row) for row in rows]
     return PaginatedResponse(
         data=data,
-        meta=PaginationMeta(total=len(data), limit=limit, offset=0),
+        meta=PaginationMeta(total=len(data), limit=limit, offset=offset),
     )
 
 
@@ -116,13 +159,15 @@ def list_upsets(
 def list_recent_games(
     season: Annotated[str | None, Query()] = None,
     season_type: Annotated[str | None, Query()] = None,
+    game_date: Annotated[date | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
     repo: GamesRepository = Depends(get_games_repository),
 ) -> PaginatedResponse[GameResult]:
     total, rows = repo.list_games(
         season=season,
-        season_type=_validate_season_type(season_type),
+        season_type=validate_season_type(season_type),
+        game_date=game_date,
         limit=limit,
         offset=offset,
     )
@@ -133,8 +178,8 @@ def list_recent_games(
     )
 
 
-# Declared after the fixed paths above: /collapses, /highlights and /upsets would
-# otherwise be parsed as a game id and fail UUID validation.
+# Declared after the fixed paths above: /collapses, /closest, /largest-margins, /dates,
+# /highlights and /upsets would otherwise be parsed as a game id and fail UUID validation.
 @router.get("/{game_id}", response_model=ItemResponse[GameDetail])
 def get_game(
     game_id: UUID,

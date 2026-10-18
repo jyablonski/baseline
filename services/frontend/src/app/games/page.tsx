@@ -1,15 +1,21 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
+import { DayPicker } from "@/components/games/day-picker";
+import { SeasonNotables } from "@/components/games/season-notables";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
+import { TeamLogo } from "@/components/team-logo";
 import { api, queryErrorMessage } from "@/lib/api";
-import { formatDate, formatSignedMargin } from "@/lib/format";
-import { periodLabel } from "@/lib/game-flow";
+import { dayNavigation, daySummary, formatDayTitle, resultSides } from "@/lib/results";
+import type { LeagueGame } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import type { GameCollapse, LeagueGame } from "@/lib/types";
+
+// A full slate is 15 games; this covers any single day.
+const DAY_LIMIT = 20;
 
 export default function GamesPage() {
   return (
@@ -20,201 +26,148 @@ export default function GamesPage() {
 }
 
 function GamesIndex() {
-  const gamesQuery = useQuery({
-    queryKey: ["games", "recent-finals"],
-    queryFn: () => api.listGames({ limit: 15 }),
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const datesQuery = useQuery({
+    queryKey: ["games", "dates"],
+    queryFn: () => api.listGameDates(),
   });
+  const dates = datesQuery.data?.data ?? [];
+  const { current, latest, older, newer } = dayNavigation(dates, searchParams.get("date"));
+  // Notables follow the newest season with a finished game, not the schedule's:
+  // before opening night that is still last season.
+  const season = dates[0]?.season ?? "";
+
+  function showDay(date: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (date === latest) params.delete("date");
+    else params.set("date", date);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <div>
-        <p className="type-eyebrow">Recent final games</p>
-        <h1 className="type-page">Game flow</h1>
+        <h1 className="type-page">Games</h1>
         <p className="mt-1 text-sm text-ink-2">
-          Scoring-play differential from PBP. Not live win probability.
+          Finished games and the season&apos;s standouts. Upcoming games are on the{" "}
+          <Link href="/schedule" className="underline underline-offset-2">
+            schedule
+          </Link>
+          .
         </p>
       </div>
-      {gamesQuery.isLoading ? (
-        <LoadingState label="Loading recent games…" />
-      ) : gamesQuery.isError ? (
-        <ErrorState message={queryErrorMessage(gamesQuery.error)} />
-      ) : (gamesQuery.data?.data ?? []).length === 0 ? (
+      {datesQuery.isPending ? (
+        <LoadingState label="Loading games…" />
+      ) : datesQuery.isError ? (
+        <ErrorState message={queryErrorMessage(datesQuery.error)} />
+      ) : !current || !latest ? (
         <EmptyState message="No completed games to show yet." />
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Matchup</th>
-              <th>Score</th>
-              <th>Margin</th>
-              <th>PBP</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(gamesQuery.data?.data ?? []).map((game) => (
-              <GameIndexRow key={game.game_id} game={game} />
-            ))}
-          </tbody>
-        </table>
+        <>
+          <ResultsDay
+            date={current}
+            latest={latest}
+            picker={
+              <DayPicker
+                current={current}
+                latest={latest}
+                older={older}
+                newer={newer}
+                gameDays={dates.map((item) => item.game_date.slice(0, 10))}
+                onPick={showDay}
+              />
+            }
+          />
+          <SeasonNotables season={season} />
+        </>
       )}
-      <BiggestCollapses />
     </div>
   );
 }
 
-function BiggestCollapses() {
-  const [blownLeadTeam, setBlownLeadTeam] = useState("");
-  // Same query key as the other directories, so this shares their cached list.
-  const teamsQuery = useQuery({
-    queryKey: ["teams"],
-    queryFn: () => api.listTeams(),
-  });
-  // Filtered server-side: the unfiltered response is the league-wide top 10, so
-  // narrowing it in the browser would almost always leave nothing.
-  const collapsesQuery = useQuery({
-    queryKey: ["games", "collapses", blownLeadTeam],
-    queryFn: () =>
-      api.listBiggestCollapses({ blown_lead_team: blownLeadTeam || undefined, limit: 10 }),
-    // Keep the previous rows mounted while the next team loads. Swapping the
-    // table for a spinner collapses document height mid-fetch, and the browser
-    // clamps scrollTop to the shorter page — so changing the filter threw the
-    // reader back up the page.
+function ResultsDay({
+  date,
+  latest,
+  picker,
+}: {
+  date: string;
+  latest: string;
+  picker: React.ReactNode;
+}) {
+  const gamesQuery = useQuery({
+    queryKey: ["games", "day", date],
+    queryFn: () => api.listGames({ game_date: date, limit: DAY_LIMIT }),
+    // Hold the last day on screen while the next loads, so the notables below
+    // do not jump up and back.
     placeholderData: keepPreviousData,
   });
-  const collapses = collapsesQuery.data?.data ?? [];
-  const teamOptions = useMemo(
-    () =>
-      [...(teamsQuery.data?.data ?? [])]
-        .map((team) => team.abbreviation)
-        .filter((abbreviation): abbreviation is string => Boolean(abbreviation))
-        .sort((left, right) => left.localeCompare(right)),
-    [teamsQuery.data]
-  );
+  const games = gamesQuery.data?.data ?? [];
+  const title = formatDayTitle(date, latest);
 
   return (
-    <section className="space-y-2">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <section aria-label="Results" className="space-y-2">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-rule-strong pb-3">
         <div>
-          <p className="type-eyebrow">Collapse of the season</p>
-          <h2 className="type-module">Biggest blown leads</h2>
-          <p className="mt-1 text-sm text-ink-2">
-            The largest lead a team held and still lost, from scoring PBP.
-          </p>
+          <h2 className="type-module">{date === latest ? `Latest · ${title}` : title}</h2>
+          {games.length > 0 && !gamesQuery.isPlaceholderData ? (
+            <p className="mt-0.5 text-xs text-ink-2">{daySummary(games)}</p>
+          ) : null}
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <span className="text-ink-2">Blew it</span>
-          <select
-            className={cn("field", blownLeadTeam && "field-query")}
-            value={blownLeadTeam}
-            onChange={(event) => setBlownLeadTeam(event.target.value)}
-          >
-            <option value="">Any team</option>
-            {teamOptions.map((abbreviation) => (
-              <option key={abbreviation} value={abbreviation}>
-                {abbreviation}
-              </option>
-            ))}
-          </select>
-        </label>
+        {picker}
       </div>
-      {collapsesQuery.isLoading ? (
-        <LoadingState label="Loading blown leads…" />
-      ) : collapsesQuery.isError ? (
-        <ErrorState message={queryErrorMessage(collapsesQuery.error)} />
-      ) : collapses.length === 0 ? (
-        <EmptyState
-          message={
-            blownLeadTeam
-              ? `No blown leads for ${blownLeadTeam} yet.`
-              : "No blown leads to show yet."
-          }
-        />
+      {gamesQuery.isPending ? (
+        <LoadingState label="Loading results…" />
+      ) : gamesQuery.isError ? (
+        <ErrorState message={queryErrorMessage(gamesQuery.error)} />
+      ) : games.length === 0 ? (
+        <EmptyState message="No games were played on this date." />
       ) : (
-        <table
-          className={cn("data-table", collapsesQuery.isFetching && "opacity-60")}
-          aria-busy={collapsesQuery.isFetching}
+        <ul
+          className={cn(gamesQuery.isPlaceholderData && "opacity-60")}
+          aria-busy={gamesQuery.isFetching}
         >
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Blew it</th>
-              <th>Opponent</th>
-              <th>Lead</th>
-              <th>Peaked</th>
-              <th>Final</th>
-              <th>PBP</th>
-            </tr>
-          </thead>
-          <tbody>
-            {collapses.map((collapse) => (
-              <CollapseRow key={collapse.game_id} collapse={collapse} />
-            ))}
-          </tbody>
-        </table>
+          {games.map((game) => (
+            <ResultRow key={game.game_id} game={game} />
+          ))}
+        </ul>
       )}
     </section>
   );
 }
 
-/** The team that came back, falling back to whichever side did not blow it. */
-function opponentOf(collapse: GameCollapse): string {
-  if (collapse.comeback_team_abbreviation) return collapse.comeback_team_abbreviation;
-  const blew = collapse.blown_lead_team_abbreviation;
-  if (!blew) return "—";
-  if (blew === collapse.home_team_abbreviation) return collapse.away_team_abbreviation ?? "—";
-  if (blew === collapse.away_team_abbreviation) return collapse.home_team_abbreviation ?? "—";
-  return "—";
-}
-
-function CollapseRow({ collapse }: { collapse: GameCollapse }) {
-  const away = collapse.away_team_abbreviation ?? "Away";
-  const home = collapse.home_team_abbreviation ?? "Home";
-  const score =
-    collapse.away_score != null && collapse.home_score != null
-      ? `${away} ${collapse.away_score}–${home} ${collapse.home_score}`
-      : "—";
-  const peaked = collapse.blown_lead_period != null ? periodLabel(collapse.blown_lead_period) : "—";
+function ResultRow({ game }: { game: LeagueGame }) {
+  const { winner, loser, margin } = resultSides(game);
+  const label = `${winner.abbreviation} ${winner.score ?? ""}, ${loser.abbreviation} ${loser.score ?? ""}`;
   return (
-    <tr>
-      <td className="tabular whitespace-nowrap">{formatDate(collapse.game_date)}</td>
-      <td className="font-semibold">{collapse.blown_lead_team_abbreviation ?? "—"}</td>
-      <td>{opponentOf(collapse)}</td>
-      <td className="tabular font-semibold">{collapse.largest_lead_blown}</td>
-      <td className="tabular whitespace-nowrap">{peaked}</td>
-      <td className="tabular whitespace-nowrap">{score}</td>
-      <td>
-        <Link href={`/games/${collapse.game_id}`} className="text-primary hover:underline">
-          PBP →
-        </Link>
-      </td>
-    </tr>
-  );
-}
-
-function GameIndexRow({ game }: { game: LeagueGame }) {
-  const away = game.away_team_abbreviation ?? "Away";
-  const home = game.home_team_abbreviation ?? "Home";
-  const score =
-    game.away_score != null && game.home_score != null
-      ? `${game.away_score}–${game.home_score}`
-      : "—";
-  const margin = game.score_margin != null ? formatSignedMargin(game.score_margin) : "—";
-  return (
-    <tr>
-      <td className="tabular whitespace-nowrap">{formatDate(game.game_date)}</td>
-      <td>
-        <span className="font-semibold">{away}</span>
-        <span className="px-1 text-muted-foreground">at</span>
-        <span className="font-semibold">{home}</span>
-      </td>
-      <td className="tabular font-semibold">{score}</td>
-      <td className="tabular font-semibold">{margin}</td>
-      <td>
-        <Link href={`/games/${game.game_id}`} className="text-primary hover:underline">
-          PBP →
-        </Link>
-      </td>
-    </tr>
+    <li className="border-b border-rule" data-testid="result-row">
+      {/* On phones the highlight wraps under the score and the arrow stays at the end of the first line. */}
+      <Link
+        href={`/games/${game.game_id}`}
+        aria-label={label}
+        className="group flex flex-wrap items-center gap-x-6 gap-y-1 py-3 hover:bg-tint"
+      >
+        <span className="flex items-center gap-2">
+          <TeamLogo teamId={winner.teamId} abbreviation={winner.abbreviation} />
+          <span className="w-10 font-semibold">{winner.abbreviation}</span>
+          <span className="tabular w-24 text-center text-lg">
+            <span className="font-semibold">{winner.score}</span>
+            <span className="px-1 text-ink-3">–</span>
+            <span className="text-ink-2">{loser.score}</span>
+          </span>
+          <TeamLogo teamId={loser.teamId} abbreviation={loser.abbreviation} />
+          <span className="w-10 text-ink-2">{loser.abbreviation}</span>
+        </span>
+        <span className="hidden w-24 text-sm text-ink-2 sm:block">{margin}</span>
+        <span className="order-last basis-full truncate text-sm text-ink-2 sm:order-none sm:flex-1 sm:basis-auto">
+          {game.lead_highlight}
+        </span>
+        <span aria-hidden="true" className="ml-auto text-ink-3 group-hover:text-primary">
+          →
+        </span>
+      </Link>
+    </li>
   );
 }

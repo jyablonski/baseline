@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense } from "react";
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { TeamRatingsScatter } from "@/components/charts/team-ratings-scatter";
@@ -9,12 +8,14 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamAbbrLink } from "@/components/team-logo";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
-import { formatRecord, formatWinPctPlain } from "@/lib/format";
-import { teamHref } from "@/lib/nav";
-import type { TeamSummary } from "@/lib/types";
+import { formatGamesBack, formatRecord, formatWinPctPlain } from "@/lib/format";
+import { teamHref, withSeason } from "@/lib/nav";
+import { conferenceStandings, standingsSeed } from "@/lib/team-form";
+import type { StandingRow } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-const EAST_DIVISIONS = ["Atlantic", "Central", "Southeast"];
-const WEST_DIVISIONS = ["Pacific", "Northwest", "Southwest"];
+// Seeds 1-6 make the playoffs and 7-10 the play-in; a rule under each.
+const CUT_LINES = [6, 10];
 
 export default function TeamsPage() {
   return (
@@ -27,132 +28,116 @@ export default function TeamsPage() {
 function TeamsDirectory() {
   const { season } = useSeason();
 
+  const standingsQuery = useQuery({
+    queryKey: ["standings", season],
+    queryFn: () => api.listStandings({ season: season || undefined }),
+  });
+  // The scatter reads team ratings, which the standings rows do not carry.
   const teamsQuery = useQuery({
     queryKey: ["teams", season],
     queryFn: () => api.listTeams({ season: season || undefined }),
   });
 
+  const rows = standingsQuery.data?.data ?? [];
+  const east = conferenceStandings(rows, "east");
+  const west = conferenceStandings(rows, "west");
   const teams = teamsQuery.data?.data ?? [];
-  const east = teams.filter((team) => team.conference.toLowerCase().startsWith("east"));
-  const west = teams.filter((team) => team.conference.toLowerCase().startsWith("west"));
 
   return (
-    <div>
-      <h1 className="type-page">Teams</h1>
+    <div className="space-y-10">
+      <div>
+        <h1 className="type-page">Teams</h1>
+        <p className="mt-1 text-sm text-ink-2">
+          Conference standings for {season || "the latest season"}. The top six make the playoffs;
+          seeds 7 to 10 play in for the last two spots.
+        </p>
+      </div>
 
-      {teamsQuery.isLoading ? (
-        <div className="mt-1">
-          <LoadingState label="Loading teams…" />
-        </div>
-      ) : teamsQuery.isError ? (
-        <div className="mt-1">
-          <ErrorState message={queryErrorMessage(teamsQuery.error)} />
-        </div>
-      ) : teams.length === 0 ? (
-        <div className="mt-1">
-          <EmptyState message="No teams to show yet." />
-        </div>
+      {standingsQuery.isLoading ? (
+        <LoadingState label="Loading standings…" />
+      ) : standingsQuery.isError ? (
+        <ErrorState message={queryErrorMessage(standingsQuery.error)} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title="No standings yet"
+          message={`No Regular Season games or official standings for ${season || "this season"}.`}
+        />
       ) : (
-        <>
-          <div className="mt-1 grid gap-10 lg:grid-cols-2">
-            <ConferenceColumn title="Eastern Conference" teams={east} divisions={EAST_DIVISIONS} />
-            <ConferenceColumn title="Western Conference" teams={west} divisions={WEST_DIVISIONS} />
-          </div>
-          <div className="mt-10">
-            <TeamRatingsScatter teams={teams} />
-          </div>
-        </>
+        <div className="grid gap-10 xl:grid-cols-2">
+          <ConferenceTable title="Eastern Conference" rows={east} season={season} />
+          <ConferenceTable title="Western Conference" rows={west} season={season} />
+        </div>
       )}
+
+      {teams.length > 0 ? <TeamRatingsScatter teams={teams} /> : null}
     </div>
   );
 }
 
-function ConferenceColumn({
+function ConferenceTable({
   title,
-  teams,
-  divisions,
+  rows,
+  season,
 }: {
   title: string;
-  teams: TeamSummary[];
-  divisions: string[];
+  rows: StandingRow[];
+  season: string;
 }) {
-  const grouped = divisions
-    .map((division) => ({
-      division,
-      teams: teams
-        .filter((team) => team.division.toLowerCase() === division.toLowerCase())
-        .sort(compareDivisionStandings),
-    }))
-    .filter((group) => group.teams.length > 0);
-  const leftover = teams
-    .filter(
-      (team) =>
-        !divisions.some((division) => team.division.toLowerCase() === division.toLowerCase())
-    )
-    .sort(compareDivisionStandings);
-  if (leftover.length) grouped.push({ division: "Other", teams: leftover });
-
+  if (rows.length === 0) return null;
   return (
-    <section>
-      {/* Same columns as the rows below, so the labels sit over the record and win %. */}
-      <div className="mb-4 grid grid-cols-[1fr_auto_3.5rem] items-baseline gap-2">
-        <h2 className="type-eyebrow">{title}</h2>
-        <span className="type-eyebrow">W–L</span>
-        <span className="type-eyebrow text-right">Win %</span>
-      </div>
-      <div className="space-y-5">
-        {grouped.map((group) => (
-          <div key={group.division}>
-            <p className="mb-1 text-xs text-muted-foreground">{group.division}</p>
-            <ul>
-              {group.teams.map((team) => {
-                const nickname =
-                  team.nickname ?? team.team_name.replace(team.city ?? "", "").trim();
-                return (
-                  <li
-                    key={team.team_id}
-                    className="grid grid-cols-[auto_1fr_auto_3.5rem] items-center gap-2 border-b border-border py-1.5 text-sm hover:bg-row-hover"
-                  >
-                    <TeamAbbrLink
-                      teamId={team.team_id}
-                      abbreviation={team.abbreviation}
-                      href={teamHref(team.team_name)}
-                    />
-                    <Link href={teamHref(team.team_name)} className="hover:text-primary">
-                      {nickname || team.team_name}
-                    </Link>
-                    <span className="tabular text-muted-foreground">
-                      {formatRecord(team.wins, team.losses)}
+    <section aria-label={title}>
+      <h2 className="type-eyebrow mb-3">{title}</h2>
+      <div className="overflow-x-auto">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Team</th>
+              <th className="text-right">W-L</th>
+              <th className="text-right">Win %</th>
+              <th className="text-right">GB</th>
+              <th>Streak</th>
+              <th className="text-right">L10</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const seed = standingsSeed(row);
+              return (
+                <tr
+                  key={`${row.team_id}-${row.season}-${row.season_type}`}
+                  // A heavier rule under the last playoff seed and the last play-in seed.
+                  className={cn(
+                    seed != null &&
+                      CUT_LINES.includes(seed) &&
+                      seed < rows.length &&
+                      "border-b-rule-strong"
+                  )}
+                >
+                  <td className="tabular text-muted-foreground">{seed ?? "—"}</td>
+                  <td>
+                    <span className="inline-flex items-center gap-2">
+                      <TeamAbbrLink
+                        teamId={row.team_id}
+                        abbreviation={row.abbreviation}
+                        href={withSeason(teamHref(row.team_name), season)}
+                      />
+                      <span className="hidden text-muted-foreground sm:inline">
+                        {row.team_name}
+                      </span>
                     </span>
-                    <span className="tabular text-right">{formatWinPctPlain(team.win_pct)}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+                  </td>
+                  <td className="tabular text-right">{formatRecord(row.wins, row.losses)}</td>
+                  <td className="tabular text-right">{formatWinPctPlain(row.win_pct)}</td>
+                  <td className="tabular text-right">{formatGamesBack(row.games_back)}</td>
+                  <td>{row.streak ?? "—"}</td>
+                  <td className="tabular text-right">{row.last_10 ?? "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </section>
   );
-}
-
-function compareNullableRank(a: number | null | undefined, b: number | null | undefined) {
-  if (a != null && b != null) return a - b;
-  if (a != null) return -1;
-  if (b != null) return 1;
-  return null;
-}
-
-function compareDivisionStandings(a: TeamSummary, b: TeamSummary) {
-  const divisionRank = compareNullableRank(a.division_rank, b.division_rank);
-  if (divisionRank != null) return divisionRank || a.team_name.localeCompare(b.team_name);
-  const conferenceRank = compareNullableRank(a.conference_rank, b.conference_rank);
-  if (conferenceRank != null) return conferenceRank || a.team_name.localeCompare(b.team_name);
-  const winPct = (b.win_pct ?? -1) - (a.win_pct ?? -1);
-  if (winPct !== 0) return winPct;
-  const wins = (b.wins ?? -1) - (a.wins ?? -1);
-  if (wins !== 0) return wins;
-  const losses = (a.losses ?? Number.POSITIVE_INFINITY) - (b.losses ?? Number.POSITIVE_INFINITY);
-  if (losses !== 0) return losses;
-  return a.team_name.localeCompare(b.team_name);
 }

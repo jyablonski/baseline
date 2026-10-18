@@ -326,7 +326,7 @@ describe("home desk", () => {
     expect(screen.getByText("OKC").closest("tr")).not.toHaveClass("border-b-rule-strong");
     expect(screen.getByRole("link", { name: "Full standings →" })).toHaveAttribute(
       "href",
-      "/standings?season=2025-26"
+      "/teams?season=2025-26"
     );
     expect(screen.queryByText("Season leaders")).not.toBeInTheDocument();
   });

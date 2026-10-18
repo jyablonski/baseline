@@ -28,10 +28,10 @@ test("teams directory to profile shows cap position", async ({ page }) => {
   );
 });
 
-test("standings page lists conferences without a 2010-11 range", async ({ page }) => {
+test("teams page ranks both conferences without a 2010-11 range", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/standings");
-  await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
+  await page.goto("/teams");
+  await expect(page.getByRole("heading", { name: "Teams", level: 1 })).toBeVisible();
   await expect(page.getByText("Eastern Conference")).toBeVisible();
   await expect(page.getByText("Western Conference")).toBeVisible();
   await expect(page.getByRole("link", { name: "CHI" })).toBeVisible();
@@ -42,7 +42,7 @@ test("standings page lists conferences without a 2010-11 range", async ({ page }
 test("teams directory empty warehouse", async ({ page }) => {
   await mockApi(page, { empty: true });
   await page.goto("/teams");
-  await expect(page.getByText("No teams to show yet.")).toBeVisible();
+  await expect(page.getByText("No standings yet")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Team offensive vs defensive rating" })
   ).toHaveCount(0);
@@ -66,9 +66,9 @@ test("teams directory surfaces the API failure instead of an empty grid", async 
   await expect(page.getByText(API_FAILURE_DETAIL).first()).toBeVisible();
 });
 
-test("standings lists streak and last-ten columns for both conferences", async ({ page }) => {
+test("teams page lists streak and last-ten columns for both conferences", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/standings");
+  await page.goto("/teams");
   await expect(page.getByRole("columnheader", { name: "Streak" }).first()).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "L10" }).first()).toBeVisible();
   await expect(page.getByRole("cell", { name: "W5", exact: true })).toBeVisible();
@@ -80,7 +80,7 @@ test("team profile opens on a season calendar whose games link to their pages", 
   page,
 }) => {
   await mockApi(page);
-  await page.goto("/teams/1610612744");
+  await page.goto("/teams/golden-state-warriors");
   const calendar = page.getByTestId("season-calendar");
   await expect(calendar.getByRole("heading", { name: "April 2026" })).toBeVisible();
 
@@ -95,6 +95,6 @@ test("team profile opens on a season calendar whose games link to their pages", 
 test("team profile shows the calendar on a phone too", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page);
-  await page.goto("/teams/1610612744");
+  await page.goto("/teams/golden-state-warriors");
   await expect(page.getByTestId("season-calendar")).toBeVisible();
 });

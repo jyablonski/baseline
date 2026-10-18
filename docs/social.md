@@ -51,17 +51,16 @@ Defined in `services/api/src/queries/social.py`.
 
 All under `/api/v1/social`, gold-only, no Cube. Every list takes `from_date` / `to_date` (inclusive) and `subreddit`.
 
-| Route                                               | Returns                                                                                                                          |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /summary`                                      | Header counts, including captured vs. reported comment totals                                                                    |
-| `GET /posts`                                        | Feed. Filters: `tag`, `source`, `content_type`, `contested`, `search`; `sort` in `recent\|score\|comments\|discussion\|leverage` |
-| `GET /posts/{reddit_id}`                            | One post plus `selftext`                                                                                                         |
-| `GET /posts/{reddit_id}/comments`                   | The stored top-10 sample, **never the thread**                                                                                   |
-| `GET /entities?entity_type=player\|team`            | Player / team social; teams carry brand hex                                                                                      |
-| `GET /fanbases?scope=team\|league\|other`           | Which fanbases are talking, from user flair                                                                                      |
-| `GET /tags`, `/sources`, `/authors`, `/composition` | Rollups with median score, comments, and discussion ratio                                                                        |
-| `GET /facets`                                       | Content-type counts for filter chips                                                                                             |
-| `GET /rhythm`                                       | Posts per UTC hour, always 24 rows                                                                                               |
+| Route                                     | Returns                                                                                                                          |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /summary`                            | Header counts, including captured vs. reported comment totals                                                                    |
+| `GET /posts`                              | Feed. Filters: `tag`, `source`, `content_type`, `contested`, `search`; `sort` in `recent\|score\|comments\|discussion\|leverage` |
+| `GET /posts/{reddit_id}`                  | One post plus `selftext`                                                                                                         |
+| `GET /posts/{reddit_id}/comments`         | The stored top-10 sample, **never the thread**                                                                                   |
+| `GET /entities?entity_type=player\|team`  | Player / team social; teams carry brand hex                                                                                      |
+| `GET /fanbases?scope=team\|league\|other` | Which fanbases are talking, from user flair                                                                                      |
+| `GET /tags`, `/sources`                   | Rollups with median score, comments, and discussion ratio                                                                        |
+| `GET /facets`                             | Content-type counts for filter chips                                                                                             |
 
 `num_comments` is the real Reddit total and `captured_comment_count` is at most 10. **Any UI showing a comment list must label it as a sample.**
 

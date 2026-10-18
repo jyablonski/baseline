@@ -171,56 +171,21 @@ vi.mock("@/lib/api", () => ({
       meta: { total: 1, limit: 1, offset: 0 },
     }),
     listSocialBoard: async (board: string) => ({
-      data:
-        board === "composition"
-          ? [
-              {
-                key: "self",
-                post_count: 104,
-                self_post_count: 104,
-                link_post_count: 0,
-                total_score: 1,
-                top_score: 1,
-                avg_score: 38,
-                median_score: 38,
-                total_comments: 1,
-                median_comments: 96,
-                median_discussion_ratio: 2.53,
-              },
-              {
-                key: "link",
-                post_count: 183,
-                self_post_count: 0,
-                link_post_count: 183,
-                total_score: 1,
-                top_score: 1,
-                avg_score: 412,
-                median_score: 412,
-                total_comments: 1,
-                median_comments: 61,
-                median_discussion_ratio: 0.15,
-              },
-            ]
-          : [
-              {
-                key:
-                  board === "tags"
-                    ? "Charania"
-                    : board === "sources"
-                      ? "streamable.com"
-                      : "MrBuckBuck",
-                post_count: 14,
-                self_post_count: 9,
-                link_post_count: 5,
-                total_score: 24108,
-                top_score: 5000,
-                avg_score: 1842,
-                median_score: 1842,
-                total_comments: 4000,
-                median_comments: 318,
-                median_discussion_ratio: 0.2,
-              },
-            ],
+      data: [
+        {
+          key: board === "tags" ? "Charania" : "streamable.com",
+          post_count: 14,
+          self_post_count: 9,
+          link_post_count: 5,
+          total_score: 24108,
+          top_score: 5000,
+          avg_score: 1842,
+          median_score: 1842,
+          total_comments: 4000,
+          median_comments: 318,
+          median_discussion_ratio: 0.2,
+        },
+      ],
       meta: { total: 1, limit: 8, offset: 0 },
     }),
   },

@@ -1,48 +1,22 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const navigation = vi.hoisted(() => ({ search: "", replace: vi.fn() }));
+const listGames = vi.hoisted(() => vi.fn());
+const listGameDates = vi.hoisted(() => vi.fn());
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/games",
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: vi.fn(), replace: navigation.replace }),
+  useSearchParams: () => new URLSearchParams(navigation.search),
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
-    listGames: async () => ({
-      data: [
-        {
-          game_id: "0042500405",
-          season: "2025-26",
-          game_date: "2026-06-13",
-          home_team_abbreviation: "SAS",
-          away_team_abbreviation: "NYK",
-          home_score: 125,
-          away_score: 108,
-          score_margin: 17,
-        },
-      ],
-      meta: { total: 1, limit: 15, offset: 0 },
-    }),
-    listBiggestCollapses: async () => ({
-      data: [
-        {
-          game_id: "0042500410",
-          season: "2025-26",
-          game_date: "2026-06-10",
-          home_team_abbreviation: "NYK",
-          away_team_abbreviation: "SAS",
-          home_score: 107,
-          away_score: 106,
-          largest_lead_blown: 29,
-          blown_lead_team_abbreviation: "SAS",
-          comeback_team_abbreviation: "NYK",
-          blown_lead_period: 2,
-          winner_margin_entering_fourth: -15,
-        },
-      ],
-      meta: { total: 1, limit: 10, offset: 0 },
-    }),
+    listGameDates: (...args: unknown[]) => listGameDates(...args),
+    listGames: (...args: unknown[]) => listGames(...args),
+    listTeams: async () => ({ data: [], meta: { total: 0, limit: 30, offset: 0 } }),
+    listBiggestCollapses: async () => ({ data: [], meta: { total: 0, limit: 10, offset: 0 } }),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
 }));
@@ -50,58 +24,133 @@ vi.mock("@/lib/api", () => ({
 import GamesPage from "@/app/games/page";
 import { Providers } from "@/components/providers";
 
+const DATES = [
+  { game_date: "2026-06-13", season: "2025-26", game_count: 1 },
+  { game_date: "2026-06-10", season: "2025-26", game_count: 1 },
+  { game_date: "2026-06-08", season: "2025-26", game_count: 1 },
+];
+
+const FINALS_GAME = {
+  game_id: "g-finals-5",
+  season: "2025-26",
+  season_type: "Playoffs",
+  game_date: "2026-06-13",
+  home_team_id: "t-sas",
+  away_team_id: "t-nyk",
+  home_team_abbreviation: "SAS",
+  away_team_abbreviation: "NYK",
+  home_score: 90,
+  away_score: 94,
+  score_margin: 4,
+  home_team_conference: "West",
+  away_team_conference: "East",
+  series_game_number: 5,
+  lead_highlight: "Knicks win the NBA Finals",
+};
+
+function renderPage() {
+  return render(
+    <Providers>
+      <GamesPage />
+    </Providers>
+  );
+}
+
+beforeEach(() => {
+  navigation.search = "";
+  navigation.replace.mockReset();
+  listGameDates.mockReset();
+  listGameDates.mockResolvedValue({ data: DATES, meta: { total: 3, limit: 3, offset: 0 } });
+  listGames.mockReset();
+  listGames.mockResolvedValue({ data: [FINALS_GAME], meta: { total: 1, limit: 20, offset: 0 } });
+});
+
 describe("games index", () => {
-  it("lists recent final games with play-by-play links", async () => {
-    render(
-      <Providers>
-        <GamesPage />
-      </Providers>
-    );
-    await waitFor(() => {
-      expect(screen.getAllByRole("link", { name: "PBP →" }).length).toBeGreaterThan(0);
-    });
-    expect(screen.getByRole("heading", { name: "Game flow" })).toBeInTheDocument();
-    expect(screen.getByText("Recent final games")).toBeInTheDocument();
-    // Scoped to the recent-games table: the collapse table below repeats these teams.
-    const recent = within(screen.getAllByRole("table")[0]);
-    expect(recent.getByText("Margin")).toBeInTheDocument();
-    expect(recent.getByText("NYK")).toBeInTheDocument();
-    expect(recent.getByText("SAS")).toBeInTheDocument();
-    expect(recent.getByRole("link", { name: "PBP →" })).toHaveAttribute(
-      "href",
-      "/games/0042500405"
-    );
-    // The only select on this page is the blown-leads team filter; the games
-    // table itself is still unfiltered.
-    expect(screen.getAllByRole("combobox")).toHaveLength(1);
-    expect(screen.getByLabelText("Blew it")).toHaveValue("");
+  it("opens on the latest day, winner first, each game linked to its page", async () => {
+    renderPage();
+    const row = await screen.findByTestId("result-row");
+    expect(listGames).toHaveBeenCalledWith({ game_date: "2026-06-13", limit: 20 });
+    expect(screen.getByRole("heading", { name: "Latest · Saturday, June 13" })).toBeInTheDocument();
+    expect(screen.getByText("Finals · Game 5 · 1 game")).toBeInTheDocument();
+    const link = within(row).getByRole("link", { name: "NYK 94, SAS 90" });
+    expect(link).toHaveAttribute("href", "/games/g-finals-5");
+    expect(within(row).getByText("NYK by 4")).toBeInTheDocument();
+    expect(within(row).getByText("Knicks win the NBA Finals")).toBeInTheDocument();
+    // Upcoming games live on the schedule; notables sit below the results.
+    expect(screen.getByRole("link", { name: "schedule" })).toHaveAttribute("href", "/schedule");
+    expect(screen.getByRole("heading", { name: "Season notables" })).toBeInTheDocument();
+    // Nothing newer than the latest day.
+    expect(screen.getByRole("button", { name: "Later game day" })).toBeDisabled();
   });
 
-  it("ranks the biggest blown leads under the recent games table", async () => {
-    render(
-      <Providers>
-        <GamesPage />
-      </Providers>
-    );
-
-    expect(screen.getByText("Biggest blown leads")).toBeInTheDocument();
-    // The heading renders before either query settles; wait for both tables.
-    await waitFor(() => {
-      expect(screen.getAllByRole("table")).toHaveLength(2);
+  it("steps back a game day through the URL, and forward to latest without a date", async () => {
+    renderPage();
+    await screen.findByTestId("result-row");
+    fireEvent.click(screen.getByRole("button", { name: "Earlier game day" }));
+    expect(navigation.replace).toHaveBeenLastCalledWith("/games?date=2026-06-10", {
+      scroll: false,
     });
-    const collapses = within(screen.getAllByRole("table")[1]);
-    const row = collapses.getByText("29").closest("tr");
-    expect(row).toBeTruthy();
-    expect(row!.textContent).toContain("SAS");
-    // Opponent column: the team that completed the comeback.
-    expect(within(row as HTMLElement).getByText("NYK", { exact: true })).toBeInTheDocument();
-    expect(collapses.getByRole("columnheader", { name: "Opponent" })).toBeInTheDocument();
-    expect(row!.textContent).toContain("Q2");
-    expect(row!.textContent).toContain("SAS 106");
-    expect(row!.textContent).toContain("NYK 107");
-    expect(within(row as HTMLElement).getByRole("link")).toHaveAttribute(
-      "href",
-      "/games/0042500410"
+
+    navigation.search = "date=2026-06-10&tab=upsets";
+    navigation.replace.mockReset();
+    renderPage();
+    expect(await screen.findByRole("heading", { name: "Wednesday, June 10" })).toBeInTheDocument();
+    expect(listGames).toHaveBeenCalledWith({ game_date: "2026-06-10", limit: 20 });
+    const [later] = screen.getAllByRole("button", { name: "Later game day" }).slice(-1);
+    fireEvent.click(later);
+    // Back on the latest day the date drops out; the notables tab stays.
+    expect(navigation.replace).toHaveBeenLastCalledWith("/games?tab=upsets", { scroll: false });
+  });
+
+  it("picks a game day from the month grid", async () => {
+    renderPage();
+    await screen.findByTestId("result-row");
+    fireEvent.click(screen.getByRole("button", { name: /Pick a game day/ }));
+    expect(await screen.findByText("June 2026")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tue, Jun 9, no games" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sat, Jun 13" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
     );
+    fireEvent.click(screen.getByRole("button", { name: "Mon, Jun 8" }));
+    expect(navigation.replace).toHaveBeenLastCalledWith("/games?date=2026-06-08", {
+      scroll: false,
+    });
+  });
+
+  it("moves the month grid within the months that have games", async () => {
+    listGameDates.mockResolvedValue({
+      data: [...DATES, { game_date: "2026-05-30", season: "2025-26", game_count: 2 }],
+      meta: { total: 4, limit: 4, offset: 0 },
+    });
+    navigation.search = "date=2026-06-08";
+    renderPage();
+    await screen.findByTestId("result-row");
+    fireEvent.click(screen.getByRole("button", { name: /Pick a game day/ }));
+    expect(screen.getByRole("button", { name: "Next month" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(await screen.findByText("May 2026")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous month" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Latest" }));
+    expect(navigation.replace).toHaveBeenLastCalledWith("/games", { scroll: false });
+  });
+
+  it("says so when a requested date had no games", async () => {
+    navigation.search = "date=2026-06-09";
+    listGames.mockResolvedValue({ data: [], meta: { total: 0, limit: 20, offset: 0 } });
+    renderPage();
+    expect(await screen.findByText("No games were played on this date.")).toBeInTheDocument();
+  });
+
+  it("explains an empty warehouse", async () => {
+    listGameDates.mockResolvedValue({ data: [], meta: { total: 0, limit: 0, offset: 0 } });
+    renderPage();
+    expect(await screen.findByText("No completed games to show yet.")).toBeInTheDocument();
+  });
+
+  it("shows an error loading the dates", async () => {
+    listGameDates.mockRejectedValue(new Error("API down"));
+    renderPage();
+    expect(await screen.findByText("API down", {}, { timeout: 3000 })).toBeInTheDocument();
   });
 });
