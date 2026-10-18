@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from dependencies import get_standings_repository, get_teams_repository
 from repositories.standings import StandingsRepository
 from repositories.teams import TeamsRepository
+from routers.params import validate_season_type
 from schemas import (
     ItemResponse,
     PaginatedResponse,
@@ -27,25 +28,6 @@ def _validate_location(location: str | None) -> str | None:
     if normalized not in {"home", "away"}:
         raise HTTPException(status_code=400, detail="location must be 'home' or 'away'")
     return normalized
-
-
-def _validate_season_type(season_type: str | None) -> str | None:
-    if season_type is None:
-        return None
-    key = season_type.strip().lower().replace("-", "").replace(" ", "")
-    mapping = {
-        "regularseason": "Regular Season",
-        "cup": "Cup",
-        "nbacup": "Cup",
-        "playoffs": "Playoffs",
-        "playin": "PlayIn",
-    }
-    if key not in mapping:
-        raise HTTPException(
-            status_code=400,
-            detail="season_type must be Regular Season, Cup, Playoffs, or PlayIn",
-        )
-    return mapping[key]
 
 
 @router.get("", response_model=PaginatedResponse[TeamSummary])
@@ -157,7 +139,7 @@ def get_team_games(
         location=_validate_location(location),
         since_season=since_season,
         arena_city=arena_city,
-        season_type=_validate_season_type(season_type),
+        season_type=validate_season_type(season_type),
         limit=limit,
         offset=offset,
     )
@@ -180,7 +162,7 @@ def get_team_season_games(
     if repo.get_team(team_id) is None:
         raise HTTPException(status_code=404, detail="Team not found")
     rows = repo.list_team_season_games(
-        team_id, season=season, season_type=_validate_season_type(season_type)
+        team_id, season=season, season_type=validate_season_type(season_type)
     )
     data = [TeamSeasonGame.model_validate(row) for row in rows]
     return PaginatedResponse(
@@ -210,6 +192,6 @@ def get_team_record(
         location=_validate_location(location),
         since_season=since_season,
         arena_city=arena_city,
-        season_type=_validate_season_type(season_type),
+        season_type=validate_season_type(season_type),
     )
     return ItemResponse(data=TeamRecord.model_validate(repo.compute_record(team, params)))

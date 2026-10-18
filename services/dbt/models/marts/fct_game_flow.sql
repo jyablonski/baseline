@@ -2,8 +2,28 @@ with scoring as (
     select * from {{ ref('int_play_by_play_scoring') }}
 ),
 
+-- The winner's side, worked out once: winner_sign turns any home-minus-away
+-- differential into the winner's margin (and its negation into the loser's).
 games as (
-    select * from {{ ref('fct_team_game_results') }}
+    select
+        fct_team_game_results.*,
+        case
+            when fct_team_game_results.winning_team_id = fct_team_game_results.home_team_id then 1
+            when fct_team_game_results.winning_team_id = fct_team_game_results.away_team_id then -1
+        end as winner_sign,
+        case
+            when fct_team_game_results.winning_team_id = fct_team_game_results.home_team_id
+                then fct_team_game_results.home_team_abbreviation
+            when fct_team_game_results.winning_team_id = fct_team_game_results.away_team_id
+                then fct_team_game_results.away_team_abbreviation
+        end as winning_team_abbreviation,
+        case
+            when fct_team_game_results.winning_team_id = fct_team_game_results.home_team_id
+                then fct_team_game_results.away_team_abbreviation
+            when fct_team_game_results.winning_team_id = fct_team_game_results.away_team_id
+                then fct_team_game_results.home_team_abbreviation
+        end as losing_team_abbreviation
+    from {{ ref('fct_team_game_results') }}
 ),
 
 game_bounds as (
@@ -256,10 +276,7 @@ loser_margins as (
         scoring.period,
         scoring.action_number,
         scoring.elapsed_seconds,
-        case
-            when games.winning_team_id = games.home_team_id then -scoring.score_differential
-            when games.winning_team_id = games.away_team_id then scoring.score_differential
-        end as loser_margin
+        -games.winner_sign * scoring.score_differential as loser_margin
     from scoring
     inner join games
         on scoring.game_id = games.game_id
@@ -320,24 +337,14 @@ winner_period_margins as (
         games.game_id,
         max(
             case
-                when period_end_margins.period = 2 then
-                    case
-                        when games.winning_team_id = games.home_team_id
-                            then period_end_margins.score_differential
-                        when games.winning_team_id = games.away_team_id
-                            then -period_end_margins.score_differential
-                    end
+                when period_end_margins.period = 2
+                    then games.winner_sign * period_end_margins.score_differential
             end
         ) as winner_halftime_margin,
         max(
             case
-                when period_end_margins.period = 3 then
-                    case
-                        when games.winning_team_id = games.home_team_id
-                            then period_end_margins.score_differential
-                        when games.winning_team_id = games.away_team_id
-                            then -period_end_margins.score_differential
-                    end
+                when period_end_margins.period = 3
+                    then games.winner_sign * period_end_margins.score_differential
             end
         ) as winner_margin_entering_fourth
     from games
@@ -384,10 +391,7 @@ select
     games.away_team_name,
     games.away_score,
     games.winning_team_id,
-    case
-        when games.winning_team_id = games.home_team_id then games.home_team_abbreviation
-        when games.winning_team_id = games.away_team_id then games.away_team_abbreviation
-    end as winning_team_abbreviation,
+    games.winning_team_abbreviation,
     games.winner_location,
     game_end.scoring_play_count,
     greatest(game_end.max_home_lead, 0) as max_home_lead,
@@ -422,18 +426,10 @@ select
     coalesce(game_periods.final_period, 4) > 4 as went_to_overtime,
     coalesce(blown_lead.largest_lead_blown, 0) as largest_lead_blown,
     case
-        when coalesce(blown_lead.largest_lead_blown, 0) > 0
-            then case
-                when games.winning_team_id = games.home_team_id then games.away_team_abbreviation
-                when games.winning_team_id = games.away_team_id then games.home_team_abbreviation
-            end
+        when coalesce(blown_lead.largest_lead_blown, 0) > 0 then games.losing_team_abbreviation
     end as blown_lead_team_abbreviation,
     case
-        when coalesce(blown_lead.largest_lead_blown, 0) > 0
-            then case
-                when games.winning_team_id = games.home_team_id then games.home_team_abbreviation
-                when games.winning_team_id = games.away_team_id then games.away_team_abbreviation
-            end
+        when coalesce(blown_lead.largest_lead_blown, 0) > 0 then games.winning_team_abbreviation
     end as comeback_team_abbreviation,
     blown_lead.blown_lead_period,
     blown_lead.blown_lead_elapsed_seconds,

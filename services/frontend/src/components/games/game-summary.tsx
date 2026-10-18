@@ -94,9 +94,16 @@ export function GameHeader({
   return (
     <header className="space-y-5 border-b border-rule-strong pb-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm text-ink-2">
-        <Link href="/schedule" className="hover:text-primary">
-          ← Schedule
-        </Link>
+        {/* A finished game goes back to its day on Games; an upcoming one to the schedule. */}
+        {final ? (
+          <Link href={`/games?date=${game.game_date.slice(0, 10)}`} className="hover:text-primary">
+            ← Games
+          </Link>
+        ) : (
+          <Link href="/schedule" className="hover:text-primary">
+            ← Schedule
+          </Link>
+        )}
         <p data-testid="game-meta">{meta.join(" · ")}</p>
       </div>
       <h1 className="sr-only">{formatMatchupTitle({ ...game, winning_team_id: winner })}</h1>

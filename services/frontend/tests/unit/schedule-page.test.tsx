@@ -126,8 +126,9 @@ describe("schedule page", () => {
     expect(screen.getAllByTestId("moneyline")[1]).toHaveTextContent("—");
     expect(screen.getAllByTestId("spread")[1]).toHaveTextContent("—");
     expect(screen.getByRole("heading", { name: "Schedule" }).parentElement).toHaveTextContent(
-      "2026-27 schedule from today onward."
+      "2026-27 schedule from today onward. Finished games are under Games."
     );
+    expect(screen.getByRole("link", { name: "Games" })).toHaveAttribute("href", "/games");
     // What a column means is behind its heading, not spelled out above the table.
     expect(screen.queryByText(/pregame model estimate/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Win %" }));

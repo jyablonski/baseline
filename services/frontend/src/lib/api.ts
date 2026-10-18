@@ -14,7 +14,10 @@ import type {
   FeatureFlags,
   GameLogEntry,
   GameLogParams,
+  ClosestGame,
   GameCollapse,
+  GameDate,
+  LargestMarginGame,
   GameUpset,
   Transaction,
   GameFlow,
@@ -72,6 +75,19 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
   }
   const qs = search.toString();
   return qs ? `?${qs}` : "";
+}
+
+/** The filters every Season notables list takes: one season, either side's team, a page. */
+type NotablesParams = { season?: string; team?: string; limit?: number; offset?: number };
+
+function notablesQuery(params: NotablesParams, extra: Record<string, string | undefined> = {}) {
+  return buildQuery({
+    season: params.season,
+    ...extra,
+    team: params.team,
+    limit: params.limit,
+    offset: params.offset,
+  });
 }
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
@@ -263,7 +279,7 @@ export const api = {
     asPaginated<SocialFacet>(await fetchApi(`/api/v1/social/facets${buildQuery({ ...params })}`)),
 
   listSocialBoard: async (
-    board: "tags" | "sources" | "authors" | "composition",
+    board: "tags" | "sources",
     params: SocialWindowParams & { limit?: number } = {}
   ) =>
     asPaginated<SocialLeader>(
@@ -387,10 +403,16 @@ export const api = {
         `/api/v1/games${buildQuery({
           season: params.season,
           season_type: params.season_type,
+          game_date: params.game_date,
           limit: params.limit ?? 10,
           offset: params.offset,
         })}`
       )
+    ),
+
+  listGameDates: async (params: { season?: string } = {}) =>
+    asPaginated<GameDate>(
+      await fetchApi(`/api/v1/games/dates${buildQuery({ season: params.season })}`)
     ),
 
   listSchedule: async (params: ListScheduleParams = {}) =>
@@ -415,27 +437,21 @@ export const api = {
       await fetchApi(`/api/v1/predictions/scorecard${buildQuery({ season: params.season })}`)
     ),
 
-  listBiggestCollapses: async (
-    params: { season?: string; blown_lead_team?: string; limit?: number } = {}
-  ) =>
-    asPaginated<GameCollapse>(
-      await fetchApi(
-        `/api/v1/games/collapses${buildQuery({
-          season: params.season,
-          blown_lead_team: params.blown_lead_team,
-          limit: params.limit ?? 10,
-        })}`
-      )
+  listBiggestCollapses: async (params: NotablesParams = {}) =>
+    asPaginated<GameCollapse>(await fetchApi(`/api/v1/games/collapses${notablesQuery(params)}`)),
+
+  listClosestGames: async (params: NotablesParams = {}) =>
+    asPaginated<ClosestGame>(await fetchApi(`/api/v1/games/closest${notablesQuery(params)}`)),
+
+  listLargestMargins: async (params: NotablesParams = {}) =>
+    asPaginated<LargestMarginGame>(
+      await fetchApi(`/api/v1/games/largest-margins${notablesQuery(params)}`)
     ),
 
-  listUpsets: async (params: { season?: string; season_type?: string; limit?: number } = {}) =>
+  listUpsets: async (params: NotablesParams & { season_type?: string } = {}) =>
     asPaginated<GameUpset>(
       await fetchApi(
-        `/api/v1/games/upsets${buildQuery({
-          season: params.season,
-          season_type: params.season_type,
-          limit: params.limit,
-        })}`
+        `/api/v1/games/upsets${notablesQuery(params, { season_type: params.season_type })}`
       )
     ),
 

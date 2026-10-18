@@ -7,6 +7,7 @@ describe("nav", () => {
     expect(PRIMARY_NAV.map((item) => item.label)).toEqual([
       "Home",
       "Schedule",
+      "Games",
       "Players",
       "Teams",
       "Social",

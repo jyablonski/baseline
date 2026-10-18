@@ -291,6 +291,35 @@ CREATE TABLE IF NOT EXISTS gold.fct_player_injuries (
     PRIMARY KEY (player_id, team_id)
 );
 
+-- The columns the API and Cube's team_game_flow read; the mart has more.
+CREATE TABLE IF NOT EXISTS gold.fct_game_flow (
+    game_id                         UUID PRIMARY KEY,
+    season                          VARCHAR(10),
+    game_date                       DATE,
+    home_team_id                    UUID,
+    home_team_abbreviation          VARCHAR(5),
+    home_score                      INTEGER,
+    away_team_id                    UUID,
+    away_team_abbreviation          VARCHAR(5),
+    away_score                      INTEGER,
+    winning_team_id                 UUID,
+    winning_team_abbreviation       VARCHAR(5),
+    scoring_play_count              INTEGER,
+    max_home_lead                   INTEGER,
+    max_away_lead                   INTEGER,
+    lead_changes                    INTEGER,
+    ties                            INTEGER,
+    final_period                    INTEGER,
+    overtime_periods                INTEGER,
+    went_to_overtime                BOOLEAN,
+    largest_lead_blown              INTEGER,
+    blown_lead_team_abbreviation    VARCHAR(5),
+    comeback_team_abbreviation      VARCHAR(5),
+    blown_lead_period               INTEGER,
+    winner_margin_entering_fourth   INTEGER,
+    is_wire_to_wire                 BOOLEAN
+);
+
 CREATE TABLE IF NOT EXISTS gold.fct_game_injuries (
     game_id         UUID NOT NULL,
     game_date       DATE,

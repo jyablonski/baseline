@@ -1,6 +1,14 @@
 import { expect, type Page } from "@playwright/test";
 
-export const PRIMARY_NAV = ["Home", "Schedule", "Players", "Teams", "Social", "Ask"] as const;
+export const PRIMARY_NAV = [
+  "Home",
+  "Schedule",
+  "Games",
+  "Players",
+  "Teams",
+  "Social",
+  "Ask",
+] as const;
 
 export type MockApiOptions = {
   empty?: boolean;
@@ -901,9 +909,8 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
       }
 
       if (url.includes("/games/collapses")) {
-        const blownLeadTeam = new URL(url, window.location.origin).searchParams.get(
-          "blown_lead_team"
-        );
+        const search = new URL(url, window.location.origin).searchParams;
+        const team = search.get("team");
         const rows = empty
           ? []
           : [
@@ -932,13 +939,72 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                 game_id: index === 0 ? rows[0].game_id : `002240100${index}`,
                 largest_lead_blown: rows[0].largest_lead_blown - index,
               }));
-        const filtered = blownLeadTeam
-          ? padded.filter((row) => row.blown_lead_team_abbreviation === blownLeadTeam)
-          : padded;
+        const filtered = padded.filter(
+          (row) =>
+            !team ||
+            row.blown_lead_team_abbreviation === team ||
+            row.comeback_team_abbreviation === team
+        );
         return json({
           data: filtered,
           meta: { total: filtered.length, limit: 10, offset: 0 },
         });
+      }
+
+      if (url.includes("/games/closest")) {
+        return json({
+          data: empty
+            ? []
+            : [
+                {
+                  game_id: "0022400002",
+                  season: "2025-26",
+                  game_date: "2024-11-02",
+                  home_team_abbreviation: "BOS",
+                  home_score: 118,
+                  away_team_abbreviation: "MIA",
+                  away_score: 115,
+                  winning_team_abbreviation: "BOS",
+                  final_margin: 3,
+                  lead_changes: 4,
+                  overtime_periods: 0,
+                },
+              ],
+          meta: { total: empty ? 0 : 1, limit: 10, offset: 0 },
+        });
+      }
+
+      if (url.includes("/games/largest-margins")) {
+        return json({
+          data: empty
+            ? []
+            : [
+                {
+                  game_id: "0022400001",
+                  season: "2025-26",
+                  game_date: "2024-10-22",
+                  home_team_abbreviation: "GSW",
+                  home_score: 120,
+                  away_team_abbreviation: "LAL",
+                  away_score: 110,
+                  winning_team_abbreviation: "GSW",
+                  final_margin: 10,
+                  is_wire_to_wire: true,
+                },
+              ],
+          meta: { total: empty ? 0 : 1, limit: 10, offset: 0 },
+        });
+      }
+
+      // Two game days: the newest is the default, the older one is a step back.
+      if (url.includes("/games/dates")) {
+        const dates = empty
+          ? []
+          : [
+              { game_date: "2024-10-22", season: "2025-26", game_count: 1 },
+              { game_date: "2024-10-20", season: "2025-26", game_count: 1 },
+            ];
+        return json({ data: dates, meta: { total: dates.length, limit: dates.length, offset: 0 } });
       }
 
       if (url.includes("/games/upsets")) {
@@ -970,8 +1036,9 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         });
       }
 
-      // One game by id. After /games/highlights, /games/collapses and
-      // /games/upsets, which would otherwise read as an id.
+      // One game by id. After /games/highlights, /games/collapses,
+      // /games/closest, /games/largest-margins, /games/dates and /games/upsets,
+      // which would otherwise read as an id.
       const singleGame = url.match(/\/api\/v1\/games\/([^/?]+)(?:\?|$)/);
       if (singleGame) {
         const base = {
@@ -1051,6 +1118,28 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         };
         const game = games[singleGame[1]];
         return game ? json({ data: game }) : json({ detail: "Game not found" }, 404);
+      }
+
+      if (url.includes("/games") && url.includes("game_date=2024-10-20")) {
+        return json({
+          data: [
+            {
+              game_id: "0022400002",
+              season: "2025-26",
+              season_type: "Regular Season",
+              game_date: "2024-10-20",
+              home_team_id: 1610612738,
+              away_team_id: 1610612748,
+              home_team_abbreviation: "BOS",
+              away_team_abbreviation: "MIA",
+              home_score: 118,
+              away_score: 115,
+              score_margin: 3,
+              lead_highlight: "Celtics erase a 21-point deficit",
+            },
+          ],
+          meta: { total: 1, limit: 20, offset: 0 },
+        });
       }
 
       if (url.includes("/games")) {

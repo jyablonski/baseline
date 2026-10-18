@@ -98,6 +98,37 @@ class GameResult(BaseModel):
     winning_team_id: UUID | None = None
     winner_location: str | None = None
     score_margin: int | None = None
+    # East or West; a playoff series across them is the Finals.
+    home_team_conference: str | None = None
+    away_team_conference: str | None = None
+    # The game's number within its playoff series; null outside the playoffs.
+    series_game_number: int | None = None
+    # The game's top highlight headline, when it has one.
+    lead_highlight: str | None = None
+
+
+class GameDate(BaseModel):
+    """A date with Final games, for the results date picker."""
+
+    game_date: date
+    season: str
+    game_count: int
+
+
+class LargestMarginGame(BaseModel):
+    """A Final game ranked by its winning margin, from gold.fct_game_flow."""
+
+    game_id: UUID
+    season: str | None = None
+    game_date: date | None = None
+    home_team_abbreviation: str | None = None
+    home_score: int
+    away_team_abbreviation: str | None = None
+    away_score: int
+    winning_team_abbreviation: str | None = None
+    final_margin: int
+    # Null when the game has no play-by-play to tell.
+    is_wire_to_wire: bool | None = None
 
 
 class PlayByPlayEvent(BaseModel):
@@ -218,6 +249,33 @@ class GameUpset(BaseModel):
     upset_magnitude: float
     upset_rank: int | None = None
     model_called_upset: bool | None = None
+    # No-vig American price for the winner on that line, e.g. +1100.
+    winner_fair_moneyline: int | None = None
+    # Each team's W-L in this season and season type entering the game.
+    home_wins: int | None = None
+    home_losses: int | None = None
+    away_wins: int | None = None
+    away_losses: int | None = None
+    # Notable players ruled out, as on the schedule; empty when none were.
+    home_notable_out: list[str] = Field(default_factory=list)
+    away_notable_out: list[str] = Field(default_factory=list)
+
+
+class ClosestGame(BaseModel):
+    """A Final game ranked by how close it finished, from gold.fct_game_flow."""
+
+    game_id: UUID
+    season: str | None = None
+    game_date: date | None = None
+    home_team_abbreviation: str | None = None
+    home_score: int
+    away_team_abbreviation: str | None = None
+    away_score: int
+    winning_team_abbreviation: str | None = None
+    final_margin: int
+    # Null when the game has no play-by-play to count them from.
+    lead_changes: int | None = None
+    overtime_periods: int | None = None
 
 
 class GameHighlight(BaseModel):

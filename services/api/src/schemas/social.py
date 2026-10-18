@@ -135,17 +135,6 @@ class SocialFacet(BaseModel):
     contested_post_count: int
 
 
-class SocialHour(BaseModel):
-    """One UTC hour of the posting-rhythm strip. Quiet hours are zeroes, not gaps."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    hour_utc: int
-    post_count: int
-    total_comments: int
-    median_score: float | None = None
-
-
 class SocialEntity(BaseModel):
     """A player or team named in posts and their captured comments.
 

@@ -21,7 +21,7 @@ import {
   formatUsdCompact,
   locationLabel,
 } from "@/lib/format";
-import { decodeRouteSlug, isLegacyEntityId, playerHref, slugifyName, withSeason } from "@/lib/nav";
+import { decodeRouteSlug, playerHref, slugifyName, withSeason } from "@/lib/nav";
 import type { GameLogEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +50,6 @@ function PlayerProfile() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
   const routeSlug = decodeRouteSlug(params.slug);
-  const isLegacyRoute = isLegacyEntityId(routeSlug);
   const { season } = useSeason();
   const [sortKey, setSortKey] = useState<SortKey>("game_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -60,9 +59,9 @@ function PlayerProfile() {
   const playerLookupQuery = useQuery({
     queryKey: ["player-by-slug", routeSlug],
     queryFn: () => api.findPlayerBySlug(routeSlug),
-    enabled: Boolean(routeSlug) && !isLegacyRoute,
+    enabled: Boolean(routeSlug),
   });
-  const playerId = isLegacyRoute ? routeSlug : (playerLookupQuery.data?.player_id ?? "");
+  const playerId = playerLookupQuery.data?.player_id ?? "";
   const playerQuery = useQuery({
     queryKey: ["player", playerId],
     queryFn: () => api.getPlayer(playerId),
@@ -125,15 +124,15 @@ function PlayerProfile() {
     setSortDir("desc");
   }
 
-  if (!isLegacyRoute && playerLookupQuery.isLoading) {
+  if (playerLookupQuery.isLoading) {
     return <LoadingState label="Loading player…" />;
   }
 
-  if (!isLegacyRoute && playerLookupQuery.isError) {
+  if (playerLookupQuery.isError) {
     return <ErrorState message={queryErrorMessage(playerLookupQuery.error)} />;
   }
 
-  if (!isLegacyRoute && !playerLookupQuery.data) {
+  if (!playerLookupQuery.data) {
     return <ErrorState message="Player not found." />;
   }
 

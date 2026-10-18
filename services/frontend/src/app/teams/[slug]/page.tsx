@@ -14,7 +14,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { useProfile } from "@/hooks/use-profile";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
-import { isLegacyEntityId, slugifyName, teamHref, withSeason } from "@/lib/nav";
+import { slugifyName, teamHref, withSeason } from "@/lib/nav";
 import { formatGamesBack, formatOrdinal, formatRecord, formatRecordWithWinPct } from "@/lib/format";
 import { lastTenFromGames, showsPlayIn, showsPlayoffs, streakFromGames } from "@/lib/team-form";
 import type { PlayerInjury, TeamSeasonGame } from "@/lib/types";
@@ -31,7 +31,6 @@ function TeamProfile() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
   const routeSlug = params.slug;
-  const isLegacyRoute = isLegacyEntityId(routeSlug);
   const { season, isLoading: seasonsLoading } = useSeason();
   const { timezone } = useProfile();
 
@@ -44,7 +43,7 @@ function TeamProfile() {
       slugifyName(item.team_name) === slugifyName(routeSlug) ||
       slugifyName(item.abbreviation) === slugifyName(routeSlug)
   );
-  const teamId = isLegacyRoute ? routeSlug : String(resolvedTeam?.team_id ?? "");
+  const teamId = String(resolvedTeam?.team_id ?? "");
   const teamQuery = useQuery({
     queryKey: ["team", teamId, season],
     queryFn: () => api.getTeam(teamId, { season: season || undefined }),
@@ -82,11 +81,11 @@ function TeamProfile() {
     enabled: Boolean(teamId) && needsForm,
   });
 
-  if (!isLegacyRoute && teamsQuery.isLoading) {
+  if (teamsQuery.isLoading) {
     return <LoadingState label="Loading team…" />;
   }
 
-  if (!isLegacyRoute && teamsQuery.isError) {
+  if (teamsQuery.isError) {
     return <ErrorState message={queryErrorMessage(teamsQuery.error)} />;
   }
 

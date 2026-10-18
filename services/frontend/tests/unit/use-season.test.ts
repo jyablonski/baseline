@@ -6,7 +6,7 @@ const search = new URLSearchParams("season=2024-25");
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace }),
-  usePathname: () => "/standings",
+  usePathname: () => "/teams",
   useSearchParams: () => search,
 }));
 
@@ -29,8 +29,8 @@ describe("useSeason", () => {
       expect(result.current.season).toBe("2024-25");
     });
     result.current.setSeason("2025-26");
-    expect(replace).toHaveBeenCalledWith("/standings?season=2025-26");
+    expect(replace).toHaveBeenCalledWith("/teams?season=2025-26");
     result.current.setSeason("");
-    expect(replace).toHaveBeenCalledWith("/standings");
+    expect(replace).toHaveBeenCalledWith("/teams");
   });
 });

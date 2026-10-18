@@ -46,6 +46,35 @@ export function standingsSeed(row: {
   return row.playoff_seed ?? row.conference_rank ?? null;
 }
 
+type RankedRow = {
+  conference: string;
+  team_name: string;
+  win_pct?: number | null;
+  playoff_seed?: number | null;
+  conference_rank?: number | null;
+};
+
+/**
+ * One conference ("east" / "west"), best seed first. Unseeded teams follow by
+ * win %, then name, so an early-season table still reads top to bottom.
+ */
+export function conferenceStandings<T extends RankedRow>(rows: T[], conference: "east" | "west") {
+  return rows
+    .filter((row) => row.conference.toLowerCase().startsWith(conference))
+    .sort((a, b) => {
+      const seedA = standingsSeed(a);
+      const seedB = standingsSeed(b);
+      if (seedA != null && seedB != null) {
+        return seedA - seedB || a.team_name.localeCompare(b.team_name);
+      }
+      if (seedA != null) return -1;
+      if (seedB != null) return 1;
+      const winDiff = (b.win_pct ?? -1) - (a.win_pct ?? -1);
+      if (winDiff !== 0) return winDiff;
+      return a.team_name.localeCompare(b.team_name);
+    });
+}
+
 type PhaseGame = { season_type?: string | null };
 
 /** Play-in only applies to teams on its slate: played one, or scheduled for one. */

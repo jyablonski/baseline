@@ -1,6 +1,6 @@
 -- Seeded gold mart rows for API/MCP integration tests (no dbt required).
 
-TRUNCATE gold.fct_transaction_participants, gold.fct_transactions, gold.fct_game_upsets, gold.fct_game_injuries, gold.fct_player_injuries, gold.fct_daily_highlights, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
+TRUNCATE gold.fct_game_flow, gold.fct_transaction_participants, gold.fct_transactions, gold.fct_game_upsets, gold.fct_game_injuries, gold.fct_player_injuries, gold.fct_daily_highlights, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
          gold.fct_standings, gold.fct_player_mvp_scores, gold.fct_player_season_stats, gold.fct_player_game_logs,
          gold.fct_team_game_results, gold.fct_games_schedule, gold.dim_players, gold.dim_teams
          RESTART IDENTITY CASCADE;
@@ -221,6 +221,34 @@ INSERT INTO gold.fct_game_injuries (
     ('00000000-0000-4000-8000-000000000204', CURRENT_DATE + 14, '2024-25', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'away',
      '00000000-0000-4000-8000-000000000102', 'Kawhi Leonard', 'Day To Day', 'Knee', 'Day To Day (Knee) - Soreness',
      CURRENT_DATE - 2, CURRENT_DATE, TRUE, NULL);
+
+-- GAME_THREE: LAC came back from 15 down in Q3 and won in overtime, the
+-- closest finish. GAME_ONE: GSW came back from 8. GAME_TWO: wire to wire, with
+-- no play-by-play, so its lead changes are unknown rather than 0.
+INSERT INTO gold.fct_game_flow (
+    game_id, season, game_date,
+    home_team_id, home_team_abbreviation, home_score,
+    away_team_id, away_team_abbreviation, away_score,
+    winning_team_id, winning_team_abbreviation, scoring_play_count,
+    max_home_lead, max_away_lead, lead_changes, ties, final_period, overtime_periods,
+    went_to_overtime, largest_lead_blown, blown_lead_team_abbreviation, comeback_team_abbreviation,
+    blown_lead_period, winner_margin_entering_fourth, is_wire_to_wire
+) VALUES
+    ('00000000-0000-4000-8000-000000000201', '2024-25', '2024-10-22',
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 120,
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 110,
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 140,
+     14, 8, 4, 2, 4, 0, FALSE, 8, 'LAC', 'GSW', 2, 6, FALSE),
+    ('00000000-0000-4000-8000-000000000202', '2024-25', '2024-10-23',
+     'a96f53b4-0f5c-4cb6-8b88-21ba05224cae', 'CHI', 105,
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 112,
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', NULL,
+     0, 0, 0, 0, 4, 0, FALSE, 0, NULL, NULL, NULL, NULL, TRUE),
+    ('00000000-0000-4000-8000-000000000203', '2024-25', '2024-10-25',
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 118,
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 115,
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 160,
+     6, 15, 12, 5, 5, 1, TRUE, 15, 'GSW', 'LAC', 3, -4, FALSE);
 
 -- GAME_ONE: GSW won at 30%, a line the model disagreed with. GAME_THREE: LAC
 -- won at 42% with the model on GSW. GAME_TWO: the favourite won.

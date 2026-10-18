@@ -1,17 +1,15 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from dependencies import get_transactions_repository
 from repositories.transactions import TransactionsRepository
+from routers.params import normalize_team
 from schemas import (
-    ItemResponse,
     PaginatedResponse,
     PaginationMeta,
-    SeasonListResponse,
     Transaction,
-    TransactionDetail,
 )
 
 router = APIRouter()
@@ -30,7 +28,7 @@ def list_transactions(
     total, rows = repo.list_transactions(
         season=season,
         search=search.strip() if search and search.strip() else None,
-        team_abbreviation=team_abbreviation.strip().upper() if team_abbreviation else None,
+        team_abbreviation=normalize_team(team_abbreviation),
         player_id=player_id,
         limit=limit,
         offset=offset,
@@ -39,27 +37,3 @@ def list_transactions(
         data=[Transaction.model_validate(row) for row in rows],
         meta=PaginationMeta(total=total, limit=limit, offset=offset),
     )
-
-
-@router.get("/seasons", response_model=SeasonListResponse)
-def list_transaction_seasons(
-    repo: TransactionsRepository = Depends(get_transactions_repository),
-) -> SeasonListResponse:
-    seasons = repo.list_seasons()
-    return SeasonListResponse(
-        data=seasons,
-        meta=PaginationMeta(total=len(seasons), limit=len(seasons), offset=0),
-    )
-
-
-# After /seasons on purpose: a literal path segment must not be shadowed by the
-# key route, which would match "seasons" as a transaction_key and 404.
-@router.get("/{transaction_key}", response_model=ItemResponse[TransactionDetail])
-def get_transaction(
-    transaction_key: str,
-    repo: TransactionsRepository = Depends(get_transactions_repository),
-) -> ItemResponse[TransactionDetail]:
-    transaction = repo.get_transaction(transaction_key)
-    if transaction is None:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    return ItemResponse(data=TransactionDetail.model_validate(transaction))

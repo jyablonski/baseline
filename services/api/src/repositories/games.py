@@ -12,9 +12,12 @@ from queries.games import (
     GET_GAME_FLOW,
     LIST_BIGGEST_COLLAPSES,
     LIST_BOX_SCORE,
+    LIST_CLOSEST_GAMES,
     LIST_DAILY_HIGHLIGHTS,
+    LIST_GAME_DATES,
     LIST_GAMES,
     LIST_GAMES_COUNT,
+    LIST_LARGEST_MARGINS,
     LIST_PLAY_BY_PLAY,
     LIST_SCHEDULE,
     LIST_SCHEDULE_COUNT,
@@ -32,12 +35,14 @@ class GamesRepository:
         *,
         season: str | None,
         season_type: str | None = None,
+        game_date: date | None = None,
         limit: int,
         offset: int,
     ) -> tuple[int, list[dict]]:
         params = {
             "season": season,
             "season_type": season_type,
+            "game_date": game_date,
             "limit": limit,
             "offset": offset,
         }
@@ -82,18 +87,66 @@ class GamesRepository:
         return _with_moneylines(dict(row._mapping))
 
     def list_biggest_collapses(
-        self, *, season: str | None, blown_lead_team: str | None, limit: int
+        self,
+        *,
+        season: str | None,
+        team: str | None,
+        limit: int,
+        offset: int,
     ) -> list[dict]:
         rows = self.db.execute(
             LIST_BIGGEST_COLLAPSES,
-            {"season": season, "blown_lead_team": blown_lead_team, "limit": limit},
+            {
+                "season": season,
+                "team": team,
+                "limit": limit,
+                "offset": offset,
+            },
         )
         return [dict(row._mapping) for row in rows]
 
-    def list_upsets(self, *, season: str | None, season_type: str | None, limit: int) -> list[dict]:
+    def list_closest_games(
+        self, *, season: str | None, team: str | None, limit: int, offset: int
+    ) -> list[dict]:
+        rows = self.db.execute(
+            LIST_CLOSEST_GAMES,
+            {"season": season, "team": team, "limit": limit, "offset": offset},
+        )
+        return [dict(row._mapping) for row in rows]
+
+    def list_largest_margins(
+        self, *, season: str | None, team: str | None, limit: int, offset: int
+    ) -> list[dict]:
+        rows = self.db.execute(
+            LIST_LARGEST_MARGINS,
+            {"season": season, "team": team, "limit": limit, "offset": offset},
+        )
+        return [dict(row._mapping) for row in rows]
+
+    def list_game_dates(self, *, season: str | None) -> list[dict]:
+        rows = self.db.execute(LIST_GAME_DATES, {"season": season})
+        return [dict(row._mapping) for row in rows]
+
+    def list_upsets(
+        self,
+        *,
+        season: str | None,
+        season_type: str | None,
+        limit: int,
+        team: str | None = None,
+        offset: int = 0,
+    ) -> list[dict]:
         rows = self.db.execute(
             LIST_UPSETS,
-            {"season": season, "season_type": season_type, "limit": limit},
+            {
+                "season": season,
+                "season_type": season_type,
+                "team": team,
+                # The shared absences CTE can narrow to one game; here it covers all.
+                "game_id": None,
+                "limit": limit,
+                "offset": offset,
+            },
         )
         return [dict(row._mapping) for row in rows]
 

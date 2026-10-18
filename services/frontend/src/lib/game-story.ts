@@ -101,9 +101,15 @@ function nickname(game: GameDetail, side: "home" | "away") {
     : (game.away_team_nickname ?? game.away_team_abbreviation ?? "Away");
 }
 
-/** The recap's one-line headline for a Final game. */
+/**
+ * The recap's one-line headline for a Final game. None for a regular-season
+ * game: "Nuggets beat the Hawks, 134–133" only repeats the scoreboard. Series
+ * games say where the series stands; Cup and Play-In games keep the result,
+ * since the stage is what makes it worth a line.
+ */
 export function recapHeadline(game: GameDetail, meetings: Meeting[]) {
   if (game.home_score == null || game.away_score == null) return null;
+  if (stageOf(game.season_type, game) === "Regular Season") return null;
   const winnerSide = homeWon(game) ? "home" : "away";
   const loserSide = winnerSide === "home" ? "away" : "home";
   const winner = nickname(game, winnerSide);
@@ -198,10 +204,15 @@ export function turningPointCard(flow: GameFlow, run: BiggestRun | null): RecapC
   const comeback =
     blown != null && blown >= NOTABLE_LEAD && flow.comeback_team_abbreviation === winner;
   const entering = flow.winner_margin_entering_fourth;
-  // Latest deficit first: "by 7 entering Q4 and by 16 in Q2".
+  // Latest deficit first: "by 7 entering Q4 and by 16 in Q2". When the biggest
+  // deficit came in Q4 or overtime it is both the latest and the largest, so
+  // the smaller one entering Q4 only muddles the order and is left out.
+  const peakedLate = flow.blown_lead_period != null && flow.blown_lead_period >= 4;
   const deficits = comeback
     ? [
-        entering != null && entering < 0 ? `by ${Math.abs(entering)} entering Q4` : null,
+        entering != null && entering < 0 && !peakedLate
+          ? `by ${Math.abs(entering)} entering Q4`
+          : null,
         `by ${blown}${flow.blown_lead_period ? ` in ${periodName(flow.blown_lead_period)}` : ""}`,
       ]
         .filter(Boolean)
@@ -212,7 +223,7 @@ export function turningPointCard(flow: GameFlow, run: BiggestRun | null): RecapC
     const caption = deficits
       ? `${closing ? "Closed the game" : "Came back"} after trailing ${deficits}`
       : flow.is_wire_to_wire
-        ? "Led wire to wire"
+        ? "Never trailed"
         : closing
           ? "Closed the game"
           : null;
@@ -228,7 +239,7 @@ export function turningPointCard(flow: GameFlow, run: BiggestRun | null): RecapC
       label: "Turning point",
       figure: `+${flow.max_lead}`,
       name: `${winner} max lead`,
-      caption: "Led wire to wire",
+      caption: "Never trailed",
     };
   }
   if (comeback && deficits) {

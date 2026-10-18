@@ -9,7 +9,9 @@ test("schedule lists the upcoming slate without scores or 2010-11 copy", async (
   const scheduleDescription = page
     .locator("p")
     .filter({ hasText: "2025-26 schedule from today onward." });
-  await expect(scheduleDescription).toHaveText("2025-26 schedule from today onward.");
+  await expect(scheduleDescription).toHaveText(
+    "2025-26 schedule from today onward. Finished games are under Games."
+  );
   await page.getByRole("button", { name: "TV" }).click();
   await expect(page.getByRole("dialog", { name: "TV" })).toContainText(
     "National TV and streaming broadcasts only."
@@ -40,20 +42,16 @@ test("schedule shows model win % and consensus odds, linking to the scorecard", 
     .getByRole("link", { name: "How accurate is the model? →" })
     .click();
   await expect(page).toHaveURL(/\/predictions$/);
-  await expect(page.getByRole("heading", { name: "Model scorecard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Model Scorecard" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Sportsbook market/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Biggest upsets" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "LAL @ GSW 110–120" })).toHaveAttribute(
-    "href",
-    "/games/0022400001"
-  );
+  // Upsets moved to the Games page.
+  await expect(page.getByRole("heading", { name: "Biggest upsets" })).toHaveCount(0);
 });
 
 test("model scorecard empty warehouse", async ({ page }) => {
   await mockApi(page, { empty: true });
   await page.goto("/predictions");
   await expect(page.getByText("No graded predictions yet")).toBeVisible();
-  await expect(page.getByText("No upsets yet this season")).toBeVisible();
 });
 
 test("schedule empty warehouse", async ({ page }) => {

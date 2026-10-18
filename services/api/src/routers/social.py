@@ -14,7 +14,6 @@ from schemas import (
     SocialEntity,
     SocialFacet,
     SocialFanbase,
-    SocialHour,
     SocialLeader,
     SocialPost,
     SocialPostDetail,
@@ -24,7 +23,6 @@ from schemas import (
 router = APIRouter()
 
 # self and link — the rollup groups into exactly these two.
-COMPOSITION_BUCKETS = 2
 
 
 def _validate_sort(sort: str) -> str:
@@ -179,32 +177,6 @@ def list_social_sources(
     return _leaderboard_response(rows, limit)
 
 
-@router.get("/authors", response_model=PaginatedResponse[SocialLeader])
-def list_social_authors(
-    from_date: Annotated[date | None, Query()] = None,
-    to_date: Annotated[date | None, Query()] = None,
-    subreddit: Annotated[str | None, Query()] = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 25,
-    repo: SocialRepository = Depends(get_social_repository),
-) -> PaginatedResponse[SocialLeader]:
-    rows = repo.list_authors(from_date=from_date, to_date=to_date, subreddit=subreddit, limit=limit)
-    return _leaderboard_response(rows, limit)
-
-
-@router.get("/composition", response_model=PaginatedResponse[SocialLeader])
-def list_social_composition(
-    from_date: Annotated[date | None, Query()] = None,
-    to_date: Annotated[date | None, Query()] = None,
-    subreddit: Annotated[str | None, Query()] = None,
-    repo: SocialRepository = Depends(get_social_repository),
-) -> PaginatedResponse[SocialLeader]:
-    """Self posts against link posts, on the same medians as every other rollup."""
-    rows = repo.list_composition(
-        from_date=from_date, to_date=to_date, subreddit=subreddit, limit=COMPOSITION_BUCKETS
-    )
-    return _leaderboard_response(rows, COMPOSITION_BUCKETS)
-
-
 @router.get("/facets", response_model=PaginatedResponse[SocialFacet])
 def list_social_facets(
     from_date: Annotated[date | None, Query()] = None,
@@ -215,22 +187,6 @@ def list_social_facets(
     """Counts for the content-type chips, over the same window as the feed."""
     rows = repo.list_facets(from_date=from_date, to_date=to_date, subreddit=subreddit)
     data = [SocialFacet.model_validate(row) for row in rows]
-    return PaginatedResponse(
-        data=data,
-        meta=PaginationMeta(total=len(data), limit=len(data), offset=0),
-    )
-
-
-@router.get("/rhythm", response_model=PaginatedResponse[SocialHour])
-def list_social_rhythm(
-    from_date: Annotated[date | None, Query()] = None,
-    to_date: Annotated[date | None, Query()] = None,
-    subreddit: Annotated[str | None, Query()] = None,
-    repo: SocialRepository = Depends(get_social_repository),
-) -> PaginatedResponse[SocialHour]:
-    """Posts per hour of the day, UTC. Always 24 rows."""
-    rows = repo.list_rhythm(from_date=from_date, to_date=to_date, subreddit=subreddit)
-    data = [SocialHour.model_validate(row) for row in rows]
     return PaginatedResponse(
         data=data,
         meta=PaginationMeta(total=len(data), limit=len(data), offset=0),

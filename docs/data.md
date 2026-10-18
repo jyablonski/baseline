@@ -86,7 +86,7 @@ A house metric, not an official award model. Knobs are the `mvp_*` vars in `serv
 
 How the history is kept: `scrape-odds` never writes an event that has already tipped, because the feed carries in-play prices that would overwrite the pregame line. Its prune only deletes _unstarted_ events that left the feed. So a played game keeps its last pregame row in `source.game_odds`. With one morning scrape a day, that row is a morning line, not a true close.
 
-Served by Cube (`game_upsets`), MCP (`get_biggest_upsets`), and REST: `GET /api/v1/games/upsets` lists upsets biggest first (`season`, `season_type`, `limit`; no `season` means the newest season with any), `GET /api/v1/games/{id}` carries `is_upset`, `winner_market_wp` and `model_called_upset`, and each pick from `GET /api/v1/account/picks` carries `is_upset`. All three are null or empty where no line was captured, never an error. The frontend shows them on `/predictions`, the game page and `/picks`.
+Served by Cube (`game_upsets`), MCP (`get_biggest_upsets`), and REST: `GET /api/v1/games/upsets` lists upsets biggest first (`season`, `season_type`, `team` for either side, `limit`, `offset`; no `season` means the newest season with any), with the winner's no-vig price (`winner_fair_moneyline`), each team's record entering the game, and notable absences, `GET /api/v1/games/{id}` carries `is_upset`, `winner_market_wp` and `model_called_upset`, and each pick from `GET /api/v1/account/picks` carries `is_upset`. All three are null or empty where no line was captured, never an error. The frontend shows them in the `/games` Upsets tab, on the game page and in `/picks`.
 
 ### Daily highlights
 

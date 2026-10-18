@@ -3,9 +3,9 @@
 	test-migrate test-lib test-parity \
 	build build-multiarch ensure-buildx-builder remove-buildx-builder sync db-migrate migrate \
 	pipeline-status pipeline-enable pipeline-disable scrape dbt ml ml-train ml-snapshot ml-eval ml-backfill refresh \
-	refresh-daily refresh-daily-once seed-demo seed-demo-clean \
+	refresh-daily-once seed-demo seed-demo-clean \
 	prod-config prod-up prod-migrate prod-dbt prod-deploy prod-release prod-build prod-pull prod-pull-tools prod-record-deploy \
-	prod-pipeline-status prod-pipeline-enable prod-pipeline-disable prod-refresh prod-refresh-daily prod-refresh-daily-once \
+	prod-pipeline-status prod-pipeline-enable prod-pipeline-disable prod-refresh prod-refresh-daily-once \
 	prod-health prod-smoke prod-prune prod-check-freshness check-freshness prod-caddy-reload \
 	prod-scrape prod-ml prod-ml-backfill prod-ml-train prod-ml-snapshot admin-jobs prod-admin-jobs test-admin-jobs quality \
 	db-backup prod-db-backup db-restore-test db-restore prod-db-restore test-backups
@@ -180,8 +180,6 @@ prod-dbt: ## Rebuild gold on the server without scraping (needed after new/chang
 	DOCKER_TARGET=runtime COMPOSE="$(COMPOSE_PROD)" DBT_BUILD_ARGS=" --full-refresh" \
 		LABEL="make prod-dbt" ./scripts/dbt-build.sh
 
-prod-refresh-daily: prod-refresh ## Alias for prod-refresh
-
 prod-refresh-daily-once: ## Force one production scrape -> dbt -> ml cycle
 	@test -n "$(IMAGE_PREFIX)" || { echo "prod-refresh-daily-once requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
 	$(MAKE) prod-pull-tools
@@ -252,7 +250,7 @@ prod-prune: ## Drop dangling layers left behind by the last build
 
 down: ## Stop Tilt and tear down compose resources (also drops the nba buildx builder)
 	-$(TILT) down
-	$(COMPOSE) --profile tools --profile cube --profile cron down --remove-orphans
+	$(COMPOSE) --profile tools --profile cron down --remove-orphans
 	-./scripts/remove-buildx-builder.sh
 
 stop: down
@@ -262,10 +260,9 @@ logs: ## Tail compose logs
 
 # Compose has no `platform:` pin — Docker builds for this machine's CPU.
 # Include tools so `make build` covers the full image set (not only
-# api/frontend/cube). refresh-daily rebuilds nba-scraper and nba-dbt.
-# `--profile cube` is kept for older compose files that still profile Cube.
+# api/frontend/cube). refresh rebuilds nba-scraper and nba-dbt.
 build: ## Build runtime images for this machine's CPU (amd64 or arm64)
-	DOCKER_TARGET=$(DOCKER_TARGET) $(COMPOSE) --profile tools --profile cube build
+	DOCKER_TARGET=$(DOCKER_TARGET) $(COMPOSE) --profile tools build
 
 # docker-container driver can emit a multi-arch manifest; classic `docker load`
 # cannot. Without PUSH=1 the images stay in the buildx builder cache.
@@ -356,8 +353,6 @@ ml-backfill: ## Walk-forward pregame WP for past Finals so the scorecard grades 
 
 refresh: ## scrape then dbt then ml; bind-mounts host files; does not recreate postgres
 	FORCE=0 ./scripts/refresh-daily.sh
-
-refresh-daily: refresh ## alias for refresh
 
 refresh-daily-once: ## Force one scrape→dbt→ml cycle; bind-mounts host files; does not recreate postgres
 	FORCE=1 ./scripts/refresh-daily.sh

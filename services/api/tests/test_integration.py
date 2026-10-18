@@ -108,6 +108,23 @@ def test_games_and_seasons(integration_client) -> None:
     assert games.status_code == 200
     assert games.json()["meta"]["total"] == 3
 
+    one_day = integration_client.get("/api/v1/games", params={"game_date": "2024-10-22"}).json()
+    assert one_day["meta"]["total"] == 1
+    opener = one_day["data"][0]
+    assert opener["game_id"] == GAME_ONE
+    # Only the top-ranked highlight, and no series number outside the playoffs.
+    assert opener["lead_highlight"] == "Stephen Curry scores 42"
+    assert opener["series_game_number"] is None
+    assert opener["home_team_conference"] == opener["away_team_conference"] == "West"
+
+    dates = integration_client.get("/api/v1/games/dates").json()["data"]
+    assert [row["game_date"] for row in dates] == ["2024-10-25", "2024-10-23", "2024-10-22"]
+    assert dates[0] == {"game_date": "2024-10-25", "season": "2024-25", "game_count": 1}
+    assert (
+        integration_client.get("/api/v1/games/dates", params={"season": "2019-20"}).json()["data"]
+        == []
+    )
+
     seasons = integration_client.get("/api/v1/seasons")
     assert seasons.status_code == 200
     assert seasons.json()["data"] == ["2024-25"]
@@ -216,6 +233,80 @@ def test_upsets(integration_client) -> None:
     assert playoffs.json()["data"] == []
     other = integration_client.get("/api/v1/games/upsets", params={"season": "2019-20"})
     assert other.json()["data"] == []
+
+
+@pytest.mark.integration
+def test_upsets_carry_context_and_filter_by_either_team(integration_client) -> None:
+    upsets = integration_client.get("/api/v1/games/upsets").json()["data"]
+    first, third = upsets
+    assert first["winner_fair_moneyline"] == 233
+    # The season opener: nobody had a record yet. Kawhi was ruled out.
+    assert (first["home_wins"], first["home_losses"], first["away_wins"], first["away_losses"]) == (
+        0,
+        0,
+        0,
+        0,
+    )
+    assert first["away_notable_out"] == ["Kawhi Leonard"]
+    assert first["home_notable_out"] == []
+    # Entering GAME_THREE: LAC (home) 1-1, GSW 1-0.
+    assert (third["home_wins"], third["home_losses"], third["away_wins"], third["away_losses"]) == (
+        1,
+        1,
+        1,
+        0,
+    )
+
+    lac = integration_client.get("/api/v1/games/upsets", params={"team": "lac"}).json()["data"]
+    assert [row["game_id"] for row in lac] == [GAME_ONE, GAME_THREE]
+    chi = integration_client.get("/api/v1/games/upsets", params={"team": "CHI"}).json()["data"]
+    assert chi == []
+    paged = integration_client.get("/api/v1/games/upsets", params={"limit": 1, "offset": 1})
+    assert [row["game_id"] for row in paged.json()["data"]] == [GAME_THREE]
+
+
+@pytest.mark.integration
+def test_collapses_filter_by_either_side(integration_client) -> None:
+    collapses = integration_client.get("/api/v1/games/collapses").json()["data"]
+    # Wire-to-wire GAME_TWO is not a collapse.
+    assert [row["game_id"] for row in collapses] == [GAME_THREE, GAME_ONE]
+    assert collapses[0]["largest_lead_blown"] == 15
+
+    gsw = integration_client.get("/api/v1/games/collapses", params={"team": "GSW"}).json()["data"]
+    assert [row["game_id"] for row in gsw] == [GAME_THREE, GAME_ONE]
+    paged = integration_client.get("/api/v1/games/collapses", params={"limit": 1, "offset": 1})
+    assert [row["game_id"] for row in paged.json()["data"]] == [GAME_ONE]
+
+
+@pytest.mark.integration
+def test_closest_games(integration_client) -> None:
+    response = integration_client.get("/api/v1/games/closest", params={"season": "2024-25"})
+    assert response.status_code == 200
+    games = response.json()["data"]
+    assert [row["game_id"] for row in games] == [GAME_THREE, GAME_TWO, GAME_ONE]
+    assert (games[0]["final_margin"], games[0]["lead_changes"], games[0]["overtime_periods"]) == (
+        3,
+        12,
+        1,
+    )
+    assert games[0]["winning_team_abbreviation"] == "LAC"
+    # No play-by-play: unknown, not zero.
+    assert games[1]["lead_changes"] is None
+
+    gsw = integration_client.get("/api/v1/games/closest", params={"team": "gsw"}).json()["data"]
+    assert [row["game_id"] for row in gsw] == [GAME_THREE, GAME_ONE]
+
+
+@pytest.mark.integration
+def test_largest_margins(integration_client) -> None:
+    games = integration_client.get("/api/v1/games/largest-margins").json()["data"]
+    assert [row["game_id"] for row in games] == [GAME_ONE, GAME_TWO, GAME_THREE]
+    assert (games[0]["final_margin"], games[0]["winning_team_abbreviation"]) == (10, "GSW")
+    assert games[0]["is_wire_to_wire"] is False
+    # Led all the way per the mart, but with no play-by-play it cannot be known.
+    assert games[1]["is_wire_to_wire"] is None
+    chi = integration_client.get("/api/v1/games/largest-margins", params={"team": "CHI"}).json()
+    assert [row["game_id"] for row in chi["data"]] == [GAME_TWO]
 
 
 @pytest.mark.integration

@@ -5,9 +5,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from queries.transactions import (
-    GET_TRANSACTION,
-    LIST_TRANSACTION_PARTICIPANTS,
-    LIST_TRANSACTION_SEASONS,
     LIST_TRANSACTIONS,
     LIST_TRANSACTIONS_COUNT,
 )
@@ -40,21 +37,3 @@ class TransactionsRepository:
         total = self.db.execute(LIST_TRANSACTIONS_COUNT, params).scalar_one()
         rows = self.db.execute(LIST_TRANSACTIONS, params)
         return int(total), [dict(row._mapping) for row in rows]
-
-    def get_transaction(self, transaction_key: str) -> dict | None:
-        row = (
-            self.db.execute(GET_TRANSACTION, {"transaction_key": transaction_key})
-            .mappings()
-            .first()
-        )
-        if row is None:
-            return None
-        transaction = dict(row)
-        participants = self.db.execute(
-            LIST_TRANSACTION_PARTICIPANTS, {"transaction_key": transaction_key}
-        )
-        transaction["participants"] = [dict(item._mapping) for item in participants]
-        return transaction
-
-    def list_seasons(self) -> list[str]:
-        return [row[0] for row in self.db.execute(LIST_TRANSACTION_SEASONS)]

@@ -77,7 +77,7 @@ Five cron entries on the VM. None of this starts with `make up`.
 0 12  * * 0 cd /opt/nba && make db-restore-test >> /opt/nba/logs/restore-test.log 2>&1
 ```
 
-**Always use the `make prod-*` targets, never raw `docker compose`.** Without `IMAGE_PREFIX`/`IMAGE_TAG` the overlay resolves bare `nba-*:latest`, which does not exist on the box — so Compose silently _builds_ it from the working tree instead of failing. `make refresh-daily` has the same trap. `/opt/nba/logs/` must also exist, or cron's redirect fails before `make` runs.
+**Always use the `make prod-*` targets, never raw `docker compose`.** Without `IMAGE_PREFIX`/`IMAGE_TAG` the overlay resolves bare `nba-*:latest`, which does not exist on the box — so Compose silently _builds_ it from the working tree instead of failing. `make refresh` has the same trap. `/opt/nba/logs/` must also exist, or cron's redirect fails before `make` runs.
 
 `TRIGGER=scheduled` on the refresh entry is what makes `/admin` show that run's trigger as `scheduled`. Everything else records `manual`: a refresh or `make dbt` run by hand, and the `/admin` buttons (they reach `make` through `prod-admin-jobs`, which does not pass it).
 

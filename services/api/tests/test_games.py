@@ -81,6 +81,77 @@ def test_list_games_sql_fills_arena_from_home_team() -> None:
 
 
 @pytest.mark.unit
+def test_list_games_sql_numbers_playoff_series_and_filters_by_date() -> None:
+    from queries.games import LIST_GAMES, LIST_GAMES_COUNT
+
+    sql = str(LIST_GAMES)
+    assert "WHERE fct_team_game_results.season_type = 'Playoffs'" in sql
+    assert "fct_daily_highlights.game_rank = 1" in sql
+    for query in (sql, str(LIST_GAMES_COUNT)):
+        assert "CAST(:game_date AS date) IS NULL" in query
+
+
+@pytest.mark.unit
+def test_list_games_binds_a_date(client, session, query_result) -> None:
+    session.queue = [query_result(scalar=0), query_result([])]
+    response = client.get("/api/v1/games?game_date=2026-06-13")
+    assert response.status_code == 200
+    _, params = session.calls[-1]
+    assert params["game_date"] == date(2026, 6, 13)
+    assert client.get("/api/v1/games?game_date=june").status_code == 422
+
+
+@pytest.mark.unit
+def test_list_game_dates(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [mapping_row({"game_date": date(2026, 6, 13), "season": "2025-26", "game_count": 1})]
+        )
+    ]
+    response = client.get("/api/v1/games/dates?season=2025-26")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [{"game_date": "2026-06-13", "season": "2025-26", "game_count": 1}],
+        "meta": {"total": 1, "limit": 1, "offset": 0},
+    }
+    _, params = session.calls[-1]
+    assert params == {"season": "2025-26"}
+
+
+@pytest.mark.unit
+def test_list_largest_margins(client, session, mapping_row, query_result) -> None:
+    from queries.games import LIST_LARGEST_MARGINS
+
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": GAME_TWO,
+                        "season": "2025-26",
+                        "game_date": date(2025, 12, 12),
+                        "home_team_abbreviation": "OKC",
+                        "home_score": 141,
+                        "away_team_abbreviation": "POR",
+                        "away_score": 94,
+                        "winning_team_abbreviation": "OKC",
+                        "final_margin": 47,
+                        "is_wire_to_wire": True,
+                    }
+                )
+            ]
+        )
+    ]
+    response = client.get("/api/v1/games/largest-margins?team=okc&offset=10")
+    assert response.status_code == 200
+    game = response.json()["data"][0]
+    assert (game["final_margin"], game["is_wire_to_wire"]) == (47, True)
+    _, params = session.calls[-1]
+    assert params == {"season": None, "team": "OKC", "limit": 10, "offset": 10}
+    assert "final_margin DESC" in str(LIST_LARGEST_MARGINS)
+
+
+@pytest.mark.unit
 def test_get_game_play_by_play(client, session, mapping_row, query_result) -> None:
     session.queue = [
         query_result(scalar=1),
@@ -430,6 +501,12 @@ def test_get_game_404(client, session, query_result) -> None:
 def test_fixed_game_paths_are_not_read_as_a_game_id(client, session, query_result) -> None:
     session.queue = [query_result([])]
     assert client.get("/api/v1/games/highlights").status_code == 200
+    session.queue = [query_result([])]
+    assert client.get("/api/v1/games/closest").status_code == 200
+    session.queue = [query_result([])]
+    assert client.get("/api/v1/games/largest-margins").status_code == 200
+    session.queue = [query_result([])]
+    assert client.get("/api/v1/games/dates").status_code == 200
     assert client.get("/api/v1/games/not-a-uuid").status_code == 422
 
 
@@ -441,7 +518,7 @@ def test_get_game_sql_shares_schedule_odds_and_derives_pregame_records() -> None
     assert "fct_game_odds.market = 'h2h'" in sql
     assert "LEFT JOIN gold.fct_game_predictions" in sql
     # Records come from results before the game, never today's standings.
-    assert "fct_team_game_results.game_date < target_games.game_date" in sql
+    assert "fct_team_game_results.game_date < fct_games_schedule.game_date" in sql
     assert "THEN home_standings.streak END AS home_streak" in sql
     assert "fct_daily_highlights.game_rank = 1" in sql
     assert "fct_games_schedule.game_id = :game_id" in sql
@@ -495,19 +572,6 @@ def test_list_biggest_collapses(client, session, mapping_row, query_result) -> N
 
 
 @pytest.mark.unit
-def test_list_biggest_collapses_filters_by_blown_lead_team(
-    client, session, mapping_row, query_result
-) -> None:
-    session.queue = [query_result([])]
-    response = client.get("/api/v1/games/collapses?blown_lead_team=sas")
-    assert response.status_code == 200
-    assert response.json()["data"] == []
-    # Lowercase in, uppercase bound: gold stores abbreviations uppercased.
-    _, params = session.calls[-1]
-    assert params["blown_lead_team"] == "SAS"
-
-
-@pytest.mark.unit
 def test_list_biggest_collapses_without_team_binds_null(
     client, session, mapping_row, query_result
 ) -> None:
@@ -515,7 +579,7 @@ def test_list_biggest_collapses_without_team_binds_null(
     response = client.get("/api/v1/games/collapses")
     assert response.status_code == 200
     _, params = session.calls[-1]
-    assert params["blown_lead_team"] is None
+    assert params["team"] is None
 
 
 @pytest.mark.unit
@@ -525,9 +589,67 @@ def test_biggest_collapses_query_excludes_wire_to_wire() -> None:
     sql = str(LIST_BIGGEST_COLLAPSES)
     assert "gold.fct_game_flow" in sql
     assert "largest_lead_blown > 0" in sql
+
+
+@pytest.mark.unit
+def test_list_biggest_collapses_team_matches_either_side(client, session, query_result) -> None:
+    from queries.games import LIST_BIGGEST_COLLAPSES
+
+    session.queue = [query_result([])]
+    response = client.get("/api/v1/games/collapses?team=nyk&limit=10&offset=10")
+    assert response.status_code == 200
+    assert response.json()["meta"] == {"total": 0, "limit": 10, "offset": 10}
+    _, params = session.calls[-1]
+    # Lowercase in, uppercase bound: gold stores abbreviations uppercased.
+    assert (params["team"], params["offset"]) == ("NYK", 10)
+    sql = str(LIST_BIGGEST_COLLAPSES)
     assert (
-        ":blown_lead_team IS NULL OR fct_game_flow.blown_lead_team_abbreviation = :blown_lead_team"
+        "fct_game_flow.blown_lead_team_abbreviation,\n                fct_game_flow.comeback_team_abbreviation"
         in sql
+    )
+
+
+@pytest.mark.unit
+def test_list_closest_games(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": GAME_TWO,
+                        "season": "2025-26",
+                        "game_date": date(2026, 3, 9),
+                        "home_team_abbreviation": "LAC",
+                        "home_score": 127,
+                        "away_team_abbreviation": "GSW",
+                        "away_score": 128,
+                        "winning_team_abbreviation": "GSW",
+                        "final_margin": 1,
+                        "lead_changes": 24,
+                        "overtime_periods": 2,
+                    }
+                )
+            ]
+        )
+    ]
+    response = client.get("/api/v1/games/closest?season=2025-26&team=gsw")
+    assert response.status_code == 200
+    game = response.json()["data"][0]
+    assert (game["final_margin"], game["lead_changes"], game["overtime_periods"]) == (1, 24, 2)
+    _, params = session.calls[-1]
+    assert params == {"season": "2025-26", "team": "GSW", "limit": 10, "offset": 0}
+
+
+@pytest.mark.unit
+def test_closest_games_query_orders_by_margin_then_lead_changes() -> None:
+    from queries.games import LIST_CLOSEST_GAMES
+
+    sql = str(LIST_CLOSEST_GAMES)
+    assert "gold.fct_game_flow" in sql
+    assert "final_margin ASC,\n        lead_changes DESC NULLS LAST," in sql
+    # Lead changes are unknown, not zero, without play-by-play.
+    assert (
+        "WHEN fct_game_flow.scoring_play_count IS NOT NULL THEN fct_game_flow.lead_changes" in sql
     )
 
 
@@ -566,7 +688,14 @@ def test_list_upsets(client, session, mapping_row, query_result) -> None:
     assert upset["winner_market_wp"] == 0.28
     assert upset["model_called_upset"] is True
     _, params = session.calls[-1]
-    assert params == {"season": "2026-27", "season_type": "Regular Season", "limit": 5}
+    assert params == {
+        "season": "2026-27",
+        "season_type": "Regular Season",
+        "team": None,
+        "game_id": None,
+        "limit": 5,
+        "offset": 0,
+    }
 
 
 @pytest.mark.unit
@@ -578,6 +707,16 @@ def test_list_upsets_is_empty_before_any_lines(client, session, query_result) ->
     assert response.json() == {"data": [], "meta": {"total": 0, "limit": 25, "offset": 0}}
     _, params = session.calls[-1]
     assert params["season"] is None
+
+
+@pytest.mark.unit
+def test_list_upsets_filters_by_team_and_pages(client, session, query_result) -> None:
+    session.queue = [query_result([])]
+    response = client.get("/api/v1/games/upsets?team=%20bos%20&limit=10&offset=20")
+    assert response.status_code == 200
+    assert response.json()["meta"] == {"total": 0, "limit": 10, "offset": 20}
+    _, params = session.calls[-1]
+    assert (params["team"], params["offset"]) == ("BOS", 20)
 
 
 @pytest.mark.unit
@@ -593,6 +732,9 @@ def test_upsets_query_ranks_only_upsets_by_magnitude() -> None:
     assert "WHERE\n        fct_game_upsets.is_upset\n" in sql
     assert "fct_game_upsets.upset_magnitude DESC" in sql
     assert "coalesce(CAST(:season AS text), latest_season.season)" in sql
+    # Records entering the game, never today's standings.
+    assert "fct_team_game_results.game_date < fct_game_upsets.game_date" in sql
+    assert "fct_game_upsets.underdog_fair_moneyline AS winner_fair_moneyline" in sql
 
 
 BOX_SCORE_ROW = {

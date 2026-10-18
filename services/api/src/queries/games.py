@@ -9,20 +9,58 @@ LIST_GAMES_COUNT = text(
     SELECT count(*) AS total
     FROM gold.fct_team_game_results
     WHERE
-        (:season IS NULL OR season = :season)
-      AND (:season_type IS NULL OR season_type = :season_type)
+        (CAST(:season AS text) IS NULL OR fct_team_game_results.season = :season)
+        AND (CAST(:season_type AS text) IS NULL OR fct_team_game_results.season_type = :season_type)
+        AND (CAST(:game_date AS date) IS NULL OR fct_team_game_results.game_date = :game_date)
     """
 )
 
+# Final games, newest first, with what a results list needs to label them:
+# each side's conference (a playoff series across them is the Finals), the
+# game's number within its playoff series, and its lead highlight.
 LIST_GAMES = text(
     """
     WITH home_teams AS (
         SELECT
-            team_id,
-            arena_name,
-            city
+            dim_teams.team_id,
+            dim_teams.arena_name,
+            dim_teams.city,
+            dim_teams.conference
         FROM gold.dim_teams
+    ),
+
+    away_teams AS (
+        SELECT
+            dim_teams.team_id,
+            dim_teams.conference
+        FROM gold.dim_teams
+    ),
+
+    -- Two teams meet in at most one series a season, so the pair numbers it.
+    series_games AS (
+        SELECT
+            fct_team_game_results.game_id,
+            row_number() OVER (
+                PARTITION BY
+                    fct_team_game_results.season,
+                    least(fct_team_game_results.home_team_id, fct_team_game_results.away_team_id),
+                    greatest(fct_team_game_results.home_team_id, fct_team_game_results.away_team_id)
+                ORDER BY
+                    fct_team_game_results.game_date,
+                    fct_team_game_results.game_id
+            ) AS series_game_number
+        FROM gold.fct_team_game_results
+        WHERE fct_team_game_results.season_type = 'Playoffs'
+    ),
+
+    lead_highlights AS (
+        SELECT
+            fct_daily_highlights.game_id,
+            fct_daily_highlights.headline
+        FROM gold.fct_daily_highlights
+        WHERE fct_daily_highlights.game_rank = 1
     )
+
     SELECT
         fct_team_game_results.game_id,
         fct_team_game_results.season,
@@ -50,17 +88,44 @@ LIST_GAMES = text(
         fct_team_game_results.away_score,
         fct_team_game_results.winning_team_id,
         fct_team_game_results.winner_location,
-        fct_team_game_results.score_margin
+        fct_team_game_results.score_margin,
+        home_teams.conference AS home_team_conference,
+        away_teams.conference AS away_team_conference,
+        series_games.series_game_number,
+        lead_highlights.headline AS lead_highlight
     FROM gold.fct_team_game_results
     LEFT JOIN home_teams
         ON home_teams.team_id = fct_team_game_results.home_team_id
+    LEFT JOIN away_teams
+        ON away_teams.team_id = fct_team_game_results.away_team_id
+    LEFT JOIN series_games
+        ON series_games.game_id = fct_team_game_results.game_id
+    LEFT JOIN lead_highlights
+        ON lead_highlights.game_id = fct_team_game_results.game_id
     WHERE
-        (:season IS NULL OR fct_team_game_results.season = :season)
-      AND (:season_type IS NULL OR fct_team_game_results.season_type = :season_type)
+        (CAST(:season AS text) IS NULL OR fct_team_game_results.season = :season)
+        AND (CAST(:season_type AS text) IS NULL OR fct_team_game_results.season_type = :season_type)
+        AND (CAST(:game_date AS date) IS NULL OR fct_team_game_results.game_date = :game_date)
     ORDER BY
         fct_team_game_results.game_date DESC,
         fct_team_game_results.game_id DESC
     LIMIT :limit OFFSET :offset
+    """
+)
+
+# Every date with a Final game, newest first, for the results date picker.
+LIST_GAME_DATES = text(
+    """
+    SELECT
+        fct_team_game_results.game_date,
+        fct_team_game_results.season,
+        count(*) AS game_count
+    FROM gold.fct_team_game_results
+    WHERE (CAST(:season AS text) IS NULL OR fct_team_game_results.season = :season)
+    GROUP BY
+        fct_team_game_results.game_date,
+        fct_team_game_results.season
+    ORDER BY fct_team_game_results.game_date DESC
     """
 )
 
@@ -258,9 +323,83 @@ LIST_SCHEDULE_COUNT = text(
     """
 )
 
+
+def _either_team(home_column: str, away_column: str) -> str:
+    """Optional :team filter matching either side of a game."""
+    return f"""(
+            CAST(:team AS text) IS NULL
+            OR :team IN (
+                {home_column},
+                {away_column}
+            )
+        )"""
+
+
+def _pregame_records(game: str) -> str:
+    """Each side's W-L entering `game`, for a CROSS JOIN LATERAL.
+
+    From Final results dated before it, in the same season and season type.
+    Today's fct_standings would be wrong for a past game: it is a
+    season-to-date upsert.
+    """
+    return f"""
+        SELECT
+            count(*) FILTER (
+                WHERE fct_team_game_results.winning_team_id = {game}.home_team_id
+            ) AS home_wins,
+            count(*) FILTER (
+                WHERE
+                    {game}.home_team_id IN (
+                        fct_team_game_results.home_team_id,
+                        fct_team_game_results.away_team_id
+                    )
+                    AND fct_team_game_results.winning_team_id <> {game}.home_team_id
+            ) AS home_losses,
+            count(*) FILTER (
+                WHERE fct_team_game_results.winning_team_id = {game}.away_team_id
+            ) AS away_wins,
+            count(*) FILTER (
+                WHERE
+                    {game}.away_team_id IN (
+                        fct_team_game_results.home_team_id,
+                        fct_team_game_results.away_team_id
+                    )
+                    AND fct_team_game_results.winning_team_id <> {game}.away_team_id
+            ) AS away_losses
+        FROM gold.fct_team_game_results
+        WHERE
+            fct_team_game_results.season = {game}.season
+            AND fct_team_game_results.season_type IS NOT DISTINCT FROM {game}.season_type
+            AND fct_team_game_results.game_date < {game}.game_date
+            AND (
+                fct_team_game_results.home_team_id IN ({game}.home_team_id, {game}.away_team_id)
+                OR fct_team_game_results.away_team_id IN ({game}.home_team_id, {game}.away_team_id)
+            )
+    """
+
+
+# Notable players ruled out, per side, for the injury chip on schedule rows and
+# upsets. Day To Day is left off on purpose: a chip for every doubt means
+# nothing. :game_id narrows it to one game for GET_GAME; NULL means all.
+NOTABLE_ABSENCES_CTE = """
+    notable_absences AS (
+        SELECT
+            fct_game_injuries.game_id,
+            array_agg(fct_game_injuries.player_name ORDER BY fct_game_injuries.player_name)
+                FILTER (WHERE fct_game_injuries.side = 'home') AS home_notable_out,
+            array_agg(fct_game_injuries.player_name ORDER BY fct_game_injuries.player_name)
+                FILTER (WHERE fct_game_injuries.side = 'away') AS away_notable_out
+        FROM gold.fct_game_injuries
+        WHERE
+            fct_game_injuries.is_notable
+            AND fct_game_injuries.injury_status IN ('Out', 'Out For Season')
+            AND (CAST(:game_id AS uuid) IS NULL OR fct_game_injuries.game_id = :game_id)
+        GROUP BY fct_game_injuries.game_id
+    )"""
+
 # The CTEs, columns, and joins every schedule-shaped read shares, so the
 # schedule list and the single game cannot disagree about a game's odds.
-SCHEDULE_CTES = """
+SCHEDULE_CTES = f"""
     home_teams AS (
         SELECT
             team_id,
@@ -303,22 +442,7 @@ SCHEDULE_CTES = """
         GROUP BY fct_game_odds.game_id
     ),
 
-    -- Notable players ruled out, per side, for the schedule's injury chip.
-    -- Day To Day is left off on purpose: a chip for every doubt means nothing.
-    notable_absences AS (
-        SELECT
-            fct_game_injuries.game_id,
-            array_agg(fct_game_injuries.player_name ORDER BY fct_game_injuries.player_name)
-                FILTER (WHERE fct_game_injuries.side = 'home') AS home_notable_out,
-            array_agg(fct_game_injuries.player_name ORDER BY fct_game_injuries.player_name)
-                FILTER (WHERE fct_game_injuries.side = 'away') AS away_notable_out
-        FROM gold.fct_game_injuries
-        WHERE
-            fct_game_injuries.is_notable
-            AND fct_game_injuries.injury_status IN ('Out', 'Out For Season')
-            AND (CAST(:game_id AS uuid) IS NULL OR fct_game_injuries.game_id = :game_id)
-        GROUP BY fct_game_injuries.game_id
-    )
+{NOTABLE_ABSENCES_CTE}
 """
 
 SCHEDULE_COLUMNS = """
@@ -393,60 +517,12 @@ LIST_SCHEDULE = text(
 )
 
 # One game in any state: the schedule row plus what only a single game needs.
-# Records are each team's W-L in that season and season type *entering* the
-# game, from Final results dated before it. Today's fct_standings would be
-# wrong for a past game, since it is a season-to-date upsert. Form (streak and
-# last 10) has no as-of version, so it is only filled in before the game.
+# Records are each team's W-L entering the game (_pregame_records). Form
+# (streak and last 10) has no as-of version, so it is only filled in before
+# the game.
 GET_GAME = text(
     f"""
     WITH {SCHEDULE_CTES},
-
-    target_games AS (
-        SELECT
-            fct_games_schedule.game_id,
-            fct_games_schedule.season,
-            fct_games_schedule.season_type,
-            fct_games_schedule.game_date,
-            fct_games_schedule.home_team_id,
-            fct_games_schedule.away_team_id
-        FROM gold.fct_games_schedule
-        WHERE fct_games_schedule.game_id = :game_id
-    ),
-
-    pregame_records AS (
-        SELECT
-            count(*) FILTER (
-                WHERE fct_team_game_results.winning_team_id = target_games.home_team_id
-            ) AS home_wins,
-            count(*) FILTER (
-                WHERE
-                    target_games.home_team_id IN (
-                        fct_team_game_results.home_team_id,
-                        fct_team_game_results.away_team_id
-                    )
-                    AND fct_team_game_results.winning_team_id <> target_games.home_team_id
-            ) AS home_losses,
-            count(*) FILTER (
-                WHERE fct_team_game_results.winning_team_id = target_games.away_team_id
-            ) AS away_wins,
-            count(*) FILTER (
-                WHERE
-                    target_games.away_team_id IN (
-                        fct_team_game_results.home_team_id,
-                        fct_team_game_results.away_team_id
-                    )
-                    AND fct_team_game_results.winning_team_id <> target_games.away_team_id
-            ) AS away_losses
-        FROM target_games
-        INNER JOIN gold.fct_team_game_results
-            ON fct_team_game_results.season = target_games.season
-            AND fct_team_game_results.season_type IS NOT DISTINCT FROM target_games.season_type
-            AND fct_team_game_results.game_date < target_games.game_date
-            AND (
-                fct_team_game_results.home_team_id IN (target_games.home_team_id, target_games.away_team_id)
-                OR fct_team_game_results.away_team_id IN (target_games.home_team_id, target_games.away_team_id)
-            )
-    ),
 
     home_standings AS (
         SELECT
@@ -518,7 +594,7 @@ GET_GAME = text(
         fct_game_upsets.model_called_upset
     FROM gold.fct_games_schedule
     {SCHEDULE_JOINS}
-    CROSS JOIN pregame_records
+    CROSS JOIN LATERAL ({_pregame_records("fct_games_schedule")}) AS pregame_records
     LEFT JOIN home_standings
         ON home_standings.team_id = fct_games_schedule.home_team_id
         AND home_standings.season = fct_games_schedule.season
@@ -555,9 +631,10 @@ LIST_SEASONS = text(
 
 # "Collapse of the season": the biggest lead a team held and still lost, most
 # painful first. largest_lead_blown is 0 for wire-to-wire games, so those are
-# excluded rather than ranked last.
+# excluded rather than ranked last. Every row is also the other side's
+# comeback, so :team matches either side.
 LIST_BIGGEST_COLLAPSES = text(
-    """
+    f"""
     SELECT
         fct_game_flow.game_id,
         fct_game_flow.season,
@@ -574,13 +651,84 @@ LIST_BIGGEST_COLLAPSES = text(
         fct_game_flow.lead_changes,
         fct_game_flow.overtime_periods
     FROM gold.fct_game_flow
-    WHERE fct_game_flow.largest_lead_blown > 0
-      AND (:season IS NULL OR fct_game_flow.season = :season)
-      AND (:blown_lead_team IS NULL OR fct_game_flow.blown_lead_team_abbreviation = :blown_lead_team)
+    WHERE
+        fct_game_flow.largest_lead_blown > 0
+        AND (CAST(:season AS text) IS NULL OR fct_game_flow.season = :season)
+        AND {_either_team("fct_game_flow.blown_lead_team_abbreviation", "fct_game_flow.comeback_team_abbreviation")}
     ORDER BY
         fct_game_flow.largest_lead_blown DESC,
-        fct_game_flow.game_date DESC
-    LIMIT :limit
+        fct_game_flow.game_date DESC,
+        fct_game_flow.game_id
+    LIMIT :limit OFFSET :offset
+    """
+)
+
+
+# The tightest finishes: smallest final margin, then the most lead changes,
+# then the most overtime. Lead changes need play-by-play; fct_game_flow
+# coalesces them to 0 without it, so a game with no PBP reports null instead of
+# claiming a wire-to-wire finish.
+LIST_CLOSEST_GAMES = text(
+    f"""
+    SELECT
+        fct_game_flow.game_id,
+        fct_game_flow.season,
+        fct_game_flow.game_date,
+        fct_game_flow.home_team_abbreviation,
+        fct_game_flow.home_score,
+        fct_game_flow.away_team_abbreviation,
+        fct_game_flow.away_score,
+        fct_game_flow.winning_team_abbreviation,
+        abs(fct_game_flow.home_score - fct_game_flow.away_score) AS final_margin,
+        CASE
+            WHEN fct_game_flow.scoring_play_count IS NOT NULL THEN fct_game_flow.lead_changes
+        END AS lead_changes,
+        fct_game_flow.overtime_periods
+    FROM gold.fct_game_flow
+    WHERE
+        fct_game_flow.home_score IS NOT NULL
+        AND fct_game_flow.away_score IS NOT NULL
+        AND (CAST(:season AS text) IS NULL OR fct_game_flow.season = :season)
+        AND {_either_team("fct_game_flow.home_team_abbreviation", "fct_game_flow.away_team_abbreviation")}
+    ORDER BY
+        final_margin ASC,
+        lead_changes DESC NULLS LAST,
+        fct_game_flow.overtime_periods DESC,
+        fct_game_flow.game_date DESC,
+        fct_game_flow.game_id
+    LIMIT :limit OFFSET :offset
+    """
+)
+
+
+# The most lopsided finals. Wire to wire needs play-by-play, so it is null,
+# not false, for a game without it.
+LIST_LARGEST_MARGINS = text(
+    f"""
+    SELECT
+        fct_game_flow.game_id,
+        fct_game_flow.season,
+        fct_game_flow.game_date,
+        fct_game_flow.home_team_abbreviation,
+        fct_game_flow.home_score,
+        fct_game_flow.away_team_abbreviation,
+        fct_game_flow.away_score,
+        fct_game_flow.winning_team_abbreviation,
+        abs(fct_game_flow.home_score - fct_game_flow.away_score) AS final_margin,
+        CASE
+            WHEN fct_game_flow.scoring_play_count IS NOT NULL THEN fct_game_flow.is_wire_to_wire
+        END AS is_wire_to_wire
+    FROM gold.fct_game_flow
+    WHERE
+        fct_game_flow.home_score IS NOT NULL
+        AND fct_game_flow.away_score IS NOT NULL
+        AND (CAST(:season AS text) IS NULL OR fct_game_flow.season = :season)
+        AND {_either_team("fct_game_flow.home_team_abbreviation", "fct_game_flow.away_team_abbreviation")}
+    ORDER BY
+        final_margin DESC,
+        fct_game_flow.game_date DESC,
+        fct_game_flow.game_id
+    LIMIT :limit OFFSET :offset
     """
 )
 
@@ -588,14 +736,18 @@ LIST_BIGGEST_COLLAPSES = text(
 # Games the market underdog won, biggest surprise first. upset_magnitude is the
 # winner's surprisal, comparable across seasons and season types, whereas
 # upset_rank restarts within each season x season_type. Without a season this
-# is the newest season that has any upsets.
+# is the newest season that has any upsets. An upset's winner is the
+# underdog, so its no-vig price is the mart's underdog_fair_moneyline.
 LIST_UPSETS = text(
-    """
+    f"""
     WITH latest_season AS (
         SELECT max(fct_game_upsets.season) AS season
         FROM gold.fct_game_upsets
         WHERE fct_game_upsets.is_upset
-    )
+    ),
+
+{NOTABLE_ABSENCES_CTE}
+
     SELECT
         fct_game_upsets.game_id,
         fct_game_upsets.season,
@@ -610,20 +762,32 @@ LIST_UPSETS = text(
         fct_game_upsets.winning_team_id,
         fct_game_upsets.winner_location,
         fct_game_upsets.winner_market_wp,
+        fct_game_upsets.underdog_fair_moneyline AS winner_fair_moneyline,
         fct_game_upsets.model_winner_wp,
         fct_game_upsets.upset_magnitude,
         fct_game_upsets.upset_rank,
-        fct_game_upsets.model_called_upset
+        fct_game_upsets.model_called_upset,
+        pregame_records.home_wins,
+        pregame_records.home_losses,
+        pregame_records.away_wins,
+        pregame_records.away_losses,
+        coalesce(notable_absences.home_notable_out, ARRAY[]::text[]) AS home_notable_out,
+        coalesce(notable_absences.away_notable_out, ARRAY[]::text[]) AS away_notable_out
     FROM gold.fct_game_upsets
     CROSS JOIN latest_season
+    CROSS JOIN LATERAL ({_pregame_records("fct_game_upsets")}) AS pregame_records
+    LEFT JOIN notable_absences
+        ON notable_absences.game_id = fct_game_upsets.game_id
     WHERE
         fct_game_upsets.is_upset
         AND fct_game_upsets.season = coalesce(CAST(:season AS text), latest_season.season)
         AND (CAST(:season_type AS text) IS NULL OR fct_game_upsets.season_type = :season_type)
+        AND {_either_team("fct_game_upsets.home_team_abbreviation", "fct_game_upsets.away_team_abbreviation")}
     ORDER BY
         fct_game_upsets.upset_magnitude DESC,
-        fct_game_upsets.game_date DESC
-    LIMIT :limit
+        fct_game_upsets.game_date DESC,
+        fct_game_upsets.game_id
+    LIMIT :limit OFFSET :offset
     """
 )
 

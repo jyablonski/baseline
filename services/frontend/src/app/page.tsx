@@ -18,7 +18,7 @@ import {
 } from "@/lib/format";
 import { teamHref, withSeason } from "@/lib/nav";
 import { CONTENT_TYPE_LABELS, formatCount, rangeToDates } from "@/lib/social";
-import { standingsSeed } from "@/lib/team-form";
+import { conferenceStandings, standingsSeed } from "@/lib/team-form";
 import { cn } from "@/lib/utils";
 import { formatGameTime, formatScrapedAt } from "@/lib/timezones";
 import type { GameHighlight, LeagueGame, ScheduledGame, StandingRow } from "@/lib/types";
@@ -92,8 +92,8 @@ function HomeDesk() {
   const featured = highlights.filter((highlight) => highlight.is_featured);
   const upcoming = sameDay(scheduleQuery.data?.data ?? []);
   const standings = standingsQuery.data?.data ?? [];
-  const east = topConference(standings, "east");
-  const west = topConference(standings, "west");
+  const east = conferenceStandings(standings, "east");
+  const west = conferenceStandings(standings, "west");
 
   return (
     <div className="flex flex-col">
@@ -131,7 +131,7 @@ function HomeDesk() {
           <section className="py-[var(--ct-space-4)]">
             <div className="mb-2 flex items-end justify-between gap-3">
               <h2 className="type-module">Standings</h2>
-              <Link href={withSeason("/standings", season)} className="text-sm text-primary">
+              <Link href={withSeason("/teams", season)} className="text-sm text-primary">
                 Full standings →
               </Link>
             </div>
@@ -590,23 +590,4 @@ function upcomingNote(game: ScheduledGame, standings: StandingRow[], results: Le
     .filter((streak) => streak.length >= NOTABLE_STREAK)
     .sort((left, right) => right.length - left.length);
   return streaks[0]?.label ?? null;
-}
-
-function topConference(rows: StandingRow[], prefix: string) {
-  return rows
-    .filter((row) => row.conference.toLowerCase().startsWith(prefix))
-    .sort(compareSnapshotRows);
-}
-
-function compareSnapshotRows(a: StandingRow, b: StandingRow) {
-  const seedA = standingsSeed(a);
-  const seedB = standingsSeed(b);
-  if (seedA != null && seedB != null) {
-    return seedA - seedB;
-  }
-  if (seedA != null) return -1;
-  if (seedB != null) return 1;
-  const winDiff = (b.win_pct ?? -1) - (a.win_pct ?? -1);
-  if (winDiff !== 0) return winDiff;
-  return a.team_name.localeCompare(b.team_name);
 }

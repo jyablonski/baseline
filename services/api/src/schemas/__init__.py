@@ -16,12 +16,15 @@ from schemas.admin import (
 )
 from schemas.game import (
     BoxScoreRow,
+    ClosestGame,
     GameCollapse,
+    GameDate,
     GameDetail,
     GameFlow,
     GameHighlight,
     GameResult,
     GameUpset,
+    LargestMarginGame,
     PlayByPlayEvent,
     QueryRequest,
     QueryResponse,
@@ -45,7 +48,6 @@ from schemas.social import (
     SocialEntity,
     SocialFacet,
     SocialFanbase,
-    SocialHour,
     SocialLeader,
     SocialPost,
     SocialPostDetail,
@@ -54,7 +56,7 @@ from schemas.social import (
 from schemas.standing import StandingRow, StandingSummary
 from schemas.status import WarehouseStatus
 from schemas.team import TeamDetail, TeamRecord, TeamSummary
-from schemas.transaction import Transaction, TransactionDetail, TransactionParticipant
+from schemas.transaction import Transaction
 
 
 class PaginationMeta(BaseModel):
@@ -86,18 +88,20 @@ __all__ = [
     "SocialEntity",
     "SocialFacet",
     "SocialFanbase",
-    "SocialHour",
     "SocialLeader",
     "SocialPost",
     "SocialPostDetail",
     "SocialSummary",
     "DbtStatus",
+    "ClosestGame",
     "GameCollapse",
+    "GameDate",
     "GameDetail",
     "GameInjury",
     "GameFlow",
     "GameHighlight",
     "GameUpset",
+    "LargestMarginGame",
     "GameLogEntry",
     "GameResult",
     "GoldTable",
@@ -126,8 +130,6 @@ __all__ = [
     "SeasonListResponse",
     "SourceHealth",
     "Transaction",
-    "TransactionDetail",
-    "TransactionParticipant",
     "StandingRow",
     "StandingSummary",
     "TableFreshness",

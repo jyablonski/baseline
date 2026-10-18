@@ -1,6 +1,7 @@
 export const PRIMARY_NAV = [
   { href: "/", label: "Home" },
   { href: "/schedule", label: "Schedule" },
+  { href: "/games", label: "Games" },
   { href: "/players", label: "Players" },
   { href: "/teams", label: "Teams" },
   { href: "/social", label: "Social" },
@@ -62,11 +63,4 @@ export function playerHref(name: string) {
 
 export function teamHref(name: string) {
   return `/teams/${slugifyName(name)}`;
-}
-
-export function isLegacyEntityId(value: string) {
-  return (
-    /^\d+$/.test(value) ||
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
-  );
 }

@@ -27,6 +27,7 @@ import {
   homeWon,
   losingCard,
   recapHeadline,
+  stageOf,
   starCard,
   turningPointCard,
   type Meeting,
@@ -95,7 +96,7 @@ function GameBody() {
 
       <p className="flex flex-wrap gap-x-6 text-sm">
         <Link href="/games" className="text-primary hover:underline">
-          All recent final games →
+          All results →
         </Link>
         <Link href="/schedule" className="text-primary hover:underline">
           Full schedule →
@@ -226,10 +227,13 @@ function RecapSummary({
 
   return (
     <section className="space-y-4">
-      <h2 className="type-page text-center text-2xl sm:text-3xl" data-testid="recap-headline">
-        {/* A non-breaking space holds the line's height while it waits. */}
-        {meetingsLoading ? "\u00a0" : recapHeadline(game, meetings)}
-      </h2>
+      {/* Regular-season games have no headline; the stage alone decides, so no wait for meetings. */}
+      {stageOf(game.season_type, game) === "Regular Season" ? null : (
+        <h2 className="type-page text-center text-2xl sm:text-3xl" data-testid="recap-headline">
+          {/* A non-breaking space holds the line's height while it waits. */}
+          {meetingsLoading ? "\u00a0" : recapHeadline(game, meetings)}
+        </h2>
+      )}
       <UpsetNote game={game} />
       {cards.length > 0 ? (
         <div

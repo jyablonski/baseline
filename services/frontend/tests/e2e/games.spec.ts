@@ -2,30 +2,38 @@ import { expect, test } from "@playwright/test";
 
 import { API_FAILURE_DETAIL, expectNo2010Range, mockApi, waitForApiCall } from "./helpers";
 
-test("games index lists recent finals and opens empty play-by-play", async ({ page }) => {
+test("games index opens on the latest day and steps between game days", async ({ page }) => {
   await mockApi(page);
   await page.goto("/games");
-  await expect(page.getByRole("heading", { name: "Game flow" })).toBeVisible();
-  await expect(page.getByText("Recent final games")).toBeVisible();
-  await expect(page.getByText("Not live win probability.")).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Margin" })).toBeVisible();
-  // Scoped to the recent-games table: the blown-leads table below also names teams.
-  const recent = page.getByRole("table").first();
-  await expect(recent.getByText("LAL", { exact: true })).toBeVisible();
-  await expect(recent.getByText("GSW", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Games", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Latest · Tuesday, October 22" })).toBeVisible();
+  // Scoped to the results: the notables below also name teams.
+  const results = page.getByRole("region", { name: "Results" });
+  await expect(results.getByTestId("result-row")).toContainText("GSW by 10");
+  await expect(page.getByRole("button", { name: "Later game day" })).toBeDisabled();
   await expectNo2010Range(page);
 
-  await expect(page.getByRole("heading", { name: "Biggest blown leads" })).toBeVisible();
-  const collapses = page.getByRole("table").nth(1);
-  await expect(collapses.getByRole("cell", { name: "MIA", exact: true })).toBeVisible();
-  await expect(collapses.getByRole("cell", { name: "21", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Earlier game day" }).click();
+  await expect(page).toHaveURL(/\/games\?date=2024-10-20/);
+  await expect(page.getByRole("heading", { name: "Sunday, October 20" })).toBeVisible();
+  await expect(results.getByTestId("result-row")).toContainText("Celtics erase a 21-point deficit");
 
-  await recent.getByRole("link", { name: "PBP →" }).first().click();
+  // The picker jumps straight back to the latest day.
+  await page.getByRole("button", { name: /Pick a game day/ }).click();
+  await expect(page.getByRole("button", { name: "Mon, Oct 21, no games" })).toBeDisabled();
+  await page.getByRole("button", { name: "Latest" }).click();
+  await expect(page).toHaveURL(/\/games$/);
+
+  await expect(page.getByRole("heading", { name: "Season notables" })).toBeVisible();
+  await expect(
+    page.getByTestId("notable-row").getByRole("link", { name: "BOS beat MIA, 118–115" })
+  ).toBeVisible();
+
+  await results.getByTestId("result-row").getByRole("link").click();
   await expect(page).toHaveURL(/\/games\/0022400001/);
   await expect(page.getByText("No PBP data available.")).toBeVisible();
   await expect(page.getByText("There's no scoring timeline for this game.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "All recent final games →" })).toBeVisible();
-  await expect(page.getByText("Recent final games", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "All results →" })).toBeVisible();
 });
 
 test("games index empty warehouse", async ({ page }) => {
@@ -51,13 +59,13 @@ test("game flow page narrates the comeback and charts the differential", async (
   await expect(page.getByText("No PBP data available.")).toHaveCount(0);
 });
 
-test("blown-leads table links through to that game", async ({ page }) => {
+test("a notable row links through to that game", async ({ page }) => {
   await mockApi(page);
   await page.goto("/games");
 
-  const collapses = page.getByRole("table").nth(1);
-  await expect(collapses.getByRole("cell", { name: "Q3", exact: true })).toBeVisible();
-  await collapses.getByRole("link", { name: "PBP →" }).first().click();
+  const row = page.getByTestId("notable-row");
+  await expect(row).toContainText("trailed by 21 in Q3");
+  await row.getByRole("link", { name: "BOS beat MIA, 118–115" }).click();
   await expect(page).toHaveURL(/\/games\/0022400002/);
   await expect(page.getByText(/trailing by 9 entering Q4 and by 21 in Q3/)).toBeVisible();
 });
@@ -85,59 +93,60 @@ test("game flow surfaces the API failure instead of the no-play-by-play copy", a
   await expect(page.getByText(API_FAILURE_DETAIL).first()).toBeVisible();
 });
 
-test("blown-leads table names the opponent beside the team that collapsed", async ({ page }) => {
+test("notables switch tabs and filter by either side of a game", async ({ page }) => {
   await mockApi(page);
   await page.goto("/games");
-  const collapses = page.getByRole("table").nth(1);
-  await expect(collapses.getByRole("columnheader", { name: "Opponent" })).toBeVisible();
+  const notables = page.getByRole("region", { name: "Season notables" });
+  await expect(notables.getByRole("link", { name: "BOS beat MIA, 118–115" })).toBeVisible();
 
-  const row = collapses.getByRole("row").filter({ hasText: "MIA" });
-  await expect(row.getByRole("cell", { name: "MIA", exact: true })).toBeVisible();
-  // BOS erased the lead, so it is the opponent on MIA's collapse row.
-  await expect(row.getByRole("cell", { name: "BOS", exact: true })).toBeVisible();
+  // MIA blew it, so its view reads from the losing side.
+  await notables.getByLabel("Team").selectOption("MIA");
+  await waitForApiCall(page, "team=MIA");
+  await expect(page).toHaveURL(/\/games\?team=MIA/);
+  await expect(notables.getByRole("link", { name: "MIA lost to BOS, 115–118" })).toBeVisible();
+  await expect(notables.getByText("Blew it")).toBeVisible();
+
+  await notables.getByRole("link", { name: "Closest games" }).click();
+  await expect(page).toHaveURL(/tab=closest/);
+  await expect(notables.getByRole("columnheader", { name: "Lead changes" })).toBeVisible();
+  await expect(notables.getByRole("link", { name: "MIA lost to BOS, 115–118" })).toBeVisible();
+
+  await notables.getByRole("link", { name: "Largest margins" }).click();
+  await expect(page).toHaveURL(/tab=margins/);
+  await expect(notables.getByTestId("notable-row")).toContainText("never trailed");
+
+  await notables.getByRole("link", { name: "Upsets" }).click();
+  await expect(page).toHaveURL(/tab=upsets/);
+  await notables.getByLabel("Team").selectOption("");
+  await expect(notables.getByRole("link", { name: "GSW won vs LAL, 120–110" })).toBeVisible();
+  await expect(notables.getByText("1 in 3")).toBeVisible();
 });
 
-test("blown-leads filter narrows by the team that blew the lead", async ({ page }) => {
-  await mockApi(page);
-  await page.goto("/games");
-  const collapses = page.getByRole("table").nth(1);
-  await expect(collapses.getByRole("cell", { name: "MIA", exact: true })).toBeVisible();
-
-  await page.getByLabel("Blew it").selectOption("MIA");
-  await waitForApiCall(page, "blown_lead_team=MIA");
-  await expect(collapses.getByRole("cell", { name: "MIA", exact: true })).toBeVisible();
-
-  // BOS came back rather than collapsing, so filtering to it clears the table.
-  await page.getByLabel("Blew it").selectOption("BOS");
-  await waitForApiCall(page, "blown_lead_team=BOS");
-  await expect(page.getByText("No blown leads for BOS yet.")).toBeVisible();
-  await expect(page.getByRole("table")).toHaveCount(1);
-});
-
-test("changing the blown-leads filter holds the scroll position", async ({ page }) => {
+test("changing the notables team holds the scroll position", async ({ page }) => {
   // Small viewport plus a full table so the page actually scrolls, and latency
   // so the in-flight state is observable. Unmounting the table mid-fetch
   // collapses document height and the browser clamps scrollTop to the new max.
   await page.setViewportSize({ width: 800, height: 300 });
   await mockApi(page, { delayMs: 400, collapseRows: 10 });
   await page.goto("/games");
-  await expect(page.getByRole("table").nth(1)).toBeVisible();
+  const table = page.getByTestId("notables-table");
+  await expect(table).toBeVisible();
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   const before = await page.evaluate(() => window.scrollY);
   expect(before).toBeGreaterThan(0);
 
-  await page.getByLabel("Blew it").selectOption("MIA");
+  await page.getByLabel("Team").selectOption("MIA");
   // Sampled while the request is still in flight, which is the moment the
   // table used to disappear.
   await page.waitForTimeout(150);
   // One-shot reads: a web-first assertion would retry until the fetch settled
   // and never see the gap.
-  expect(await page.getByRole("table").count()).toBe(2);
+  expect(await table.count()).toBe(1);
   expect(await page.evaluate(() => window.scrollY)).toBe(before);
 
-  await waitForApiCall(page, "blown_lead_team=MIA");
-  await expect(page.getByRole("table").nth(1)).toBeVisible();
+  await waitForApiCall(page, "team=MIA");
+  await expect(table).toBeVisible();
   expect(await page.evaluate(() => window.scrollY)).toBe(before);
 });
 
@@ -171,10 +180,14 @@ test("game page previews an upcoming game from its schedule row", async ({ page 
   await expect(page.getByRole("heading", { name: "Game flow" })).toHaveCount(0);
 });
 
-test("game page recaps a final with its headline and the model's call", async ({ page }) => {
+test("game page recaps a final with the model's call and no regular-season headline", async ({
+  page,
+}) => {
   await mockApi(page);
   await page.goto("/games/0022400002");
-  await expect(page.getByTestId("recap-headline")).toBeVisible();
+  await expect(page.getByTestId("recap-card").first()).toBeVisible();
+  // A regular-season result needs no headline: the scoreboard already says it.
+  await expect(page.getByTestId("recap-headline")).toHaveCount(0);
   await expect(page.getByTestId("recap-call").filter({ hasText: "Model" })).toContainText(
     "Had BOS at 55% before tip-off · Called it"
   );

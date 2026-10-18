@@ -103,9 +103,16 @@ describe("recapHeadline", () => {
     expect(recapHeadline(g2even, even)).toBe("Knicks even the series at 1–1.");
   });
 
-  it("is a plain result outside a series", () => {
+  it("is the plain result for a Cup or Play-In game, and nothing in the regular season", () => {
+    expect(recapHeadline({ ...GAME, season_type: "Cup" }, [])).toBe(
+      "Knicks beat the Spurs, 94–90."
+    );
+    expect(recapHeadline({ ...GAME, season_type: "PlayIn" }, [])).toBe(
+      "Knicks beat the Spurs, 94–90."
+    );
+    // The scoreboard already says it.
     const regular = { ...GAME, season_type: "Regular Season" };
-    expect(recapHeadline(regular, [])).toBe("Knicks beat the Spurs, 94–90.");
+    expect(recapHeadline(regular, [])).toBeNull();
     expect(contextLine(regular, [])).toBeNull();
   });
 });
@@ -140,6 +147,22 @@ describe("turningPointCard", () => {
     expect(turningPointCard(flow, { ...run, biggest_run_end_seconds: 2000 })?.caption).toBe(
       "Came back after trailing by 7 entering Q4 and by 16 in Q2"
     );
+    // The deficit peaked in Q4, after the margin entering it: only the peak.
+    const lateFlow = {
+      ...flow,
+      largest_lead_blown: 22,
+      blown_lead_period: 4,
+      winner_margin_entering_fourth: -14,
+    };
+    expect(turningPointCard(lateFlow, { ...run, biggest_run_end_seconds: 2000 })?.caption).toBe(
+      "Came back after trailing by 22 in Q4"
+    );
+    expect(
+      turningPointCard(
+        { ...lateFlow, blown_lead_period: 5 },
+        { ...run, biggest_run_end_seconds: 2000 }
+      )?.caption
+    ).toBe("Came back after trailing by 22 in overtime");
   });
 
   it("falls back to a wire-to-wire lead or the comeback alone, and to nothing", () => {
@@ -147,7 +170,7 @@ describe("turningPointCard", () => {
     expect(turningPointCard({ ...flow, is_wire_to_wire: true }, loserRun)).toMatchObject({
       figure: "+16",
       name: "NYK max lead",
-      caption: "Led wire to wire",
+      caption: "Never trailed",
     });
     expect(turningPointCard(flow, loserRun)).toMatchObject({
       figure: "16",

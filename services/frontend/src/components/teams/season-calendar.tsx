@@ -156,12 +156,7 @@ function GameEntry({ game, timezone }: { game: TeamSeasonGame; timezone: string 
       href={`/games/${game.game_id}`}
       aria-label={label}
       data-testid="calendar-game"
-      className={cn(
-        "mt-0.5 block border-l-2 px-1 py-0.5 hover:bg-tint",
-        game.result === "W" && "border-primary bg-accent-soft",
-        game.result === "L" && "border-destructive",
-        !game.result && "border-rule"
-      )}
+      className="mt-0.5 block px-1 py-0.5 hover:bg-tint"
     >
       <span className="flex items-center gap-1 font-semibold">
         <span className="text-xs font-normal text-ink-3">{side}</span>
@@ -174,13 +169,17 @@ function GameEntry({ game, timezone }: { game: TeamSeasonGame; timezone: string 
         <span>{opponent}</span>
       </span>
       {game.result ? (
-        <span
-          className={cn(
-            "block text-xs tabular",
-            game.result === "W" ? "text-primary" : "text-destructive"
-          )}
-        >
-          {game.result} <span className="hidden sm:inline">{score}</span>
+        // Only the letter carries the colour; the cell itself stays unshaded.
+        <span className="block text-xs tabular">
+          <span
+            className={cn(
+              "font-semibold",
+              game.result === "W" ? "text-primary" : "text-destructive"
+            )}
+          >
+            {game.result}
+          </span>{" "}
+          <span className="hidden sm:inline">{score}</span>
         </span>
       ) : (
         <span className="hidden text-xs text-ink-2 tabular sm:block">
