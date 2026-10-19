@@ -326,7 +326,7 @@ def test_chat_answers_from_the_rules_backend_when_no_key_is_set(client) -> None:
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["backend"] == "rules"
-    assert "55,772,427" in body["answer"]
+    assert "$55.8M" in body["answer"]
     assert body["data"]
     assert body["quota"] == {
         "daily_limit": 3,
@@ -502,7 +502,7 @@ def test_the_shared_daily_budget_falls_back_to_rules(make_client, monkeypatch) -
     capped = make_client(nlp_llm_api_key="sk-test", chat_global_daily_limit=1)
     body = _ask(capped, _sign_up(capped), "What is Curry's salary?").json()
     assert body["backend"] == "rules"
-    assert "55,772,427" in body["answer"]
+    assert "$55.8M" in body["answer"]
     assert len(scripted.calls) == calls_before
 
 

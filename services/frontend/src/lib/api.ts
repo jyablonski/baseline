@@ -32,6 +32,8 @@ import type {
   ScheduledGame,
   ListStandingsParams,
   ListTeamsParams,
+  NlpClarify,
+  NlpEntity,
   NlpQueryResponse,
   PaginatedResponse,
   PlayerComparison,
@@ -172,6 +174,21 @@ function asSeasons(json: unknown): PaginatedResponse<SeasonInfo> {
   return { data, meta: page.meta };
 }
 
+const NLP_ENTITY_KINDS = new Set<string>([
+  "team",
+  "opponent",
+  "player",
+  "city",
+  "location",
+  "topic",
+] satisfies NlpEntity["kind"][]);
+
+function isNlpEntity(value: unknown): value is NlpEntity {
+  if (!value || typeof value !== "object") return false;
+  const { kind, label } = value as Record<string, unknown>;
+  return typeof kind === "string" && NLP_ENTITY_KINDS.has(kind) && typeof label === "string";
+}
+
 function asNlpResponse(json: unknown): NlpQueryResponse {
   if (!json || typeof json !== "object") {
     return { answer: "No answer returned." };
@@ -183,6 +200,14 @@ function asNlpResponse(json: unknown): NlpQueryResponse {
       answer: obj.answer,
       data: Array.isArray(obj.data) ? (obj.data as Record<string, unknown>[]) : null,
       sql: typeof obj.sql === "string" ? obj.sql : null,
+      entities: Array.isArray(obj.entities) ? obj.entities.filter(isNlpEntity) : [],
+      follow_ups: Array.isArray(obj.follow_ups)
+        ? obj.follow_ups.filter((item): item is string => typeof item === "string")
+        : [],
+      clarify: obj.clarify && typeof obj.clarify === "object" ? (obj.clarify as NlpClarify) : null,
+      show_data: obj.show_data !== false,
+      highlight_row: typeof obj.highlight_row === "number" ? obj.highlight_row : null,
+      value: typeof obj.value === "string" && obj.value ? obj.value : null,
     };
   }
 

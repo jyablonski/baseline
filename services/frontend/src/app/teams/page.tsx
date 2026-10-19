@@ -44,7 +44,7 @@ function TeamsDirectory() {
   const teams = teamsQuery.data?.data ?? [];
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       <div>
         <h1 className="type-page">Teams</h1>
         <p className="mt-1 text-sm text-ink-2">
@@ -63,7 +63,7 @@ function TeamsDirectory() {
           message={`No Regular Season games or official standings for ${season || "this season"}.`}
         />
       ) : (
-        <div className="grid gap-10 xl:grid-cols-2">
+        <div className="grid gap-x-10 gap-y-6 xl:grid-cols-2">
           <ConferenceTable title="Eastern Conference" rows={east} season={season} />
           <ConferenceTable title="Western Conference" rows={west} season={season} />
         </div>
@@ -88,7 +88,7 @@ function ConferenceTable({
     <section aria-label={title}>
       <h2 className="type-eyebrow mb-3">{title}</h2>
       <div className="overflow-x-auto">
-        <table className="data-table">
+        <table className="data-table data-table-compact">
           <thead>
             <tr>
               <th>#</th>

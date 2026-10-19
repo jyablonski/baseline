@@ -64,7 +64,12 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         return json({
           answer: "Kawhi Leonard has 12 back-to-back sets",
           data: [],
-          sql: "gold.fct_player_game_logs",
+          sql: "cube:player_game_logs back-to-back",
+          entities: [
+            { kind: "player", label: "Kawhi Leonard" },
+            { kind: "topic", label: "Back-to-backs" },
+          ],
+          follow_ups: ["Kawhi Leonard salary"],
         });
       }
 

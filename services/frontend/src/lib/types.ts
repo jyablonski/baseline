@@ -364,10 +364,34 @@ export type WarehouseStatus = {
   last_season: string | null;
 };
 
+/** One thing the rules engine read from the question. Team, opponent and player labels are full names, which is what the page links slug. */
+export type NlpEntity = {
+  kind: "team" | "opponent" | "player" | "city" | "location" | "topic";
+  label: string;
+};
+
+/** A near-miss offered back, e.g. a lowercase "was" that might mean the Wizards. */
+export type NlpClarify = {
+  prompt: string;
+  action: string;
+  /** The rewritten question to ask if the user accepts. */
+  question: string;
+};
+
 export type NlpQueryResponse = {
   answer: string;
   data?: Record<string, unknown>[] | null;
   sql?: string | null;
+  /** Empty from the LLM backend; only the rules engine fills these. */
+  entities?: NlpEntity[];
+  follow_ups?: string[];
+  clarify?: NlpClarify | null;
+  /** False when the sentence already says everything in `data` (one record, one salary). */
+  show_data?: boolean;
+  /** Index into `data` of the row the question asked about. */
+  highlight_row?: number | null;
+  /** The key figure, verbatim inside `answer`, to emphasise instead of the whole sentence. */
+  value?: string | null;
 };
 
 export type SearchPlayersParams = {

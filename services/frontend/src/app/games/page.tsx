@@ -147,7 +147,8 @@ function ResultRow({ game }: { game: LeagueGame }) {
       <Link
         href={`/games/${game.game_id}`}
         aria-label={label}
-        className="group flex flex-wrap items-center gap-x-6 gap-y-1 py-3 hover:bg-tint"
+        // pr-3 matches .data-table's cell padding so this arrow lines up with the notables' arrows.
+        className="group flex flex-wrap items-center gap-x-6 gap-y-1 py-3 pr-3 hover:bg-tint"
       >
         <span className="flex items-center gap-2">
           <TeamLogo teamId={winner.teamId} abbreviation={winner.abbreviation} />

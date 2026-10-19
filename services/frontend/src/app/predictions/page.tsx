@@ -44,13 +44,12 @@ function Predictions() {
       <div>
         <h1 className="type-page">Model Scorecard</h1>
         <p className="mt-1 text-sm text-ink-2">
-          How Baseline&apos;s pregame win probabilities have held up against final results. The
-          model marked &ldquo;On schedule&rdquo; is the one shown on the{" "}
+          How our pregame win odds held up. &ldquo;On schedule&rdquo; marks the model shown on the{" "}
           <Link href="/schedule" className="underline underline-offset-2">
             schedule
           </Link>
-          . Lower log loss and Brier score are better. The market row scores the sportsbook
-          consensus on the games where odds were available.
+          . Lower log loss and Brier are better. The sportsbook row covers only games with odds. For
+          context, home teams win about 54% of games and sportsbook favorites about two in three.
         </p>
       </div>
 

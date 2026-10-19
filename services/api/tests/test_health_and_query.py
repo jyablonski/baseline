@@ -152,7 +152,7 @@ def test_query_salary_curry(client) -> None:
     assert response.status_code == 200
     body = response.json()
     assert "Stephen Curry" in body["answer"]
-    assert "55,772,427" in body["answer"]
+    assert "$55.8M" in body["answer"]
     assert body["data"][0]["current_season_salary"] == 55772427
 
 

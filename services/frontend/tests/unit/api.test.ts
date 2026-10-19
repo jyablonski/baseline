@@ -382,6 +382,49 @@ describe("api client", () => {
     );
     await expect(api.queryNlp("How many?")).resolves.toMatchObject({ answer: "nested" });
 
+    // The Ask page's chips, follow-ups and "did you mean" ride on these; dropping
+    // them here leaves the page showing a bare answer.
+    const clarify = {
+      prompt: "Did you mean the Washington Wizards?",
+      action: "Yes",
+      question: "q",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({
+          answer: "ok",
+          entities: [
+            { kind: "team", label: "Washington Wizards" },
+            { kind: "mystery", label: "Dropped" },
+            { kind: "player" },
+          ],
+          follow_ups: ["Washington Wizards payroll", 3],
+          clarify,
+        })
+      )
+    );
+    await expect(api.queryNlp("How many?")).resolves.toMatchObject({
+      entities: [{ kind: "team", label: "Washington Wizards" }],
+      follow_ups: ["Washington Wizards payroll"],
+      clarify,
+      // Missing means show the table, as the LLM backend has always had it.
+      show_data: true,
+      highlight_row: null,
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({ answer: "ok $1M", show_data: false, highlight_row: 2, value: "$1M" })
+      )
+    );
+    await expect(api.queryNlp("How many?")).resolves.toMatchObject({
+      show_data: false,
+      highlight_row: 2,
+      value: "$1M",
+    });
+
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => jsonResponse({}, 400))

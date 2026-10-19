@@ -1,4 +1,5 @@
 from datetime import date, datetime, time
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -380,7 +381,41 @@ class QueryRequest(BaseModel):
     season: str | None = None
 
 
+EntityKind = Literal["team", "opponent", "player", "city", "location", "topic"]
+
+
+class QueryEntity(BaseModel):
+    """One thing the rules engine read from the question, so the user can see
+    what it matched. Team, opponent and player labels are full names, which is
+    what the frontend's page links slug."""
+
+    kind: EntityKind
+    label: str
+
+
+class QueryClarify(BaseModel):
+    """A near-miss worth offering: "was" in lowercase is not read as the
+    Wizards, but the user may have meant them."""
+
+    prompt: str
+    action: str
+    question: str = Field(description="The rewritten question to ask if the user accepts.")
+
+
 class QueryResponse(BaseModel):
     answer: str
     data: list = Field(default_factory=list)
     sql: str | None = None
+    # Rules backend only; the LLM backend leaves these empty.
+    entities: list[QueryEntity] = Field(default_factory=list)
+    follow_ups: list[str] = Field(default_factory=list)
+    clarify: QueryClarify | None = None
+    # False when the sentence already says everything the rows hold (one record,
+    # one salary). The rows stay in `data` so the answer can still be checked.
+    show_data: bool = True
+    # Index into `data` of the row the question asked about, e.g. Home in an
+    # Overall / Home / Away split.
+    highlight_row: int | None = None
+    # The key figure, verbatim inside `answer` ("$62.6M", "11-30"), so the page
+    # can emphasise it rather than the whole sentence.
+    value: str | None = None

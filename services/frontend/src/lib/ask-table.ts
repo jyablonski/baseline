@@ -27,6 +27,8 @@ const ALIAS_IF_PREFERRED = [
 ] as const;
 
 const COLUMN_LABELS: Record<string, string> = {
+  // Overall / Home / Away: the row labels say what the column is.
+  split: "",
   full_name: "Player",
   player_name: "Player",
   team_name: "Team",
@@ -132,8 +134,8 @@ export function askTableColumns(rows: Record<string, unknown>[]): string[] {
 
 export function askTableLabel(key: string) {
   const short = shortKey(key);
-  if (COLUMN_LABELS[key]) return COLUMN_LABELS[key];
-  if (COLUMN_LABELS[short]) return COLUMN_LABELS[short];
+  if (key in COLUMN_LABELS) return COLUMN_LABELS[key];
+  if (short in COLUMN_LABELS) return COLUMN_LABELS[short];
   return short.replaceAll("_", " ");
 }
 
