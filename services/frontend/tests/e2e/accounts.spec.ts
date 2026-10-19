@@ -376,7 +376,7 @@ test.describe("chat", () => {
     await expect(page.getByLabel("Your question")).toHaveCount(0);
 
     await page.goto("/ask");
-    await page.getByPlaceholder("Ask a bounded question").fill("Who leads the West?");
+    await page.getByRole("textbox", { name: "Question" }).fill("Who leads the West?");
     await page.getByRole("button", { name: "Ask", exact: true }).click();
     await expect(page.getByText("Rules answer.")).toBeVisible();
     expect((await stubRequests()).filter((request) => request.path === "/chat")).toEqual([]);
@@ -502,7 +502,7 @@ test.describe("feature flags", () => {
     await expect(primaryNav(user).getByRole("link", { name: "Ask" })).toBeVisible();
     await user.getByRole("link", { name: /Ask a single question/ }).click();
     await expect(user).toHaveURL(/\/ask$/);
-    await user.getByPlaceholder("Ask a bounded question").fill("Who leads the West?");
+    await user.getByRole("textbox", { name: "Question" }).fill("Who leads the West?");
     await user.getByRole("button", { name: "Ask", exact: true }).click();
     await expect(user.getByText("Rules answer.")).toBeVisible();
 

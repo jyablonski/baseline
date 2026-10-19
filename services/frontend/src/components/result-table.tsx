@@ -15,12 +15,15 @@ export function ResultTable({
   rows,
   limit,
   alignNumbers = false,
+  highlightRow = null,
 }: {
   rows: Record<string, unknown>[];
   /** Show only the first rows; the caller offers the rest. */
   limit?: number;
   /** Right-align numeric columns and their headings. */
   alignNumbers?: boolean;
+  /** Bold the row the question asked about, e.g. Home in an Overall / Home / Away split. */
+  highlightRow?: number | null;
 }) {
   const display = askDisplayRows(rows);
   const columns = askTableColumns(display);
@@ -42,7 +45,7 @@ export function ResultTable({
         </thead>
         <tbody>
           {shown.map((row, index) => (
-            <tr key={index}>
+            <tr key={index} className={index === highlightRow ? "font-semibold" : undefined}>
               {columns.map((column) => (
                 <td
                   key={column}

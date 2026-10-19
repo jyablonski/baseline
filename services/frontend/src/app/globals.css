@@ -337,6 +337,16 @@
     padding-left: 0;
   }
 
+  /* Shorter rows for tables meant to fit one screen, e.g. a 15-team conference. */
+  .data-table-compact tbody tr {
+    height: 32px;
+  }
+
+  .data-table-compact td {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
   .data-table td.tabular,
   .data-table .tabular {
     font-size: var(--ct-fs-num);

@@ -29,11 +29,15 @@ Ask needs Cube (`CUBE_API_URL`, `http://cube:4000` in Compose). If Cube is down 
 
 ## What rules can answer
 
-Eight families: back-to-backs, season averages, player compare, team head-to-head (two teams named), blown leads, arena-city records, salary/payroll, and standings.
+Nine families: back-to-backs, season averages, player compare, team head-to-head (two teams named with "vs" or "against"), blown leads, arena-city records, salary/payroll, standings, and win streaks (the league's longest current win streak, or one named team's current streak, from the standings `streak` field).
 
 Anything else returns a capability message with HTTP 200 — never a 501.
 
-Season resolution: an explicit `YYYY-YY` in the question wins, otherwise the optional `season` field on the request body. Standings prefer official `fct_standings` and fall back to Regular Season W–L when those rows are missing.
+Rules answers also carry `entities` (what was matched: team, opponent, player, city, home/road, topic), `follow_ups` (questions built from those names, each checked to route back to the same team or player), and `clarify` (a "did you mean" with a rewritten question, offered when a lowercase `was` / `min` is the only team-like word). The LLM backend leaves all three empty. `show_data` is false when the sentence already says everything in `data` (one record, salary, payroll, back-to-backs, games back, one team's streak); the rows stay in the response for checking. Record questions return an Overall / Home / Away split (led by the city row when one is named) with `highlight_row` pointing at the asked row. Sentences and follow-ups use the short team name ("Wizards"), and follow-ups use the shortest player name that reads back as the same player ("Curry"); the entity chips and page links keep the full name. `value` is the key figure quoted from the sentence ("$62.6M", "11-30"), which the page sets in bold; money is rounded to millions. "at home" / "on the road" filter home or away games rather than a city.
+
+Team names match whole words only, and the abbreviations `WAS` and `MIN` only when typed in capitals, so "what was" and "min" are not read as teams.
+
+Season resolution: an explicit `YYYY-YY` (or `YYYY-YYYY`) in the question wins, otherwise the optional `season` field on the request body. Standings prefer official `fct_standings` and fall back to Regular Season W–L when those rows are missing.
 
 Salary and payroll answers are Basketball-Reference **remaining-year snapshots**, not a historical paid ledger.
 
