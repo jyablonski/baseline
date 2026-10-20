@@ -46,7 +46,6 @@ def _standing_row() -> dict:
         "losses": 32,
         "win_pct": 0.61,
         "games_back": 0,
-        "conf_games_back": 0,
         "streak": "W5",
         "last_10": "8-2",
     }
@@ -489,14 +488,16 @@ def test_record_sql_filters_season_type() -> None:
 
 
 @pytest.mark.unit
-def test_list_teams_sql_overlays_regular_season_records() -> None:
+def test_list_teams_sql_reads_records_from_standings() -> None:
     from queries.teams import LIST_TEAMS
 
     sql = str(LIST_TEAMS)
     assert "gold.fct_team_game_results" in sql
     assert "season_type = 'Regular Season'" in sql
-    assert "record_source" in sql
-    assert "coalesce(fct_standings.wins, records.wins)" in sql
+    # fct_standings already falls back to game results; the SQL must not redo it.
+    assert "fct_standings.wins" in sql
+    assert "fct_standings.record_source" in sql
+    assert "records." not in sql
     assert "pts_scored_avg" in sql
     assert "pts_allowed_avg" in sql
 

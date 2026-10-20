@@ -4,10 +4,12 @@ models:
   - name: fct_standings
     description: >
       Season-to-date Regular Season standings joined to team attributes.
-      Grain is team_id x season x season_type; as_of_date is the scrape watermark.
-      The source has no form columns and no games_back for a conference leader,
-      so streak, last_10 and the missing games_back are derived here, once, for
-      the API, Cube, and MCP alike.
+      Grain is team_id x season x season_type: every team-season with scraped
+      standings or at least one Regular Season Final. Scraped values win field by
+      field; whatever the source leaves out (form columns, division ranks, a
+      leader's games_back, or a whole season it has not scraped) is derived in
+      int_standings_records from fct_team_game_results, once, for the API, Cube,
+      and MCP alike. This mart adds the playoff seed.
     columns:
       - name: playoff_seed
         description: >
@@ -37,13 +39,38 @@ models:
                 quote_values: true
                 row_condition: "conference is not null"
       - name: conference_rank
-        description: Record-based rank within the conference (1-15). Ignores play-in results; see playoff_seed.
+        description: >
+          Record-based rank within the conference (1-15). The scraped rank when there
+          is one; otherwise win % with NBA tiebreakers (see int_standings_records).
+          Ignores play-in results; see playoff_seed.
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:
               arguments:
                 min_value: 1
                 max_value: 15
                 row_condition: "conference_rank is not null"
+      - name: division_rank
+        description: >
+          Rank within the division (1-5), always derived: the source never carries
+          one. Win %, then the NBA tiebreakers that apply inside a division.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 5
+      - name: as_of_date
+        description: Scrape watermark of the standings row; null when record_source is games.
+      - name: record_source
+        description: >
+          official when the row came from scraped standings, games when it is
+          derived entirely from Regular Season Finals because the source has no
+          row for that team-season.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["official", "games"]
       - name: games_back
         description: >
           Games behind the conference leader. The scraped value when there is one;
@@ -78,3 +105,6 @@ models:
       - dbt_expectations.expect_compound_columns_to_be_unique:
           arguments:
             column_list: ["team_id", "season", "season_type"]
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["season", "division", "division_rank"]

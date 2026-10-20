@@ -15,7 +15,6 @@ select
     standings.losses,
     standings.win_pct,
     standings.games_back,
-    standings.conf_games_back,
     standings.streak,
     standings.last_10
 from standings

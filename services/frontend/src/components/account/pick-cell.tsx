@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Lock } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -34,21 +35,25 @@ function sidesOf(game: ScheduledGame) {
 /**
  * Pick a winner for one scheduled game. Choosing a side saves at once; a stake
  * is a second, optional step in a popover opened from the line underneath.
+ * Once `locked` (tip-off) it only shows what was picked.
  */
 export function PickCell({
   game,
   pick,
   busy,
+  locked = false,
   onSave,
   onRemove,
 }: {
   game: ScheduledGame;
   pick: UserPick | undefined;
   busy: boolean;
+  locked?: boolean;
   onSave: SavePick;
   onRemove: (gameId: string) => void;
 }) {
   const [staking, setStaking] = useState(false);
+  if (locked) return <LockedPick game={game} pick={pick} />;
   const sides = sidesOf(game);
   const picked = sides.find((side) => side.teamId === pick?.picked_team_id);
 
@@ -128,6 +133,42 @@ export function PickCell({
           </button>
         </p>
       ) : null}
+    </div>
+  );
+}
+
+/** A game past tip-off: the side taken behind a lock and what it stands to win. */
+function LockedPick({ game, pick }: { game: ScheduledGame; pick: UserPick | undefined }) {
+  const sides = sidesOf(game);
+  const pickedHome = pick?.picked_team_id === game.home_team_id;
+  const mine = sides.find((side) => side.teamId === pick?.picked_team_id);
+  const theirs = pickedHome ? sides[0] : sides[1];
+  if (!pick || !mine) {
+    return (
+      <p className="text-sm text-ink-3" data-testid="pick-cell">
+        Locked at tip
+      </p>
+    );
+  }
+  const stakeLine =
+    pick.stake && pick.moneyline != null
+      ? `${formatMoney(pick.stake)} to win ${formatMoney(pickProfit(pick.stake, pick.moneyline))}`
+      : "record only";
+  return (
+    <div data-testid="pick-cell">
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-flex h-[var(--ct-control-page)] min-w-12 items-center justify-center gap-1.5 border border-rule bg-tint px-2.5 text-sm font-semibold"
+          aria-label={`Locked pick: ${mine.label}`}
+        >
+          <Lock aria-hidden="true" className="size-3.5" />
+          {mine.label}
+        </span>
+        <span className="text-xs text-ink-2">
+          {pickedHome ? "vs" : "at"} {theirs.label}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-ink-2">Locked at tip · {stakeLine}</p>
     </div>
   );
 }

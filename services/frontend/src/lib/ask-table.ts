@@ -183,7 +183,7 @@ export function formatAskCell(value: unknown, column?: string) {
     const pct = typeof value === "number" ? value : Number(value);
     return Number.isFinite(pct) ? formatWinPctPlain(pct) : "—";
   }
-  if (key === "games_back" || key === "conf_games_back") {
+  if (key === "games_back") {
     const gb = typeof value === "number" ? value : Number(value);
     return Number.isFinite(gb) ? formatGamesBack(gb) : "—";
   }

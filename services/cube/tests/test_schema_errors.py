@@ -61,7 +61,7 @@ STANDINGS = """
       - name: id
         primary_key: true
       - name: season
-      - name: conf_games_back
+      - name: record_source
 """
 
 

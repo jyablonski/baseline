@@ -267,15 +267,16 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         "get_career_stats",
-        "Career totals and averages for a player: games, points, ppg, rpg, apg, "
-        "seasons_played, teams_played_for.",
+        "Totals and averages for a player over the loaded data, which is the current season "
+        "only: games, points, ppg, rpg, apg, seasons_played, teams_played_for.",
         {"player_id": _STRING},
         _career_stats,
         required=("player_id",),
     ),
     ToolSpec(
         "compare_players",
-        "Side-by-side career rows for two or more players. stats optionally narrows the columns.",
+        "Side-by-side current-season rows for two or more players. stats optionally narrows the "
+        "columns.",
         {"player_ids": _STRINGS, "stats": _STRINGS},
         _compare,
         required=("player_ids",),
@@ -333,7 +334,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         "get_player_season_stats",
-        "Per-season PPG / RPG / APG for a player.",
+        "Per-season PPG / RPG / APG for a player. Only the current season is loaded.",
         {"player_id": _STRING},
         _season_stats,
         required=("player_id",),

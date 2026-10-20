@@ -22,7 +22,6 @@ class StandingRow(BaseModel):
     losses: int | None = None
     win_pct: float | None = None
     games_back: float | None = None
-    conf_games_back: float | None = None
     streak: str | None = None
     last_10: str | None = None
     record_source: str | None = None

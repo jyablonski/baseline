@@ -27,7 +27,7 @@ Every service except `migrate` fails its suite below a line-coverage floor, set 
 
 ## The `testing/` package
 
-Three suites (`api`, `scraper`, and `migrate`) need the same thing: a throwaway Postgres carrying the _real_ schema. That word is the whole point. The container is built from `db/init.sql` and the actual Alembic revision chain, so a test fails when a revision stops applying or a query drifts from the columns it reads. A hand-written mock schema per service would sail through exactly those breakages, which is the class of bug that historically reached production here.
+Three suites (`api`, `scraper`, and `migrate`) need the same thing: a throwaway Postgres carrying the _real_ schema. That word is the whole point. The container is built from `db/init.sql` and the actual Alembic revision chain, so a test fails when a revision stops applying or a query drifts from the columns it reads. A hand-written mock schema per service would sail through exactly those breakages, which is why we maintain a single source of truth for the schema in the tests.
 
 Keeping one copy is the second reason. The bootstrap is container startup, Alembic invocation, and SQL-statement splitting; three copies would drift, and the drift would be silent because each service's tests would still be green against its own stale copy.
 

@@ -1,6 +1,6 @@
 # Social
 
-r/nba posts and their top comments, modelled into discourse metrics. Supersedes [plans/social-tab.md](plans/social-tab.md): entity links live in their own fact rather than widening `fct_reddit_posts`.
+r/nba posts and their top comments, modelled into discourse metrics.
 
 **Current:** ingest, dbt models, Cube, REST, and the `/social` page. **Not built:** any score history.
 
@@ -26,6 +26,8 @@ r/nba posts and their top comments, modelled into discourse metrics. Supersedes 
 **Players match on full name only.** A single-token rule was tested against the live corpus and was roughly half wrong: "Michael Jordan drops 45" matched DeAndre Jordan, "Kobe Bryant" matched Thomas Bryant, "Russell Westbrook" matched D'Angelo Russell. Gating on surname uniqueness does not fix it, because `dim_players` holds only current players — it cannot rule out a collision with someone it does not contain.
 
 The cost is recall: `kawhi` appears in ~31 documents where `Kawhi Leonard` appears in 8. **Surname- and nickname-only references are not counted, and the UI has to say so.** Teams have no such problem and match on full name, nickname, or alias.
+
+This is work that could be improved upon in the future with more sophistication, but for now it prioritizes precision over recall to avoid false positives in player mentions.
 
 ### Flair
 

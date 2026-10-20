@@ -112,8 +112,8 @@ def validate_schema(root: Path | None = None) -> dict:
     standings = next(item for item in cubes_payload if item["name"] == "standings")
     standing_dims = {dim["name"]: dim for dim in standings.get("dimensions") or []}
     pk_dims = {name for name, dim in standing_dims.items() if dim.get("primary_key")}
-    if "conf_games_back" not in standing_dims:
-        raise ValueError("standings is missing dimension conf_games_back")
+    if "record_source" not in standing_dims:
+        raise ValueError("standings is missing dimension record_source")
     if not pk_dims:
         raise ValueError("standings is missing a primary_key")
     if pk_dims == {"team_id"}:

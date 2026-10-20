@@ -39,12 +39,13 @@ for parent in _SRC_DIR.parents:
 
 EXAMPLE_QUESTIONS = """# Example Questions
 
+Only the current season is loaded, so every answer covers that season.
 These questions use named Cube tools or query_cube (Cube query JSON only):
 
 1. **Back-to-back analysis**: "How does Kawhi Leonard perform on back-to-backs?"
    → Use get_player_back_to_backs(player_id, season)
 
-2. **Player comparison**: "Who has more career games, LeBron or Curry?"
+2. **Player comparison**: "Who has played more games this season, LeBron or Curry?"
    → Use compare_players([player_uuid_a, player_uuid_b], stats=["games"])
 
 3. **Team record by city**: "What is the Warriors' win percentage in Chicago?"
@@ -53,7 +54,7 @@ These questions use named Cube tools or query_cube (Cube query JSON only):
 4. **Game log**: "Show me LeBron's last 10 games"
    → Use get_player_game_log(player_uuid)
 
-5. **Career stats**: "What are Stephen Curry's career averages?"
+5. **Season totals**: "What are Stephen Curry's averages this season?"
    → Use get_career_stats(player_uuid)
 
 6. **Ad-hoc Cube query**: "Which team has the most wins this season?"
@@ -68,13 +69,13 @@ These questions use named Cube tools or query_cube (Cube query JSON only):
 9. **Standings**: "Who leads the West?" / "How many games back are the Lakers?"
    → Use get_standings(conference="West")
 
-10. **Season averages**: "Curry PPG by season"
+10. **Season averages**: "Curry PPG this season"
    → Use get_player_season_stats(player_uuid)
 
 11. **MVP race**: "Who leads the MVP race?" / "Top 10 playoff MVP scores last season"
    → Use get_mvp_ladder(season, season_type="Regular Season" or "Playoffs", limit)
 
-12. **Player MVP history**: "Where has Jokic ranked in MVP score each season?"
+12. **Player MVP rank**: "Where does Jokic rank in MVP score, Regular Season and Playoffs?"
    → Use get_player_mvp_scores(player_uuid)
 
 13. **Upsets**: "Biggest upsets this season?" / "Did the model see any upsets coming?"
@@ -137,6 +138,7 @@ mcp = FastMCP(
     "NBA Analytics",
     instructions=(
         "Query NBA player and team stats through Cube (measures, dimensions, filters). "
+        "Only the current NBA season is loaded; say so rather than answer about earlier ones. "
         "Use named tools (search_players, get_player_game_log, etc.) for structured questions. "
         "Fall back to query_cube with Cube query JSON when named tools do not cover the question. "
         "Cube members are listed in the nba://schema resource. "
@@ -166,7 +168,7 @@ def analyze_player(player_name: str) -> str:
     """Guided prompt to analyze an NBA player's performance."""
     return (
         f"Look up {player_name} using search_players, then:\n"
-        f"1. Get their career stats with get_career_stats\n"
+        f"1. Get their season totals with get_career_stats\n"
         f"2. Check their back-to-back performance with get_player_back_to_backs\n"
         f"3. Pull their recent game log with get_player_game_log\n"
         f"Summarize findings with key stats and trends."
@@ -175,7 +177,7 @@ def analyze_player(player_name: str) -> str:
 
 @mcp.prompt()
 def compare_careers(player_a: str, player_b: str) -> str:
-    """Guided prompt to compare two players' careers."""
+    """Guided prompt to compare two players over the current season."""
     return (
         f"Compare {player_a} and {player_b}:\n"
         f"1. Search for both players using search_players\n"

@@ -12,7 +12,6 @@ from baseline_analytics.queries import (
     daily_highlights_query,
     game_odds_query,
     game_predictions_query,
-    game_standings_query,
     games_schedule_query,
     latest_highlight_date_query,
     mvp_ladder_query,
@@ -36,7 +35,6 @@ from baseline_analytics.queries import (
     team_by_abbreviation_query,
     team_contracts_query,
     team_flow_query,
-    team_games_seasons_query,
     team_payroll_season_query,
     team_record_games_query,
     team_record_query,
@@ -45,7 +43,6 @@ from baseline_analytics.queries import (
     transactions_query,
     upset_seasons_query,
 )
-from baseline_analytics.standings_rank import apply_derived_ranks
 
 
 def _as_int(value: Any) -> int | None:
@@ -567,22 +564,13 @@ class CubeAnalytics:
     ) -> list[dict[str, Any]]:
         resolved = self._resolve_standings_season(season)
         rows = self.client.load(standings_query(season=resolved, conference=conference))
-        mapped = [_standings_row(row) for row in rows]
-        if mapped:
-            return mapped
-        game_rows = self.client.load(game_standings_query(season=resolved, conference=conference))
-        return apply_derived_ranks([_game_standings_row(row, season=resolved) for row in game_rows])
+        return [_standings_row(row) for row in rows]
 
     def _resolve_standings_season(self, season: str | None) -> str | None:
         if season is not None:
             return season
         latest = self.client.load(standings_seasons_query())
-        if latest:
-            return latest[0].get("season")
-        latest_games = self.client.load(team_games_seasons_query())
-        if latest_games:
-            return latest_games[0].get("season")
-        return None
+        return latest[0].get("season") if latest else None
 
     def get_team_standing(
         self,
@@ -649,35 +637,9 @@ def _standings_row(row: dict[str, Any]) -> dict[str, Any]:
         "losses": losses,
         "win_pct": _as_float(row.get("win_pct") or row.get("avg_win_pct")),
         "games_back": _as_float(row.get("games_back") or row.get("avg_games_back")),
-        "conf_games_back": _as_float(row.get("conf_games_back")),
         "streak": row.get("streak"),
         "last_10": row.get("last_10"),
-    }
-
-
-def _game_standings_row(row: dict[str, Any], season: str | None) -> dict[str, Any]:
-    wins = _as_int(row.get("wins")) or 0
-    losses = _as_int(row.get("losses")) or 0
-    games = _as_int(row.get("games")) or (wins + losses)
-    win_pct = round(wins / games, 3) if games else None
-    return {
-        "team_id": _as_uuid(row.get("team_id")),
-        "abbreviation": row.get("team_abbreviation") or row.get("abbreviation"),
-        "team_name": row.get("team_name"),
-        "season": row.get("season") or season,
-        "season_type": "Regular Season",
-        "as_of_date": None,
-        "conference": row.get("conference"),
-        "division": row.get("division"),
-        "conference_rank": None,
-        "division_rank": None,
-        "wins": wins,
-        "losses": losses,
-        "win_pct": win_pct,
-        "games_back": None,
-        "conf_games_back": None,
-        "streak": None,
-        "last_10": None,
+        "record_source": row.get("record_source"),
     }
 
 

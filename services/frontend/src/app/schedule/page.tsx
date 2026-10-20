@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -16,8 +16,9 @@ import { useAccount, useFeatures } from "@/lib/account";
 import { api, queryErrorMessage } from "@/lib/api";
 import { formatMoneyline, formatProbability, formatScheduleDate, formatSpread } from "@/lib/format";
 import { teamHref, withSeason } from "@/lib/nav";
-import { formatGameTime } from "@/lib/timezones";
+import { formatGameTime, gamePhase, liveWindowStartDate } from "@/lib/timezones";
 import type { ScheduledGame, UserPick } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 // One request covers the day on screen and reaches the next one: a full slate
 // is 15 games, so the first row dated later is always inside this window.
@@ -39,19 +40,23 @@ export default function SchedulePage() {
 
 function ScheduleBody() {
   const { season, isLoading: seasonIsLoading } = useSeason();
+  const now = useMinuteClock();
   // The days paged through so far, oldest first; empty means the first day with
-  // a game from today onward. Prev pops back through the same days, so off days
+  // a game from today onward (or one still live from last night). Prev pops back through the same days, so off days
   // are skipped in both directions.
   const [days, setDays] = useState<string[]>([]);
   const day = days.at(-1);
+  // The API's own default is the server's UTC date, which drops an evening's
+  // games from 8 PM Eastern, while they are still live.
+  const firstDay = liveWindowStartDate(now);
 
   const scheduleQuery = useQuery({
-    queryKey: ["schedule", season, day ?? "next"],
+    queryKey: ["schedule", season, day ?? firstDay],
     queryFn: () =>
       api.listSchedule({
         season: season || undefined,
         status: "Scheduled",
-        from_date: day,
+        from_date: day ?? firstDay,
         limit: FETCH_LIMIT,
       }),
     enabled: !seasonIsLoading,
@@ -151,11 +156,9 @@ function ScheduleBody() {
                     staking $150 wins $100. A plus is the underdog: +130 means staking $100 wins
                     $130.
                   </p>
-                </ColumnHelp>
-                <ColumnHelp label="Spread" title="Spread">
-                  <p>
-                    Consensus point spread for the home team. −3.5 means the home team is favored by
-                    3.5 points.
+                  <p className="mt-2">
+                    Underneath is the consensus point spread for the home team: −3.5 means the home
+                    team is favored by 3.5 points.
                   </p>
                 </ColumnHelp>
                 <th>Status</th>
@@ -175,6 +178,7 @@ function ScheduleBody() {
                   season={season}
                   picks={picks}
                   timezone={timezone}
+                  now={now}
                   signInHref={signedOut ? signInHref : undefined}
                 />
               ))}
@@ -212,6 +216,16 @@ function ScheduleBody() {
       ) : null}
     </div>
   );
+}
+
+/** The current time, moved on once a minute so rows go live and lock without a reload. */
+function useMinuteClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
 }
 
 const PICK_STEPS = [
@@ -283,35 +297,53 @@ function ScheduleGame({
   season,
   picks,
   timezone,
+  now,
   signInHref,
 }: {
   game: ScheduledGame;
   season: string;
   picks: ReturnType<typeof usePicks>;
   timezone: string | null;
+  now: Date;
   /** Set for a visitor with no session: a pick button explains picks instead of saving. */
   signInHref?: string;
 }) {
+  // The API refuses a pick from tip-off on, so the cell locks on the same clock.
+  const phase = gamePhase(game.game_date, game.start_time_et, now);
+  const locked = phase !== "upcoming";
+  const row = { game, season, timezone, phase };
   if (signInHref) {
     return (
-      <ScheduleRow game={game} season={season} timezone={timezone}>
+      <ScheduleRow {...row}>
         <td>
-          <SignedOutPick game={game} signInHref={signInHref} />
+          {locked ? (
+            <PickCell
+              game={game}
+              pick={undefined}
+              busy={false}
+              locked
+              onSave={() => {}}
+              onRemove={() => {}}
+            />
+          ) : (
+            <SignedOutPick game={game} signInHref={signInHref} />
+          )}
         </td>
       </ScheduleRow>
     );
   }
-  if (!picks.sheet) return <ScheduleRow game={game} season={season} timezone={timezone} />;
+  if (!picks.sheet) return <ScheduleRow {...row} />;
   const pick: UserPick | undefined = picks.sheet.picks.find(
     (item) => item.game_id === game.game_id
   );
   return (
-    <ScheduleRow game={game} season={season} timezone={timezone}>
+    <ScheduleRow {...row}>
       <td>
         <PickCell
           game={game}
           pick={pick}
           busy={picks.save.isPending || picks.remove.isPending}
+          locked={locked}
           onSave={picks.save.mutate}
           onRemove={picks.remove.mutate}
         />
@@ -346,13 +378,17 @@ function ScheduleRow({
   game,
   season,
   timezone,
+  phase,
   children,
 }: {
   game: ScheduledGame;
   season: string;
   timezone: string | null;
+  phase: ReturnType<typeof gamePhase>;
   children?: React.ReactNode;
 }) {
+  // Pregame numbers stay readable once the game is on, but step back.
+  const pregame = phase === "upcoming" ? undefined : "text-ink-3";
   const tip = formatGameTime(game.game_date, game.start_time_et, timezone);
   const away = game.away_team_abbreviation ?? "Away";
   const home = game.home_team_abbreviation ?? "Home";
@@ -398,23 +434,46 @@ function ScheduleRow({
       <td className="whitespace-nowrap" data-testid="national-tv">
         {game.national_tv || "—"}
       </td>
-      <td className="tabular whitespace-nowrap" data-testid="win-probability">
+      <td className={cn("tabular whitespace-nowrap", pregame)} data-testid="win-probability">
         {pairOrDash(
           formatProbability(game.away_win_probability),
           formatProbability(game.home_win_probability)
         )}
       </td>
-      <td className="tabular whitespace-nowrap" data-testid="moneyline">
-        {pairOrDash(formatMoneyline(game.away_moneyline), formatMoneyline(game.home_moneyline))}
+      <td className={cn("tabular whitespace-nowrap", pregame)}>
+        <span className="block" data-testid="moneyline">
+          {pairOrDash(formatMoneyline(game.away_moneyline), formatMoneyline(game.home_moneyline))}
+        </span>
+        {game.home_spread == null ? null : (
+          <span className={cn("block text-xs", pregame ?? "text-ink-2")} data-testid="spread">
+            {home} {formatSpread(game.home_spread)}
+          </span>
+        )}
       </td>
-      <td className="tabular whitespace-nowrap" data-testid="spread">
-        {game.home_spread == null ? "—" : `${home} ${formatSpread(game.home_spread)}`}
+      <td className="whitespace-nowrap" data-testid="game-status">
+        <GameStatus status={game.status} phase={phase} />
       </td>
-      <td>{game.status || "Scheduled"}</td>
       <td>{arena}</td>
       {children}
     </tr>
   );
+}
+
+/**
+ * "Live" for three hours from the scheduled tip, by the clock alone: there is no
+ * live feed, so no score or game clock. Past that the game waits on its final.
+ */
+function GameStatus({ status, phase }: { status: string; phase: ReturnType<typeof gamePhase> }) {
+  if (phase === "live") {
+    return (
+      <span className="inline-flex items-center gap-1.5 font-semibold text-destructive">
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-destructive" />
+        Live
+      </span>
+    );
+  }
+  if (phase === "started") return <span className="text-ink-2">Awaiting final</span>;
+  return <>{status || "Scheduled"}</>;
 }
 
 // One missing side means the pair is not trustworthy; render a single dash.

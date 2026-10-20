@@ -107,7 +107,7 @@ def _number(value) -> float | None:
 
 def test_standings_agree(db: Session, cube: CubeAnalytics) -> None:
     _, sql_rows = StandingsRepository(db).list_standings(
-        season=SEASON, conference=None, as_of=None, limit=30, offset=0
+        season=SEASON, conference=None, limit=30, offset=0
     )
     cube_rows = {row["team_id"]: row for row in cube.list_standings(season=SEASON)}
 
@@ -118,7 +118,7 @@ def test_standings_agree(db: Session, cube: CubeAnalytics) -> None:
             assert cube_row[field] == sql_row[field], (sql_row["abbreviation"], field)
         for field in ("wins", "losses", "conference_rank", "division_rank"):
             assert cube_row[field] == sql_row[field], (sql_row["abbreviation"], field)
-        for field in ("win_pct", "games_back", "conf_games_back"):
+        for field in ("win_pct", "games_back"):
             assert _number(cube_row[field]) == _number(sql_row[field]), (
                 sql_row["abbreviation"],
                 field,

@@ -110,6 +110,26 @@ describe("PickCell", () => {
     for (const button of screen.getAllByRole("button")) expect(button).toBeDisabled();
   });
 
+  it("shows a locked pick, its opponent and what it stands to win, with no controls", () => {
+    setup({ pick: pickOn("home", { stake: 10, moneyline: -150 }), locked: true });
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Locked pick: GSW")).toBeInTheDocument();
+    expect(screen.getByTestId("pick-cell")).toHaveTextContent("vs LAL");
+    expect(screen.getByTestId("pick-cell")).toHaveTextContent("Locked at tip · $10 to win $6.66");
+  });
+
+  it("says an away pick is at the home team, and an unstaked one counts for the record", () => {
+    setup({ pick: pickOn("away"), locked: true });
+    expect(screen.getByTestId("pick-cell")).toHaveTextContent("LALat GSW");
+    expect(screen.getByTestId("pick-cell")).toHaveTextContent("Locked at tip · record only");
+  });
+
+  it("offers nothing once locked with no pick", () => {
+    setup({ locked: true });
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.getByTestId("pick-cell")).toHaveTextContent("Locked at tip");
+  });
+
   it("falls back to Away and Home when a team has no abbreviation", () => {
     setup({
       game: {

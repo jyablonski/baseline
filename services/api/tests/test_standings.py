@@ -1,7 +1,7 @@
 from datetime import date
 
 import pytest
-from ids import TEAM_BOS, TEAM_CHI, TEAM_DET, TEAM_GSW, TEAM_LAC, TEAM_NYK, TEAM_OKC
+from ids import TEAM_BOS, TEAM_CHI, TEAM_GSW, TEAM_LAC
 
 
 def _standing_row(**overrides) -> dict:
@@ -20,7 +20,6 @@ def _standing_row(**overrides) -> dict:
         "losses": 32,
         "win_pct": 0.61,
         "games_back": 0.0,
-        "conf_games_back": 0.0,
         "streak": "W5",
         "last_10": "8-2",
     }
@@ -46,7 +45,6 @@ def test_list_standings(client, session, mapping_row, query_result) -> None:
                         losses=33,
                         win_pct=0.593,
                         games_back=1.5,
-                        conf_games_back=1.5,
                         streak="L1",
                         last_10="6-4",
                     )
@@ -98,52 +96,48 @@ def test_list_standings_rejects_invalid_conference(client) -> None:
 
 
 @pytest.mark.unit
-def test_list_standings_sql_overlays_regular_season_records() -> None:
-    from queries.standings import LIST_STANDINGS, LIST_STANDINGS_COUNT
+def test_list_standings_sql_reads_fct_standings_only() -> None:
+    from queries.standings import LIST_STANDINGS, LIST_STANDINGS_COUNT, TEAM_STANDING
 
     sql = str(LIST_STANDINGS)
-    assert "gold.dim_teams" in sql
-    assert "gold.fct_team_game_results" in sql
-    assert "season_type = 'Regular Season'" in sql
-    assert "record_source" in sql
-    assert "rank() OVER" in sql
-    assert "first_value(" in sql
-    assert "streak_group" in sql
-    assert "lag(" in sql
-    assert "form.last_10" in sql
+    assert "FROM gold.fct_standings" in sql
+    assert "fct_standings.record_source" in sql
+    # Ranks, games back and form are derived in dbt, never recomputed here.
+    assert "gold.fct_team_game_results" not in sql
+    assert "OVER (" not in sql
     # Ordering follows the settled play-in bracket, falling back to record rank.
-    assert "coalesce(fct_standings.playoff_seed," in sql
-    assert "playoff_seed" in sql
-    assert "gold.dim_teams" in str(LIST_STANDINGS_COUNT)
+    assert "coalesce(fct_standings.playoff_seed, fct_standings.conference_rank)" in sql
+    assert "FROM gold.fct_standings" in str(LIST_STANDINGS_COUNT)
+    assert "fct_standings.team_id = :team_id" in str(TEAM_STANDING)
 
 
 @pytest.mark.unit
-def test_list_standings_game_record_overlay(client, session, mapping_row, query_result) -> None:
+def test_list_standings_passes_derived_rows_through(
+    client, session, mapping_row, query_result
+) -> None:
     session.queue = [
         query_result(scalar=1),
         query_result(
             [
                 mapping_row(
-                    {
-                        "team_id": TEAM_BOS,
-                        "abbreviation": "BOS",
-                        "team_name": "Boston Celtics",
-                        "season": "2025-26",
-                        "season_type": "Regular Season",
-                        "as_of_date": None,
-                        "conference": "East",
-                        "division": "Atlantic",
-                        "conference_rank": None,
-                        "division_rank": None,
-                        "wins": 56,
-                        "losses": 26,
-                        "win_pct": 0.683,
-                        "games_back": None,
-                        "conf_games_back": None,
-                        "streak": None,
-                        "last_10": None,
-                        "record_source": "games",
-                    }
+                    _standing_row(
+                        team_id=TEAM_BOS,
+                        abbreviation="BOS",
+                        team_name="Boston Celtics",
+                        season="2025-26",
+                        as_of_date=None,
+                        conference="East",
+                        division="Atlantic",
+                        conference_rank=1,
+                        division_rank=None,
+                        wins=56,
+                        losses=26,
+                        win_pct=0.683,
+                        games_back=0.0,
+                        streak="W2",
+                        last_10="7-3",
+                        record_source="games",
+                    )
                 )
             ]
         ),
@@ -153,94 +147,7 @@ def test_list_standings_game_record_overlay(client, session, mapping_row, query_
     row = response.json()["data"][0]
     assert row["abbreviation"] == "BOS"
     assert row["wins"] == 56
-    assert row["losses"] == 26
     assert row["conference_rank"] == 1
     assert row["games_back"] == 0
-    assert row["streak"] is None
+    assert row["streak"] == "W2"
     assert row["record_source"] == "games"
-
-
-@pytest.mark.unit
-def test_apply_derived_ranks_orders_by_record() -> None:
-    from baseline_analytics.standings_rank import apply_derived_ranks
-
-    rows = apply_derived_ranks(
-        [
-            {
-                "team_id": TEAM_DET,
-                "abbreviation": "DET",
-                "team_name": "Detroit Pistons",
-                "conference": "East",
-                "wins": 59,
-                "losses": 22,
-                "win_pct": 0.728,
-                "conference_rank": None,
-                "games_back": None,
-                "record_source": "games",
-            },
-            {
-                "team_id": TEAM_NYK,
-                "abbreviation": "NYK",
-                "team_name": "New York Knicks",
-                "conference": "East",
-                "wins": 50,
-                "losses": 32,
-                "win_pct": 0.61,
-                "conference_rank": None,
-                "games_back": None,
-                "record_source": "games",
-            },
-            {
-                "team_id": TEAM_OKC,
-                "abbreviation": "OKC",
-                "team_name": "Oklahoma City Thunder",
-                "conference": "West",
-                "wins": 64,
-                "losses": 17,
-                "win_pct": 0.79,
-                "conference_rank": None,
-                "games_back": None,
-                "record_source": "games",
-            },
-        ]
-    )
-    east = [row for row in rows if row["conference"] == "East"]
-    west = [row for row in rows if row["conference"] == "West"]
-    assert east[0]["abbreviation"] == "DET"
-    assert east[0]["conference_rank"] == 1
-    assert east[0]["games_back"] == 0
-    assert east[1]["abbreviation"] == "NYK"
-    assert east[1]["conference_rank"] == 2
-    assert east[1]["games_back"] == 9.5
-    assert west[0]["conference_rank"] == 1
-    assert west[0]["games_back"] == 0
-
-
-@pytest.mark.unit
-def test_apply_derived_ranks_empty() -> None:
-    from baseline_analytics.standings_rank import apply_derived_ranks
-
-    assert apply_derived_ranks([]) == []
-
-
-@pytest.mark.unit
-def test_apply_derived_ranks_keeps_official_values() -> None:
-    from baseline_analytics.standings_rank import apply_derived_ranks
-
-    rows = apply_derived_ranks(
-        [
-            {
-                "team_id": TEAM_BOS,
-                "team_name": "Boston Celtics",
-                "conference": "East",
-                "wins": 50,
-                "losses": 32,
-                "win_pct": 0.61,
-                "conference_rank": 5,
-                "games_back": 12.0,
-                "record_source": "official",
-            }
-        ]
-    )
-    assert rows[0]["conference_rank"] == 5
-    assert rows[0]["games_back"] == 12.0

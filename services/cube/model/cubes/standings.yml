@@ -58,16 +58,17 @@ cubes:
         sql: last_10
         type: string
 
+      - name: record_source
+        sql: record_source
+        type: string
+        description: official (scraped standings) or games (derived from Regular Season Finals)
+
       - name: win_pct
         sql: win_pct
         type: number
 
       - name: games_back
         sql: games_back
-        type: number
-
-      - name: conf_games_back
-        sql: conf_games_back
         type: number
 
       - name: team_wins

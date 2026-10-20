@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { formatGameTime, formatScrapedAt, hasTipped, isTimezone, TIMEZONES } from "@/lib/timezones";
+import {
+  formatGameTime,
+  formatScrapedAt,
+  gamePhase,
+  hasTipped,
+  isTimezone,
+  liveWindowStartDate,
+  TIMEZONES,
+} from "@/lib/timezones";
 
 describe("formatGameTime", () => {
   it("shows Eastern by default, exactly as the game is stored", () => {
@@ -94,5 +102,31 @@ describe("hasTipped", () => {
 
   it("is false without a usable date", () => {
     expect(hasTipped(null, "19:30")).toBe(false);
+  });
+});
+
+describe("gamePhase", () => {
+  it("is live for three hours from tip, then started", () => {
+    // 7:30 PM EDT is 23:30 UTC; three hours on is 02:30 UTC.
+    expect(gamePhase("2026-10-22", "19:30", new Date("2026-10-22T23:29:00Z"))).toBe("upcoming");
+    expect(gamePhase("2026-10-22", "19:30", new Date("2026-10-22T23:30:00Z"))).toBe("live");
+    expect(gamePhase("2026-10-22", "19:30", new Date("2026-10-23T02:29:00Z"))).toBe("live");
+    expect(gamePhase("2026-10-22", "19:30", new Date("2026-10-23T02:30:00Z"))).toBe("started");
+  });
+
+  it("never calls a game with no tip time live", () => {
+    expect(gamePhase("2026-10-22", null, new Date("2026-10-22T03:59:00Z"))).toBe("upcoming");
+    expect(gamePhase("2026-10-22", null, new Date("2026-10-22T05:00:00Z"))).toBe("started");
+  });
+});
+
+describe("liveWindowStartDate", () => {
+  it("is the Eastern date three hours ago", () => {
+    // 1 AM EDT on the 23rd: a 10 PM tip on the 22nd is still live.
+    expect(liveWindowStartDate(new Date("2026-10-23T05:00:00Z"))).toBe("2026-10-22");
+    // 3:30 AM EDT: past every window from the night before.
+    expect(liveWindowStartDate(new Date("2026-10-23T07:30:00Z"))).toBe("2026-10-23");
+    // 9 PM EDT on the 22nd, when the server's UTC date is already the 23rd.
+    expect(liveWindowStartDate(new Date("2026-10-23T01:00:00Z"))).toBe("2026-10-22");
   });
 });

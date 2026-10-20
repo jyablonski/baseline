@@ -45,7 +45,6 @@ function standing(abbreviation: string, seed: number, conference = "East"): Stan
     losses: 12 + seed * 3,
     win_pct: (70 - seed * 3) / 82,
     games_back: seed === 1 ? 0 : (seed - 1) * 3,
-    conf_games_back: null,
     streak: seed === 1 ? "W5" : "L1",
     last_10: seed === 1 ? "8-2" : "5-5",
   } as StandingRow;
