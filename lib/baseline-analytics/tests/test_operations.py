@@ -16,7 +16,6 @@ from baseline_analytics.queries import (
     daily_highlights_query,
     game_odds_query,
     game_predictions_query,
-    game_standings_query,
     games_schedule_query,
     mvp_ladder_query,
     normalize_conference,
@@ -35,7 +34,6 @@ from baseline_analytics.queries import (
     search_players_query,
     standings_query,
     team_contracts_query,
-    team_games_seasons_query,
     team_record_query,
     transaction_participants_query,
     transactions_query,
@@ -282,7 +280,7 @@ def test_query_builders() -> None:
     assert pbp["filters"][0]["values"] == [str(GAME_ONE)]
     reddit = reddit_posts_query("thread", 10)
     assert reddit["limit"] == 10
-    assert "standings.conf_games_back" in standings_query()["dimensions"]
+    assert "standings.division_rank" in standings_query()["dimensions"]
     query, applied = team_record_query(
         "gsw",
         opponent_abbreviation="chi",
@@ -304,16 +302,6 @@ def test_query_builders() -> None:
     assert normalize_conference("Central") == "Central"
     standings = standings_query(season="2024-25", conference="east")
     assert standings["filters"][1]["values"] == ["East"]
-    game_standings = game_standings_query(season="2026-27", conference="west")
-    assert game_standings["measures"] == [
-        "team_games.wins",
-        "team_games.losses",
-        "team_games.games",
-    ]
-    assert game_standings["filters"][0]["values"] == ["Regular Season"]
-    assert game_standings["filters"][1]["values"] == ["2026-27"]
-    assert game_standings["filters"][2]["values"] == ["West"]
-    assert team_games_seasons_query()["filters"][0]["values"] == ["Regular Season"]
     rows = [
         {"player_id": PLAYER_CURRY, "full_name": "A", "career_ppg": 20, "career_games_played": 10}
     ]
@@ -407,80 +395,47 @@ def test_player_contract_snapshot_omits_profile_dims() -> None:
 
 
 @pytest.mark.unit
-def test_list_standings_falls_back_to_team_games() -> None:
+def test_list_standings_reads_derived_rows_from_standings() -> None:
     client = ScriptedCubeClient(
         [
-            [],
+            [{"season": "2026-27"}],
             [
                 {
                     "team_id": TEAM_OKC,
-                    "team_abbreviation": "OKC",
+                    "abbreviation": "OKC",
                     "team_name": "Oklahoma City Thunder",
                     "season": "2026-27",
                     "conference": "West",
-                    "wins": 2,
-                    "losses": 0,
-                    "games": 2,
-                },
-                {
-                    "team_id": TEAM_LAL,
-                    "team_abbreviation": "LAL",
-                    "team_name": "Los Angeles Lakers",
-                    "season": "2026-27",
-                    "conference": "West",
-                    "wins": 1,
-                    "losses": 1,
-                    "games": 2,
-                },
-            ],
-        ]
-    )
-    analytics = CubeAnalytics(client)
-    rows = analytics.list_standings(season="2026-27", conference="West")
-    assert [row["abbreviation"] for row in rows] == ["OKC", "LAL"]
-    assert rows[0]["conference_rank"] == 1
-    assert rows[0]["wins"] == 2
-    assert rows[0]["games_back"] == 0
-    assert rows[1]["conference_rank"] == 2
-    assert rows[1]["games_back"] == 1.0
-    assert client.queries[0]["dimensions"][0] == "standings.team_id"
-    assert client.queries[1]["measures"] == [
-        "team_games.wins",
-        "team_games.losses",
-        "team_games.games",
-    ]
-    assert client.queries[1]["filters"][0]["values"] == ["Regular Season"]
-
-
-@pytest.mark.unit
-def test_list_standings_resolves_season_from_team_games() -> None:
-    client = ScriptedCubeClient(
-        [
-            [],
-            [{"season": "2026-27"}],
-            [],
-            [
-                {
-                    "team_id": TEAM_OKC,
-                    "team_abbreviation": "OKC",
-                    "team_name": "Thunder",
-                    "season": "2026-27",
-                    "conference": "West",
-                    "wins": 3,
-                    "losses": 1,
-                    "games": 4,
+                    "conference_rank": 1,
+                    "team_wins": 2,
+                    "team_losses": 0,
+                    "win_pct": 1.0,
+                    "games_back": 0,
+                    "streak": "W2",
+                    "last_10": "2-0",
+                    "record_source": "games",
                 }
             ],
         ]
     )
     analytics = CubeAnalytics(client)
-    rows = analytics.list_standings()
+    rows = analytics.list_standings(conference="West")
     assert rows[0]["abbreviation"] == "OKC"
-    assert rows[0]["conference_rank"] == 1
     assert rows[0]["season"] == "2026-27"
+    assert rows[0]["conference_rank"] == 1
+    assert rows[0]["streak"] == "W2"
+    assert rows[0]["record_source"] == "games"
     assert client.queries[0]["dimensions"] == ["standings.season"]
-    assert client.queries[1]["dimensions"] == ["team_games.season"]
-    assert client.queries[2]["filters"][0]["values"] == ["2026-27"]
+    assert client.queries[1]["filters"][0]["values"] == ["2026-27"]
+    # fct_standings already covers seasons without a scrape; nothing reads team_games.
+    assert all("team_games" not in str(query) for query in client.queries)
+
+
+@pytest.mark.unit
+def test_list_standings_empty_without_any_season() -> None:
+    client = ScriptedCubeClient([[], []])
+    assert CubeAnalytics(client).list_standings() == []
+    assert len(client.queries) == 2
 
 
 def equals_filter(member: str, value: str) -> dict:

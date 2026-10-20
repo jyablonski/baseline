@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/schedule",
@@ -19,6 +19,7 @@ vi.mock("@/lib/api", () => ({
           game_id: "0022600100",
           season: "2026-27",
           game_date: "2026-10-22",
+          start_time_et: "19:30",
           status: "Scheduled",
           home_team_id: 1610612744,
           away_team_id: 1610612747,
@@ -73,7 +74,24 @@ vi.mock("@/lib/api", () => ({
 import SchedulePage from "@/app/schedule/page";
 import { Providers } from "@/components/providers";
 
+function renderPage() {
+  render(
+    <Providers>
+      <SchedulePage />
+    </Providers>
+  );
+}
+
 describe("schedule page", () => {
+  // Rows go live and lock by the clock, so the clock is pinned: noon Eastern
+  // two days before the fixtures' slate.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-20T16:00:00Z") });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("lists upcoming scheduled games with matchup and arena", async () => {
     render(
       <Providers>
@@ -117,6 +135,8 @@ describe("schedule page", () => {
     // Row 0 is priced; row 1 has neither a prediction nor odds.
     expect(screen.getAllByTestId("win-probability")[0]).toHaveTextContent("38% / 62%");
     expect(screen.getAllByTestId("moneyline")[0]).toHaveTextContent("+130 / -150");
+    // The spread sits under the moneyline, and only where there is one.
+    expect(screen.getAllByTestId("spread")).toHaveLength(1);
     expect(screen.getAllByTestId("spread")[0]).toHaveTextContent("GSW -3.5");
     // Only nationally televised games name a network.
     expect(screen.getByRole("columnheader", { name: "TV" })).toBeInTheDocument();
@@ -124,7 +144,6 @@ describe("schedule page", () => {
     expect(screen.getAllByTestId("national-tv")[1]).toHaveTextContent("—");
     expect(screen.getAllByTestId("win-probability")[1]).toHaveTextContent("—");
     expect(screen.getAllByTestId("moneyline")[1]).toHaveTextContent("—");
-    expect(screen.getAllByTestId("spread")[1]).toHaveTextContent("—");
     expect(screen.getByRole("heading", { name: "Schedule" }).parentElement).toHaveTextContent(
       "2026-27 schedule from today onward. Finished games are under Games."
     );
@@ -137,9 +156,10 @@ describe("schedule page", () => {
     expect(
       within(help).getByRole("link", { name: "How accurate is the model? →" })
     ).toHaveAttribute("href", "/predictions");
-    for (const column of ["TV", "Moneyline", "Spread"]) {
+    for (const column of ["TV", "Moneyline"]) {
       expect(screen.getByRole("button", { name: column })).toBeInTheDocument();
     }
+    expect(screen.queryByRole("button", { name: "Spread" })).not.toBeInTheDocument();
   });
 
   it("shows one day of games at a time and pages by game day", async () => {
@@ -163,5 +183,33 @@ describe("schedule page", () => {
     fireEvent.click(screen.getByRole("button", { name: "← Prev day" }));
     expect(await screen.findByText("Thu, Oct 22, 2026 · 2 games")).toBeInTheDocument();
     expect(screen.getByText("Chase Center")).toBeInTheDocument();
+  });
+
+  it("calls a game live for three hours from tip, by the clock alone", async () => {
+    // 7:45 PM EDT on the 22nd: the 7:30 game is on; the one with no tip time
+    // locked at the start of the day and is never called live.
+    vi.setSystemTime(new Date("2026-10-22T23:45:00Z"));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getAllByTestId("game-status")).toHaveLength(2);
+    });
+    const [live, unknown] = screen.getAllByTestId("game-status");
+    expect(live).toHaveTextContent("Live");
+    expect(unknown).toHaveTextContent("Awaiting final");
+    expect(screen.queryByText("Scheduled")).not.toBeInTheDocument();
+  });
+
+  it("asks for games from the Eastern date three hours ago, not the server's", async () => {
+    // 9 PM EDT on the 22nd: the server's UTC date is already the 23rd, but
+    // that evening's games are on now.
+    vi.setSystemTime(new Date("2026-10-23T01:00:00Z"));
+    const { api } = await import("@/lib/api");
+    const listSchedule = vi.spyOn(api, "listSchedule");
+    renderPage();
+    await waitFor(() => {
+      expect(listSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({ from_date: "2026-10-22" })
+      );
+    });
   });
 });

@@ -19,7 +19,7 @@ How the project got from a school Tableau dashboard to Baseline. The current sha
 
 The project started in fall 2019 as a Tableau dashboard fed by data fetched with R. That worked well enough to put a real [dashboard](https://public.tableau.com/app/profile/jyablonski/viz/NBA2019-2020SeasonMySQL/NBADashboard) together, but the Tableau license came from school and eventually ran out.
 
-In summer 2020 the dashboard was rebuilt in R Shiny, hosted on https://shinyapps.io, with Google Sheets as the data store.
+In summer 2020 the dashboard was rebuilt in R Shiny, hosted on https://shinyapps.io, with Google Sheets as the data store which was free and convenient at the time.
 
 ## AWS, Python, and dbt (2021-2023)
 
@@ -27,7 +27,9 @@ In spring 2021 the data moved off Sheets to AWS RDS on the free tier. That summe
 
 Features accumulated from there: Reddit and Twitter comments, sentiment analysis, play-by-play charts, and ML predictions.
 
-In fall 2023 the frontend moved to a [Python Dash dashboard](https://github.com/jyablonski/nba_elt_dashboard/) and R was dropped altogether.
+The data pipeline (ingestion, dbt, ML predictions) was scheduled via AWS Step Functions everyday and ran over ECS Fargate on free-tier resources.
+
+In fall 2023 the frontend moved to a [Python Dash dashboard](https://github.com/jyablonski/nba_elt_dashboard/) running on an EC2 instance, and R was dropped altogether.
 
 ## Free-tier churn (2025)
 

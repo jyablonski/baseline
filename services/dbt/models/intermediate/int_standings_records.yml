@@ -1,0 +1,226 @@
+version: 2
+
+models:
+  - name: int_standings_records
+    description: >
+      Regular Season standings for every team-season with scraped standings or at
+      least one Final, before playoff seeding. Scraped values win field by field;
+      the rest (form, division ranks, a leader's games_back, or a whole unscraped
+      season) is derived from fct_team_game_results. Derived ranks break ties with
+      the NBA criteria the data can answer; the model header lists what is not
+      modeled. Read by int_playoff_seeds and fct_standings.
+    columns:
+      - name: team_id
+        description: Baseline team UUID.
+        data_tests:
+          - not_null
+      - name: season
+        description: NBA season label, e.g. 2026-27.
+        data_tests:
+          - not_null
+      - name: conference_rank
+        description: Scraped conference rank, else win % with NBA tiebreakers (1-15).
+        data_tests:
+          - not_null
+      - name: division_rank
+        description: Always derived; the source never carries one (1-5).
+        data_tests:
+          - not_null
+      - name: division_wins
+        description: Regular Season wins against teams in the same division.
+      - name: conference_wins
+        description: Regular Season wins against teams in the same conference.
+      - name: point_differential
+        description: Points scored minus allowed over Regular Season Finals.
+      - name: record_source
+        description: official (scraped standings row) or games (derived from Finals).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["official", "games"]
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["team_id", "season"]
+
+unit_tests:
+  - name: standings_two_team_tie_goes_to_head_to_head
+    description: >
+      ZET and ALP finish .500. ZET won their meeting, so it ranks second even
+      though ALP sorts first by name and has the better point differential.
+    model: int_standings_records
+    given:
+      - input: ref('stg_standings')
+        rows: []
+      - input: ref('stg_teams')
+        rows:
+          - {
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              abbreviation: ZET,
+              team_name: Zeta,
+              conference: West,
+              division: Pacific,
+            }
+          - {
+              team_id: "00000000-0000-4000-8000-00000000a002",
+              abbreviation: ALP,
+              team_name: Alpha,
+              conference: West,
+              division: Southwest,
+            }
+          - {
+              team_id: "00000000-0000-4000-8000-00000000a003",
+              abbreviation: OME,
+              team_name: Omega,
+              conference: West,
+              division: Pacific,
+            }
+          - {
+              team_id: "00000000-0000-4000-8000-00000000a004",
+              abbreviation: PIE,
+              team_name: Pi,
+              conference: West,
+              division: Southwest,
+            }
+      - input: ref('fct_team_game_results')
+        rows:
+          - {
+              game_id: "00000000-0000-4000-8000-00000000b001",
+              season: 2026-27,
+              season_type: Regular Season,
+              game_date: 2026-10-21,
+              home_team_id: "00000000-0000-4000-8000-00000000a001",
+              away_team_id: "00000000-0000-4000-8000-00000000a002",
+              home_score: 110,
+              away_score: 100,
+              winning_team_id: "00000000-0000-4000-8000-00000000a001",
+            }
+          - {
+              game_id: "00000000-0000-4000-8000-00000000b002",
+              season: 2026-27,
+              season_type: Regular Season,
+              game_date: 2026-10-22,
+              home_team_id: "00000000-0000-4000-8000-00000000a002",
+              away_team_id: "00000000-0000-4000-8000-00000000a003",
+              home_score: 105,
+              away_score: 100,
+              winning_team_id: "00000000-0000-4000-8000-00000000a002",
+            }
+          - {
+              game_id: "00000000-0000-4000-8000-00000000b003",
+              season: 2026-27,
+              season_type: Regular Season,
+              game_date: 2026-10-23,
+              home_team_id: "00000000-0000-4000-8000-00000000a004",
+              away_team_id: "00000000-0000-4000-8000-00000000a001",
+              home_score: 120,
+              away_score: 100,
+              winning_team_id: "00000000-0000-4000-8000-00000000a004",
+            }
+    expect:
+      rows:
+        - {
+            abbreviation: PIE,
+            conference_rank: 1,
+            division_rank: 1,
+            games_back: 0,
+            streak: W1,
+            record_source: games,
+          }
+        - {
+            abbreviation: ZET,
+            conference_rank: 2,
+            division_rank: 1,
+            games_back: 0.5,
+            streak: L1,
+            record_source: games,
+          }
+        - {
+            abbreviation: ALP,
+            conference_rank: 3,
+            division_rank: 2,
+            games_back: 0.5,
+            streak: W1,
+            record_source: games,
+          }
+        - {
+            abbreviation: OME,
+            conference_rank: 4,
+            division_rank: 2,
+            games_back: 1,
+            streak: L1,
+            record_source: games,
+          }
+
+  - name: standings_three_team_tie_division_leaders_first
+    description: >
+      PEE, QUE and ARR split a round robin and all finish 1-1. PEE (won its
+      meeting with QUE) and ARR lead their divisions, so QUE drops to third
+      despite the second-best point differential.
+    model: int_standings_records
+    given:
+      - input: ref('stg_standings')
+        rows: []
+      - input: ref('stg_teams')
+        rows:
+          - {
+              team_id: "00000000-0000-4000-8000-00000000c001",
+              abbreviation: PEE,
+              team_name: Pee,
+              conference: East,
+              division: Atlantic,
+            }
+          - {
+              team_id: "00000000-0000-4000-8000-00000000c002",
+              abbreviation: QUE,
+              team_name: Que,
+              conference: East,
+              division: Atlantic,
+            }
+          - {
+              team_id: "00000000-0000-4000-8000-00000000c003",
+              abbreviation: ARR,
+              team_name: Arr,
+              conference: East,
+              division: Central,
+            }
+      - input: ref('fct_team_game_results')
+        rows:
+          - {
+              game_id: "00000000-0000-4000-8000-00000000d001",
+              season: 2026-27,
+              season_type: Regular Season,
+              game_date: 2026-10-21,
+              home_team_id: "00000000-0000-4000-8000-00000000c001",
+              away_team_id: "00000000-0000-4000-8000-00000000c002",
+              home_score: 101,
+              away_score: 100,
+              winning_team_id: "00000000-0000-4000-8000-00000000c001",
+            }
+          - {
+              game_id: "00000000-0000-4000-8000-00000000d002",
+              season: 2026-27,
+              season_type: Regular Season,
+              game_date: 2026-10-22,
+              home_team_id: "00000000-0000-4000-8000-00000000c002",
+              away_team_id: "00000000-0000-4000-8000-00000000c003",
+              home_score: 102,
+              away_score: 100,
+              winning_team_id: "00000000-0000-4000-8000-00000000c002",
+            }
+          - {
+              game_id: "00000000-0000-4000-8000-00000000d003",
+              season: 2026-27,
+              season_type: Regular Season,
+              game_date: 2026-10-23,
+              home_team_id: "00000000-0000-4000-8000-00000000c003",
+              away_team_id: "00000000-0000-4000-8000-00000000c001",
+              home_score: 120,
+              away_score: 100,
+              winning_team_id: "00000000-0000-4000-8000-00000000c003",
+            }
+    expect:
+      rows:
+        - { abbreviation: ARR, conference_rank: 1, division_rank: 1 }
+        - { abbreviation: PEE, conference_rank: 2, division_rank: 1 }
+        - { abbreviation: QUE, conference_rank: 3, division_rank: 2 }

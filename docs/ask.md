@@ -37,7 +37,7 @@ Rules answers also carry `entities` (what was matched: team, opponent, player, c
 
 Team names match whole words only, and the abbreviations `WAS` and `MIN` only when typed in capitals, so "what was" and "min" are not read as teams.
 
-Season resolution: an explicit `YYYY-YY` (or `YYYY-YYYY`) in the question wins, otherwise the optional `season` field on the request body. Standings prefer official `fct_standings` and fall back to Regular Season W–L when those rows are missing.
+Season resolution: an explicit `YYYY-YY` (or `YYYY-YYYY`) in the question wins, otherwise the optional `season` field on the request body. Standings read `fct_standings`, which uses scraped standings where they exist and derives the rest from Regular Season Finals (`record_source` says which).
 
 Salary and payroll answers are Basketball-Reference **remaining-year snapshots**, not a historical paid ledger.
 

@@ -14,8 +14,10 @@ with play_in_games as (
     where season_type = 'PlayIn'
 ),
 
+-- Record ranks from scraped standings, or derived with NBA tiebreakers for a
+-- season the scraper has not reached.
 standings as (
-    select * from {{ ref('stg_standings') }}
+    select * from {{ ref('int_standings_records') }}
 ),
 
 home_standings as (

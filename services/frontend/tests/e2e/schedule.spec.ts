@@ -2,6 +2,12 @@ import { expect, test } from "@playwright/test";
 
 import { API_FAILURE_DETAIL, expectNo2010Range, mockApi } from "./helpers";
 
+// Rows go live and lock by the clock, and the first day asked for is today's
+// Eastern date, so the clock is pinned before the fixtures' Oct 22 slate.
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-10-20T16:00:00Z"));
+});
+
 test("schedule lists the upcoming slate without scores or 2010-11 copy", async ({ page }) => {
   await mockApi(page);
   await page.goto("/schedule");

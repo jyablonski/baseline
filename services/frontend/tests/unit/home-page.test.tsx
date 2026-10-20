@@ -26,7 +26,6 @@ function standing(overrides: Record<string, unknown>) {
     losses: 30,
     win_pct: 0.571,
     games_back: 3,
-    conf_games_back: null,
     streak: "W1",
     last_10: "5-5",
     record_source: "games",

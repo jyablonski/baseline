@@ -188,14 +188,14 @@ INSERT INTO gold.fct_prediction_scorecard (
 INSERT INTO gold.fct_standings (
     team_id, abbreviation, team_name, season, season_type, as_of_date,
     conference, division, conference_rank, division_rank,
-    wins, losses, win_pct, games_back, conf_games_back, streak, last_10
+    wins, losses, win_pct, games_back, streak, last_10, record_source
 ) VALUES
     ('7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Golden State Warriors', '2024-25', 'Regular Season', '2025-04-13',
-     'West', 'Pacific', 1, 1, 50, 32, 0.610, 0, 0, 'W5', '8-2'),
+     'West', 'Pacific', 1, 1, 50, 32, 0.610, 0, 'W5', '8-2', 'official'),
     ('a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'LA Clippers', '2024-25', 'Regular Season', '2025-04-13',
-     'West', 'Pacific', 2, 2, 48, 33, 0.593, 1.5, 1.5, 'L1', '6-4'),
+     'West', 'Pacific', 2, 2, 48, 33, 0.593, 1.5, 'L1', '6-4', 'official'),
     ('a96f53b4-0f5c-4cb6-8b88-21ba05224cae', 'CHI', 'Chicago Bulls', '2024-25', 'Regular Season', '2025-04-13',
-     'East', 'Central', 5, 2, 45, 37, 0.549, 4, 4, 'W2', '5-5');
+     'East', 'Central', 5, 2, 45, 37, 0.549, 4, 'W2', '5-5', 'official');
 
 -- Curry is out and notable; Kawhi is a doubt. GAME_ONE (Final) has Kawhi
 -- listed out and not playing; the upcoming GAME_SCHEDULE has Curry out.

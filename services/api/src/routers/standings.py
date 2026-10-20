@@ -29,7 +29,6 @@ def list_standings(
     total, rows = repo.list_standings(
         season=season,
         conference=_validate_conference(conference),
-        as_of=None,
         limit=limit,
         offset=offset,
     )

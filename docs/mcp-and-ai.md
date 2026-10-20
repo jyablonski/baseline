@@ -28,12 +28,14 @@ MCP never opens Postgres. Cube down means a clear tool error, never a gold-SQL f
 
 ## Tools
 
-Player and career:
+Only the current season is loaded, so "career" and "by season" below mean that one season.
+
+Player:
 
 - `search_players` — fuzzy name search
 - `get_player_game_log` — box scores, season optional
-- `get_player_season_stats` — PPG/RPG/APG by season
-- `get_career_stats`, `compare_players`
+- `get_player_season_stats` — PPG/RPG/APG for the loaded season
+- `get_career_stats`, `compare_players` — totals and averages over the loaded season
 - `get_player_back_to_backs` — B2B splits vs overall
 - `get_mvp_ladder` — Baseline MVP score ranking for a season; Regular Season (default) or Playoffs, latest scored season when omitted
 - `get_player_mvp_scores` — one player's MVP score and rank by season, Regular Season and Playoffs as separate rows. The per-game score is `mvp_game_score` on `get_player_game_log`
@@ -41,7 +43,7 @@ Player and career:
 Team and league:
 
 - `get_team_record` — W/L plus filters (opponent, home/away, arena city, season). The game-by-game list is left out unless `include_games` is set
-- `get_standings` — conference table with `streak`, `last_10`, and games back; falls back to Regular Season W–L when official rows are missing
+- `get_standings` — conference table with `streak`, `last_10`, and games back; rows the scraper has not reached are derived from Regular Season Finals in `fct_standings` (`record_source: games`)
 - `get_team_payroll`, `get_player_contract` — remaining-year snapshots, not a paid ledger. Payroll is one team total with no players in it
 - `get_team_contracts` — every contract on a team for one season, largest first (default: the current contract season)
 

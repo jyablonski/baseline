@@ -147,7 +147,6 @@ def test_standing_row() -> None:
         losses=32,
         win_pct=0.61,
         games_back=0,
-        conf_games_back=0,
         streak="W5",
         last_10="8-2",
     )

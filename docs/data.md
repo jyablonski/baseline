@@ -26,7 +26,7 @@ make ml
 
 Always pass `--no-deps` next to Tilt so Compose does not recreate Postgres.
 
-Default ingest is the **current season only**. Backfill later with `--seasons 2010-11,2024-25`.
+Ingest is the **current season only**, and that is the only season the product supports (AGENTS.md, Season scope). `--seasons` exists to reload that season; loading other seasons is unsupported.
 
 You're done when `curl -s localhost:8000/api/v1/status` returns JSON and `gold.fct_team_game_results` has rows.
 
@@ -48,7 +48,7 @@ Click CLI, `python -m main`. Upserts only — Alembic must have created the tabl
 | `scrape-reddit`                   | `source.reddit_posts`, `source.reddit_comments` — needs `REDDIT_*` |
 | `scrape-play-by-play`             | `source.play_by_play`                                              |
 | `scrape-daily`                    | the whole basketball daily, ungated                                |
-| `scrape-all [--seasons]`          | teams, players, contracts, then per-season data and transactions   |
+| `scrape-all [--seasons]`          | teams, players, contracts, current-season data, transactions       |
 
 All Basketball-Reference HTML goes through one shared conservative transport with retries. Identity is never guessed from a name alone.
 
@@ -155,6 +155,6 @@ Salary and payroll are Basketball-Reference **remaining-year snapshots**, not a 
 
 Player `position` is a full name ("Point Guard") from `stg_players` onward. `source.players` keeps the roster code, which may be `PG`, an older `G-F`, or the `1`–`5` sort key an earlier scrape stored; all of them map to the same label.
 
-`fct_standings` derives what the source leaves out: `streak` and `last_10` from the team's own Regular Season Finals (Basketball-Reference's standings carry no form columns), and `games_back` for a conference leader, which the source leaves empty. The pages, Cube, and MCP all read those columns, so there is one definition. `fct_standings` is a season-to-date upsert. Joining it onto a past game does not give you the standings as of that night.
+`fct_standings` derives what the source leaves out, in `int_standings_records`: `streak` and `last_10` from the team's own Regular Season Finals (Basketball-Reference's standings carry no form columns), `division_rank` (never scraped), `games_back` for a conference leader, which the source leaves empty, and the whole row (W–L, win %, `conference_rank`, games back) for any team-season with Finals but no scraped standings, marked `record_source = 'games'` with a null `as_of_date`. Derived ranks break ties with the NBA criteria the data can answer: head-to-head (or the record among the tied teams for three or more), division leader, division and conference win %, then point differential. Win % against playoff-eligible teams and the restart of a multi-team tie once some teams separate are not modeled; team name stands in for the random drawing. `int_playoff_seeds` reads the same ranks, so a season the scraper has not reached still gets its play-in bracket. The pages, Cube, and MCP all read those columns and none of them recomputes a record, so there is one definition. `fct_standings` is a season-to-date upsert. Joining it onto a past game does not give you the standings as of that night.
 
 Transactions are keyed by `sha256(transaction_date|description)`, so a reworded Basketball-Reference entry arrives as a new row rather than an edit. Draft picks are prose with no link on the source page and never become participants; a player named inside a pick clause is linked and is kept. A transaction naming a player that `scrape-players` has not seen yet drops that participant and picks it up on a later run — transactions reference players, they never create or reactivate them.

@@ -4,14 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from queries.records import (
-    RECORD_LOSSES,
-    RECORD_SOURCE,
-    RECORD_WIN_PCT,
-    RECORD_WINS,
-    REGULAR_SEASON_RECORDS,
-    RESOLVED_SEASON,
-)
+from queries.standings import RESOLVED_SEASON
 
 TEAM_GAME_FILTERS = """
     (fct_team_game_results.home_team_id = :team_id OR fct_team_game_results.away_team_id = :team_id)
@@ -108,10 +101,10 @@ LIST_TEAMS = text(
         dim_teams.division,
         dim_teams.city,
         dim_teams.nickname,
-        {RECORD_WINS} AS wins,
-        {RECORD_LOSSES} AS losses,
-        {RECORD_WIN_PCT} AS win_pct,
-        {RECORD_SOURCE} AS record_source,
+        fct_standings.wins,
+        fct_standings.losses,
+        fct_standings.win_pct,
+        fct_standings.record_source,
         scoring.pts_scored_avg,
         scoring.pts_allowed_avg
     FROM gold.dim_teams
@@ -119,8 +112,6 @@ LIST_TEAMS = text(
         ON fct_standings.team_id = dim_teams.team_id
         AND fct_standings.season = ({RESOLVED_SEASON})
         AND fct_standings.season_type = 'Regular Season'
-    LEFT JOIN ({REGULAR_SEASON_RECORDS}) AS records
-        ON records.team_id = dim_teams.team_id
     LEFT JOIN ({REGULAR_SEASON_SCORING}) AS scoring
         ON scoring.team_id = dim_teams.team_id
     ORDER BY

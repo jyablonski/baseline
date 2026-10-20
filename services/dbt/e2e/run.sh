@@ -53,6 +53,7 @@ DECLARE
   gsw_gb numeric;
   chi_streak text;
   chi_last_10 text;
+  lac_standing text;
   schedule_count integer;
   scheduled_count integer;
   prediction_count integer;
@@ -167,6 +168,20 @@ BEGIN
     AND season_type = 'Regular Season';
   IF chi_streak IS DISTINCT FROM 'L2' OR chi_last_10 IS DISTINCT FROM '0-2' THEN
     RAISE EXCEPTION 'expected CHI streak=L2 last_10=0-2, got % %', chi_streak, chi_last_10;
+  END IF;
+
+  -- LAC has no source.standings row: 2-1 from its Regular Season Finals,
+  -- ranked behind GSW's official 3-0.
+  SELECT record_source || ' ' || wins || '-' || losses || ' ' || win_pct || ' #' ||
+         conference_rank || ' div' || division_rank || ' ' || games_back::float8 || ' ' || streak || ' ' || last_10 || ' ' ||
+         division || ' ' || coalesce(as_of_date::text, 'no-as-of')
+  INTO lac_standing
+  FROM gold.fct_standings
+  WHERE team_id = 'a79dabb2-26c5-443c-bbb4-cabdd8db5958'
+    AND season = '2024-25'
+    AND season_type = 'Regular Season';
+  IF lac_standing IS DISTINCT FROM 'games 2-1 0.667 #2 div2 1 W2 2-1 Pacific no-as-of' THEN
+    RAISE EXCEPTION 'expected derived LAC standing, got %', lac_standing;
   END IF;
 
   SELECT count(*) INTO schedule_count FROM gold.fct_games_schedule;

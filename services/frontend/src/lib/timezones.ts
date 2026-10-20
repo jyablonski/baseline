@@ -80,6 +80,36 @@ export function hasTipped(
   return tip != null && tip.getTime() <= now.getTime();
 }
 
+/** How long after tip a game not yet scraped as Final still reads as live. */
+export const LIVE_WINDOW_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * Where a game not yet Final stands by the clock alone: "upcoming" before tip,
+ * "live" for the first three hours, "started" after that. No live feed is
+ * read. With no start time on file a game locks at the start of game day but
+ * is never called live, since nobody knows when it tipped.
+ */
+export function gamePhase(
+  gameDate: string | null | undefined,
+  startTimeEt: string | null | undefined,
+  now = new Date()
+): "upcoming" | "live" | "started" {
+  if (!hasTipped(gameDate, startTimeEt, now)) return "upcoming";
+  const tip = tipOff(gameDate, startTimeEt);
+  if (tip && now.getTime() - tip.getTime() < LIVE_WINDOW_MS) return "live";
+  return "started";
+}
+
+/**
+ * The earliest game day that can still have a live game: the Eastern date
+ * three hours ago, as "YYYY-MM-DD". A 10 PM tip stays on screen past midnight.
+ */
+export function liveWindowStartDate(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: DEFAULT_TIMEZONE }).format(
+    new Date(now.getTime() - LIVE_WINDOW_MS)
+  );
+}
+
 /**
  * A game's date, start time and zone label as one account wants to read them.
  *

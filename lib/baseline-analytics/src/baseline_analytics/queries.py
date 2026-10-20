@@ -133,7 +133,7 @@ STANDINGS_DIMENSIONS = [
     "standings.team_losses",
     "standings.win_pct",
     "standings.games_back",
-    "standings.conf_games_back",
+    "standings.record_source",
 ]
 
 TEAM_RECORD_GAME_DIMENSIONS = [
@@ -374,17 +374,6 @@ def standings_seasons_query() -> dict[str, Any]:
     }
 
 
-def team_games_seasons_query() -> dict[str, Any]:
-    """Latest Regular Season with team-game results (Ask overlay when official standings are empty)."""
-    return {
-        "dimensions": ["team_games.season"],
-        "measures": ["team_games.games"],
-        "filters": [equals("team_games.season_type", "Regular Season")],
-        "order": {"team_games.season": "desc"},
-        "limit": 1,
-    }
-
-
 def standings_query(season: str | None = None, conference: str | None = None) -> dict[str, Any]:
     filters: list[dict[str, Any]] = []
     if season:
@@ -396,31 +385,6 @@ def standings_query(season: str | None = None, conference: str | None = None) ->
         "dimensions": list(STANDINGS_DIMENSIONS),
         "filters": filters,
         "order": {"standings.conference_rank": "asc"},
-        "limit": 30,
-    }
-
-
-def game_standings_query(
-    season: str | None = None, conference: str | None = None
-) -> dict[str, Any]:
-    """Regular Season W–L by team from team_games (same overlay REST uses when fct_standings is empty)."""
-    filters: list[dict[str, Any]] = [equals("team_games.season_type", "Regular Season")]
-    if season:
-        filters.append(equals("team_games.season", season))
-    normalized = normalize_conference(conference)
-    if normalized:
-        filters.append(equals("teams.conference", normalized))
-    return {
-        "measures": ["team_games.wins", "team_games.losses", "team_games.games"],
-        "dimensions": [
-            "team_games.team_id",
-            "team_games.team_abbreviation",
-            "team_games.team_name",
-            "team_games.season",
-            "teams.conference",
-            "teams.division",
-        ],
-        "filters": filters,
         "limit": 30,
     }
 
