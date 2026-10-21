@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { leagueRatingAverages, paddedDomain, teamRatingPoints } from "@/lib/team-ratings";
+import {
+  leagueRatingAverages,
+  netLines,
+  paddedDomain,
+  ratingRanks,
+  teamRatingPoints,
+} from "@/lib/team-ratings";
 import type { TeamSummary } from "@/lib/types";
 
 const TEAM_A = "00000000-0000-4000-8000-000000000201";
@@ -67,5 +73,35 @@ describe("team ratings", () => {
     const [min, max] = paddedDomain([110, 118]);
     expect(min).toBeLessThan(110);
     expect(max).toBeGreaterThan(118);
+  });
+});
+
+describe("rating ranks and net lines", () => {
+  const point = (team_id: string, scored: number, allowed: number) => ({
+    team_id,
+    abbreviation: team_id,
+    team_name: team_id,
+    pts_scored_avg: scored,
+    pts_allowed_avg: allowed,
+  });
+
+  it("ranks most scored, fewest allowed, and biggest net first, sharing ties", () => {
+    const ranks = ratingRanks([point("A", 120, 110), point("B", 110, 105), point("C", 110, 115)]);
+    expect(ranks.get("A")).toEqual({ offense: 1, defense: 2, net: 1 });
+    expect(ranks.get("B")).toEqual({ offense: 2, defense: 1, net: 2 });
+    expect(ranks.get("C")).toEqual({ offense: 2, defense: 3, net: 3 });
+  });
+
+  it("draws net −10 and +10, clipped to the plot", () => {
+    const lines = netLines([105, 125], [105, 125]);
+    expect(lines.map((line) => line.net)).toEqual([-10, 10]);
+    // Net +10 runs from (115, 105) to (125, 115): allowed = scored − 10.
+    expect(lines.find((line) => line.net === 10)).toEqual({
+      net: 10,
+      from: { x: 115, y: 105 },
+      to: { x: 125, y: 115 },
+    });
+    // A line that only touches a corner is left out.
+    expect(netLines([105, 125], [105, 125], [20])).toEqual([]);
   });
 });

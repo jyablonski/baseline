@@ -9,7 +9,7 @@ test("games index opens on the latest day and steps between game days", async ({
   await expect(page.getByRole("heading", { name: "Latest · Tuesday, October 22" })).toBeVisible();
   // Scoped to the results: the notables below also name teams.
   const results = page.getByRole("region", { name: "Results" });
-  await expect(results.getByTestId("result-row")).toContainText("GSW by 10");
+  await expect(results.getByTestId("result-row")).not.toContainText("GSW by 10");
   await expect(page.getByRole("button", { name: "Later game day" })).toBeDisabled();
   await expectNo2010Range(page);
 
@@ -188,9 +188,13 @@ test("game page recaps a final with the model's call and no regular-season headl
   await expect(page.getByTestId("recap-card").first()).toBeVisible();
   // A regular-season result needs no headline: the scoreboard already says it.
   await expect(page.getByTestId("recap-headline")).toHaveCount(0);
-  await expect(page.getByTestId("recap-call").filter({ hasText: "Model" })).toContainText(
-    "Had BOS at 55% before tip-off · Called it"
+  await expect(page.getByTestId("recap-call").filter({ hasText: "Model" })).toHaveText(
+    "Model favored BOS 55%"
   );
+  await page.getByRole("button", { name: /Before tip-off/ }).click();
+  await expect(
+    page.getByTestId("pregame-row").filter({ hasText: "Model" }).getByText("Called it")
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Who wins?" })).toHaveCount(0);
 });
 

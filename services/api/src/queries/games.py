@@ -92,7 +92,9 @@ LIST_GAMES = text(
         home_teams.conference AS home_team_conference,
         away_teams.conference AS away_team_conference,
         series_games.series_game_number,
-        lead_highlights.headline AS lead_highlight
+        lead_highlights.headline AS lead_highlight,
+        fct_game_flow.largest_lead_blown,
+        fct_game_upsets.winner_market_wp
     FROM gold.fct_team_game_results
     LEFT JOIN home_teams
         ON home_teams.team_id = fct_team_game_results.home_team_id
@@ -102,6 +104,10 @@ LIST_GAMES = text(
         ON series_games.game_id = fct_team_game_results.game_id
     LEFT JOIN lead_highlights
         ON lead_highlights.game_id = fct_team_game_results.game_id
+    LEFT JOIN gold.fct_game_flow
+        ON fct_game_flow.game_id = fct_team_game_results.game_id
+    LEFT JOIN gold.fct_game_upsets
+        ON fct_game_upsets.game_id = fct_team_game_results.game_id
     WHERE
         (CAST(:season AS text) IS NULL OR fct_team_game_results.season = :season)
         AND (CAST(:season_type AS text) IS NULL OR fct_team_game_results.season_type = :season_type)

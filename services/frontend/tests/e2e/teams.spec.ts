@@ -10,9 +10,7 @@ test("teams directory to profile shows cap position", async ({ page }) => {
   await expect(page.getByText(/Records shown for/)).toHaveCount(0);
   await expect(page.getByText(/30 clubs/)).toHaveCount(0);
   await expect(page.getByRole("link", { name: "GSW" })).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Team offensive vs defensive rating" })
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Offense vs defense" })).toBeVisible();
   await expectNo2010Range(page);
 
   await page.getByRole("link", { name: "GSW" }).click();
@@ -43,9 +41,7 @@ test("teams directory empty warehouse", async ({ page }) => {
   await mockApi(page, { empty: true });
   await page.goto("/teams");
   await expect(page.getByText("No standings yet")).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Team offensive vs defensive rating" })
-  ).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Offense vs defense" })).toHaveCount(0);
 });
 
 test("teams page plots each team as a bare logo marker", async ({ page }) => {
@@ -54,10 +50,15 @@ test("teams page plots each team as a bare logo marker", async ({ page }) => {
 
   const scatter = page.locator("section[aria-labelledby='team-ratings-heading']");
   await expect(scatter).toBeVisible();
-  await expect(scatter.getByText("Offensive rating")).toBeVisible();
-  // Markers are the logo image alone; the backing circle was removed.
+  await expect(scatter.getByText("Good on both ends")).toBeVisible();
+  await expect(scatter.getByText(/^League avg/)).toHaveCount(2);
+  // Markers are the logo image alone until a team is highlighted.
   await expect(scatter.locator("image")).toHaveCount(3);
   await expect(scatter.locator("circle")).toHaveCount(0);
+  const picker = scatter.getByRole("combobox", { name: "Highlight" });
+  await picker.selectOption({ index: 1 });
+  await expect(scatter.locator("circle")).toHaveCount(1);
+  await expect(scatter.getByRole("button", { name: "Last 15" })).toHaveCount(0);
 });
 
 test("teams directory surfaces the API failure instead of an empty grid", async ({ page }) => {

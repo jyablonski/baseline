@@ -606,16 +606,27 @@ describe("game page states", () => {
     expect(screen.getByLabelText("NYK 108, winner")).toBeInTheDocument();
     expect(screen.getByLabelText("SAS 101")).toBeInTheDocument();
     const calls = screen.getAllByTestId("recap-call").map((call) => call.textContent);
-    // The model had the home side and lost; the market had the winner.
-    expect(calls).toEqual([
-      "Model Had SAS at 60% before tip-off · Missed",
-      "Market Had NYK at 55% before tip-off · Called it",
-    ]);
+    // The market had the winner; the model had the home side and lost.
+    expect(calls).toEqual(["Market favored NYK 55%", "Model favored SAS 60%"]);
+    // Compare opens the three calls on one axis, with how each one came out.
+    const toggle = screen.getByRole("button", { name: /Before tip-off/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("pregame-row")).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const [market, model] = screen.getAllByTestId("pregame-row");
+    expect(within(market).getByText("Called it")).toHaveClass("text-primary");
+    expect(within(model).getByText("Missed")).toHaveClass("text-destructive");
+    expect(model).toHaveTextContent("15 pts further off than the market");
+    expect(screen.getByRole("link", { name: "How accurate is the model?" })).toHaveAttribute(
+      "href",
+      "/predictions"
+    );
     expect(screen.queryByRole("heading", { name: "Who wins?" })).not.toBeInTheDocument();
-    expect(screen.queryByTestId("upset-note")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("upset-tag")).not.toBeInTheDocument();
   });
 
-  it("badges an upset with the winner's morning line, and says when the model saw it", async () => {
+  it("tags an upset in the pregame bar with the winner's morning line", async () => {
     finalWithoutFlow();
     getGame.mockResolvedValue({
       ...FINALS_GAME,
@@ -626,12 +637,43 @@ describe("game page states", () => {
     });
     renderPage();
 
-    const note = await screen.findByTestId("upset-note");
-    expect(note).toHaveTextContent("Upset NYK won at 28% on the morning line");
-    expect(note).toHaveTextContent("The model had NYK favoured");
-    expect(note).not.toHaveTextContent(/closing/i);
+    const tag = await screen.findByTestId("upset-tag");
+    expect(tag).toHaveTextContent("Upset");
+    expect(tag).toHaveAttribute("title", "The market gave NYK a 28% chance");
+    expect(screen.getByTestId("pregame-calls")).toContainElement(tag);
     // A regular-season result has no headline: the scoreboard already says it.
     expect(screen.queryByTestId("recap-headline")).not.toBeInTheDocument();
+  });
+
+  it("does not call a near coin flip an upset", async () => {
+    finalWithoutFlow();
+    getGame.mockResolvedValue({
+      ...FINALS_GAME,
+      season_type: "Regular Season",
+      is_upset: true,
+      winner_market_wp: 0.46,
+    });
+    renderPage();
+
+    expect(await screen.findByTestId("pregame-calls")).toBeInTheDocument();
+    expect(screen.queryByTestId("upset-tag")).not.toBeInTheDocument();
+  });
+
+  it("reads an even line as no call, neither hit nor miss", async () => {
+    finalWithoutFlow();
+    getGame.mockResolvedValue({
+      ...FINALS_GAME,
+      season_type: "Regular Season",
+      market_home_wp: 0.5,
+    });
+    renderPage();
+
+    const toggle = await screen.findByRole("button", { name: /Before tip-off/ });
+    expect(screen.getAllByTestId("recap-call")[0]).toHaveTextContent("Market had it even");
+    fireEvent.click(toggle);
+    const outcome = within(screen.getAllByTestId("pregame-row")[0]).getByText("Coin flip");
+    expect(outcome).not.toHaveClass("text-primary");
+    expect(outcome).not.toHaveClass("text-destructive");
   });
 
   it("tells a Finals game as the series: game number, record, and the clincher", async () => {

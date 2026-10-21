@@ -106,6 +106,10 @@ class GameResult(BaseModel):
     series_game_number: int | None = None
     # The game's top highlight headline, when it has one.
     lead_highlight: str | None = None
+    # The winner's biggest deficit (0 if it never trailed); null without play-by-play.
+    largest_lead_blown: int | None = None
+    # The winner's market WP from that morning's line; null without a captured line.
+    winner_market_wp: float | None = None
 
 
 class GameDate(BaseModel):

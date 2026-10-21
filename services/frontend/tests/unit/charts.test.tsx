@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("recharts", async () => {
@@ -178,9 +178,7 @@ describe("charts", () => {
         ]}
       />
     );
-    expect(
-      screen.getByRole("heading", { name: "Team offensive vs defensive rating" })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Offense vs defense" })).toBeInTheDocument();
     expect(ratings.querySelectorAll("path.recharts-symbols")).toHaveLength(0);
     expect(ratings.querySelector(".recharts-scatter title")).toBeNull();
     expect(screen.queryByText(/possession-adjusted ORtg/i)).not.toBeInTheDocument();
@@ -211,13 +209,50 @@ describe("charts", () => {
       "href",
       "https://cdn.nba.com/logos/nba/1610612756/primary/L/logo.svg"
     );
-    expect(image).toHaveAttribute("width", "51");
-    expect(image).toHaveAttribute("height", "51");
-    expect(image).toHaveAttribute("x", "14.5");
-    expect(image).toHaveAttribute("y", "14.5");
+    expect(image).toHaveAttribute("width", "40");
+    expect(image).toHaveAttribute("height", "40");
+    expect(image).toHaveAttribute("x", "20");
+    expect(image).toHaveAttribute("y", "20");
     expect(image).not.toHaveAttribute("clip-path");
     expect(logo.querySelector("text")).toBeNull();
     expect(logo.querySelector("title")).toBeNull();
+    // The highlighted team gets a ring; the rest step back.
+    const highlighted = render(
+      <svg>
+        <TeamLogoMarker
+          cx={40}
+          cy={40}
+          payload={{
+            team_id: TEAM_PHX,
+            abbreviation: "PHX",
+            team_name: "Phoenix Suns",
+            pts_scored_avg: 112.6,
+            pts_allowed_avg: 111.1,
+            highlighted: true,
+          }}
+        />
+        <TeamLogoMarker
+          cx={80}
+          cy={40}
+          payload={{
+            team_id: TEAM_BOS,
+            abbreviation: "BOS",
+            team_name: "Boston Celtics",
+            pts_scored_avg: 116.4,
+            pts_allowed_avg: 109.2,
+            dimmed: true,
+          }}
+        />
+      </svg>
+    );
+    expect(highlighted.container.querySelectorAll("circle")).toHaveLength(1);
+    expect(highlighted.container.querySelectorAll("g[opacity='0.35']")).toHaveLength(1);
+    // Every plotted team is in the picker, by name.
+    const picker = screen.getByRole("combobox", { name: "Highlight" });
+    expect(within(picker).getByRole("option", { name: "Boston Celtics" })).toBeInTheDocument();
+    fireEvent.change(picker, { target: { value: TEAM_BOS } });
+    expect(picker).toHaveValue(TEAM_BOS);
+    expect(screen.queryByText(/Last 15|previous season/i)).not.toBeInTheDocument();
     render(
       <RatingsTooltip
         active
@@ -228,14 +263,22 @@ describe("charts", () => {
               abbreviation: "PHX",
               team_name: "Phoenix Suns",
               pts_scored_avg: 112.6,
-              pts_allowed_avg: 111.1,
+              pts_allowed_avg: 116.1,
+              wins: 34,
+              losses: 48,
+              ranks: { offense: 21, defense: 21, net: 23 },
             },
           },
         ]}
       />
     );
     expect(screen.getByText("Phoenix Suns")).toBeInTheDocument();
-    expect(screen.getByText("Scored 112.6 · allowed 111.1")).toBeInTheDocument();
+    expect(screen.getByText("34–48")).toBeInTheDocument();
+    expect(screen.getByText("Offense").closest("tr")).toHaveTextContent("Offense112.621st");
+    expect(screen.getByText("Defense").closest("tr")).toHaveTextContent("Defense116.121st");
+    // A negative net reads in the loss colour, with a real minus.
+    expect(screen.getByText("−3.5")).toHaveClass("text-destructive");
+    expect(screen.getByText("Net").closest("tr")).toHaveTextContent("23rd");
     expect(screen.queryByText(/Phoenix Suns: 112.6 scored/)).not.toBeInTheDocument();
     render(<GameFlowTooltip active payload={[]} />);
     render(

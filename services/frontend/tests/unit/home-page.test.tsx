@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const listGames = vi.fn();
 const listSchedule = vi.fn();
-const listHighlights = vi.fn();
 const listSocialPosts = vi.fn();
 let searchParams = "season=2025-26";
 let seasons = ["2025-26"];
@@ -44,7 +43,6 @@ vi.mock("@/lib/api", () => ({
     }),
     listGames: (...args: unknown[]) => listGames(...args),
     listSchedule: (...args: unknown[]) => listSchedule(...args),
-    listHighlights: (...args: unknown[]) => listHighlights(...args),
     getSocialSummary: async () => ({ last_post_at: "2026-01-13T05:00:00Z" }),
     listSocialPosts: (...args: unknown[]) => listSocialPosts(...args),
     listStandings: async () => ({
@@ -128,9 +126,8 @@ describe("home desk", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-01-13T15:00:00Z"));
     listGames.mockResolvedValue(page([]));
+    listSchedule.mockReset();
     listSchedule.mockResolvedValue(page([]));
-    listHighlights.mockReset();
-    listHighlights.mockResolvedValue(page([]));
     listSocialPosts.mockResolvedValue(page([]));
   });
 
@@ -148,16 +145,25 @@ describe("home desk", () => {
   it("shows last night's slate, capped, and leaves older games out", async () => {
     listGames.mockResolvedValue(
       page([
-        ...Array.from({ length: 8 }, (_, index) => final(index)),
+        ...Array.from({ length: 7 }, (_, index) => final(index)),
+        // Last in the API's order, but a comeback: it makes the cut.
+        final(7, { largest_lead_blown: 15 }),
         final(99, { game_date: "2026-01-11" }),
       ])
     );
     renderHome();
 
     expect(await screen.findByRole("heading", { name: "Last night" })).toBeInTheDocument();
-    expect(await screen.findByText("Mon 12 Jan · 8 games, 6 shown")).toBeInTheDocument();
+    expect(await screen.findByText("Monday, January 12 · 8 games")).toBeInTheDocument();
     expect(listGames).toHaveBeenCalledWith({ season: "2025-26", limit: 15 });
-    expect(screen.getAllByRole("link", { name: /game flow$/ })).toHaveLength(6);
+    const cards = screen.getAllByRole("link", { name: /game flow$/ });
+    expect(cards).toHaveLength(6);
+    expect(cards[0]).toHaveAccessibleName("A7 97, H7 107: game flow");
+    // The rest of the night is one click away, pinned to that date.
+    expect(screen.getByRole("link", { name: "See all 8 games →" })).toHaveAttribute(
+      "href",
+      "/games?date=2026-01-12"
+    );
     const card = screen.getByRole("link", { name: "A0 90, H0 100: game flow" });
     expect(card).toHaveAttribute("href", "/games/game-0");
     // Winner in bold, loser muted.
@@ -167,85 +173,60 @@ describe("home desk", () => {
     expect(screen.getByRole("link", { name: "All results →" })).toHaveAttribute("href", "/games");
   });
 
-  it("features the day's highlights and notes each game's lead one", async () => {
-    listGames.mockResolvedValue(page([final(0), final(1), final(2)]));
-    const highlight = (index: number, overrides: Record<string, unknown>) => ({
-      highlight_id: `hl-${index}`,
-      game_id: `game-${index}`,
-      game_date: "2026-01-12",
-      season: "2025-26",
-      detail: `H${index} 10${index}, A${index} 9${index}.`,
-      score: 10 - index,
-      ...overrides,
-    });
-    listHighlights.mockResolvedValue(
+  it("notes each game's lead highlight and the market's favourite, never the model's", async () => {
+    listGames.mockResolvedValue(
       page([
-        highlight(0, {
-          highlight_type: "win_streak",
-          headline: "Thunder win 15th straight",
-          is_featured: true,
+        final(0, { lead_highlight: "Thunder win 15th straight", winner_market_wp: 0.72 }),
+        // The away side wins this one, at 39% on the line.
+        final(1, {
+          away_score: 106,
+          home_score: 100,
+          winning_team_id: "away-1",
+          winner_market_wp: 0.39,
         }),
-        highlight(1, {
-          highlight_type: "blown_lead",
-          headline: "Heat blow a 22-point lead",
-          is_featured: true,
-        }),
-        highlight(2, {
-          highlight_type: "something_new",
-          headline: "Jalen Brunson: 34 pts, 5 reb, 8 ast",
-          is_featured: false,
-        }),
+        // Back from 22 down, and only a 46% underdog: a comeback, not an upset.
+        final(2, { largest_lead_blown: 22, winner_market_wp: 0.46 }),
       ])
     );
+    // A model prediction is on the schedule, and none of it reaches the page.
+    listSchedule.mockResolvedValue(
+      page([scheduled(0, { prediction_model_version: "elo-v1", home_win_probability: 0.7 })])
+    );
     renderHome();
-
-    expect(await screen.findByRole("heading", { name: "What stood out" })).toBeInTheDocument();
-    // Asked for the same night as the scores above it.
-    expect(listHighlights).toHaveBeenCalledWith({
-      season: "2025-26",
-      game_date: "2026-01-12",
-      limit: 15,
-    });
-    const cards = screen.getAllByRole("link", { name: /^(Win streak|Blown lead)/ });
-    expect(cards).toHaveLength(2);
-    expect(cards[0]).toHaveAttribute("href", "/games/game-0");
-    expect(within(cards[0]).getByText("H0 100, A0 90.")).toBeInTheDocument();
-    // Bad news for its subject reads in the loss colour.
-    expect(screen.getByText("Win streak")).toHaveClass("text-primary");
-    expect(screen.getByText("Blown lead")).toHaveClass("text-destructive");
-    // Every game gets its lead line under the score, featured or not.
-    const quiet = screen.getByRole("link", { name: "A2 92, H2 102: game flow" });
-    expect(within(quiet).getByText("Jalen Brunson: 34 pts, 5 reb, 8 ast")).toBeInTheDocument();
-    expect(screen.queryByText("something new")).not.toBeInTheDocument();
-  });
-
-  it("leaves the highlights section out when nothing is featured", async () => {
-    listGames.mockResolvedValue(page([final(0)]));
-    renderHome();
-
-    expect(await screen.findByRole("heading", { name: "Last night" })).toBeInTheDocument();
-    await waitFor(() => expect(listHighlights).toHaveBeenCalled());
-    expect(screen.queryByRole("heading", { name: "What stood out" })).not.toBeInTheDocument();
-  });
-
-  it("reports a highlights failure without hiding the rest of the desk", async () => {
-    listGames.mockResolvedValue(page([final(0)]));
-    listHighlights.mockRejectedValue(new Error("Warehouse unavailable"));
-    renderHome();
-
-    // The query client retries once before giving up.
+    await screen.findByRole("link", { name: "A1 106, H1 100: game flow" });
+    // Upset, then comeback, then the rest; no "See all" with every game shown.
     expect(
-      await screen.findByText("Warehouse unavailable", {}, { timeout: 4000 })
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "What stood out" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Standings" })).toBeInTheDocument();
+      screen.getAllByRole("link", { name: /game flow$/ }).map((card) => card.getAttribute("href"))
+    ).toEqual(["/games/game-1", "/games/game-2", "/games/game-0"]);
+    expect(screen.queryByRole("link", { name: /^See all/ })).not.toBeInTheDocument();
+
+    const upset = await screen.findByRole("link", { name: "A1 106, H1 100: game flow" });
+    expect(within(upset).getByText("Upset")).toBeInTheDocument();
+    expect(upset).toHaveTextContent("Market favored H1 61%");
+    const calm = screen.getByRole("link", { name: "A0 90, H0 100: game flow" });
+    expect(within(calm).getByText("Thunder win 15th straight")).toBeInTheDocument();
+    expect(calm).toHaveTextContent("Market favored H0 72%");
+    expect(within(calm).queryByText("Upset")).not.toBeInTheDocument();
+    expect(within(calm).queryByText("Comeback")).not.toBeInTheDocument();
+    const comeback = screen.getByRole("link", { name: "A2 92, H2 102: game flow" });
+    expect(within(comeback).getByText("Comeback")).toHaveAttribute(
+      "title",
+      "H2 came back from 22 down"
+    );
+    expect(within(comeback).queryByText("Upset")).not.toBeInTheDocument();
+    expect(comeback).toHaveTextContent("Market favored A2 54%");
+    await screen.findByRole("heading", { name: "Games today" });
+    expect(screen.queryByText(/model|elo-v1|70%/i)).not.toBeInTheDocument();
+    // The line comes on the results rows: no second request for the night.
+    expect(listSchedule).not.toHaveBeenCalledWith(expect.objectContaining({ status: "Final" }));
+    expect(screen.queryByRole("heading", { name: "What stood out" })).not.toBeInTheDocument();
   });
 
   it("does not call an older slate last night", async () => {
     listGames.mockResolvedValue(page([final(0, { game_date: "2026-01-10" })]));
     renderHome();
 
-    expect(await screen.findByText("Sat 10 Jan · 1 game")).toBeInTheDocument();
+    expect(await screen.findByText("Saturday, January 10 · 1 game")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Latest results" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Last night" })).not.toBeInTheDocument();
   });
@@ -383,8 +364,6 @@ describe("home desk", () => {
       expect(await screen.findByText("No upcoming games on the schedule.")).toBeInTheDocument();
       expect(await screen.findByText("No posts have been collected yet.")).toBeInTheDocument();
       expect(listGames).toHaveBeenCalledWith({ season: "2026-27", limit: 15 });
-      // No slate, so there is no night to ask about.
-      expect(listHighlights).not.toHaveBeenCalled();
     } finally {
       searchParams = "season=2025-26";
       seasons = ["2025-26"];

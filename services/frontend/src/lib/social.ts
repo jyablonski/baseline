@@ -22,11 +22,12 @@ export const SOCIAL_SORTS = [
   { key: "leverage", label: "Top-comment leverage" },
 ] as const;
 
-// The API's four buckets. "link" is an untagged link post, distinct from
+// The API's buckets. "link" is an untagged link post, distinct from
 // "discussion", which is an untagged self post.
 export const CONTENT_TYPE_LABELS: Record<string, string> = {
   highlight: "Highlight",
   report: "Reporter",
+  game_thread: "Game thread",
   discussion: "Discussion",
   link: "Link",
 };
