@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { PickCell } from "@/components/account/pick-cell";
+import { ColumnHelp } from "@/components/column-help";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TEAM_LOGO_SIZE, TeamAbbrLink } from "@/components/team-logo";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -260,35 +261,6 @@ function HowPicksWork({ signInHref }: { signInHref?: string }) {
         </Link>
       ) : null}
     </>
-  );
-}
-
-/** A column heading that explains itself in a popover when pressed. */
-function ColumnHelp({
-  label,
-  title,
-  align,
-  children,
-}: {
-  label: string;
-  title: string;
-  align?: "start" | "end";
-  children: React.ReactNode;
-}) {
-  return (
-    <th>
-      <Popover>
-        <PopoverTrigger
-          // Inherits the heading's type; only the dotted rule marks it as pressable.
-          className="[font:inherit] tracking-[inherit] text-inherit uppercase underline decoration-dotted underline-offset-4 hover:text-foreground"
-        >
-          {label}
-        </PopoverTrigger>
-        <PopoverContent title={title} align={align}>
-          <div className="text-ink-2">{children}</div>
-        </PopoverContent>
-      </Popover>
-    </th>
   );
 }
 

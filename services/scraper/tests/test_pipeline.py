@@ -414,6 +414,7 @@ def test_record_dbt_only_run_logs_a_standalone_build(
             "dbt_exit": dbt_exit,
             "detail": "make dbt",
             "failed_nodes": None,
+            "started_at": None,
         },
     )
     session.commit.assert_called_once()

@@ -113,6 +113,9 @@ jobs:
       POSTGRES_PORT: "55432"
     steps:
       - uses: actions/checkout@v7
+        # queue-dbt-if-changed.sh diffs real commits, so the history must be there.
+        with:
+          fetch-depth: 0
       # The runner is shell + SQL against a live database, so this needs a real
       # Postgres with the source schema applied — not Testcontainers.
       - name: Start Postgres and apply migrations

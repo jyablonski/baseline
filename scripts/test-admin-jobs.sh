@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # test-admin-jobs.sh — end-to-end checks for scripts/admin-job-runner.sh.
 #
+# Also covers scripts/queue-dbt-if-changed.sh, which feeds the same queue.
+#
 # Exercises the real runner against the real Postgres in the local Compose
 # project. Not a unit test: the runner is shell + SQL, and the parts that are
 # easy to get wrong (atomic claim, flock contention, reaping an abandoned job)
@@ -22,10 +24,8 @@ export LOCK_FILE="${LOCK_FILE:-/tmp/nba-admin-jobs-test.lock}"
 PASS=0
 FAIL=0
 
-psql_query() {
-  $COMPOSE exec -T postgres \
-    sh -c 'psql -X -A -t -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "$0"' "$1"
-}
+# shellcheck source=scripts/lib/psql.sh
+source "$ROOT/scripts/lib/psql.sh"
 
 cleanup() {
   psql_query "DELETE FROM source.admin_jobs" >/dev/null 2>&1 || true
@@ -128,6 +128,45 @@ sleep 1
 ./scripts/admin-job-runner.sh >/dev/null 2>&1 || true
 assert_eq "left running while lock held" "running" "$(psql_query "SELECT status FROM source.admin_jobs")"
 wait "$lock_pid" 2>/dev/null || true
+
+# queue-dbt-if-changed.sh, run after every prod release. Real commits from this
+# repo's history (CI checks out with full depth): the newest commit to touch
+# dbt, its parent, and HEAD, which by definition has no dbt change since it.
+queue_dbt() {
+  PREVIOUS_TAG="$1" IMAGE_TAG="$2" ./scripts/queue-dbt-if-changed.sh >/dev/null 2>&1
+}
+dbt_commit="$(git log -1 --format=%H -- services/dbt ':(exclude)services/dbt/e2e')"
+head_commit="$(git rev-parse HEAD)"
+
+echo "==> a deploy that changed dbt queues a rebuild"
+reset_jobs
+queue_dbt "${dbt_commit}^" "$dbt_commit"
+assert_eq "exit status" 0 "$?"
+assert_eq "one dbt job queued" "dbt|queued" \
+  "$(psql_query "SELECT job_type || '|' || status FROM source.admin_jobs")"
+assert_eq "attributed to the deploy" "deploy ${dbt_commit:0:12}" \
+  "$(psql_query "SELECT requested_by FROM source.admin_jobs")"
+
+echo "==> a deploy with no dbt change queues nothing"
+reset_jobs
+queue_dbt "$dbt_commit" "$head_commit"
+assert_eq "exit status" 0 "$?"
+assert_eq "no rows created" 0 "$(psql_query 'SELECT count(*) FROM source.admin_jobs')"
+
+echo "==> an unknown or missing previous deploy queues anyway"
+reset_jobs
+queue_dbt "" "$head_commit"
+assert_eq "first deploy queued" 1 "$(psql_query "SELECT count(*) FROM source.admin_jobs WHERE job_type = 'dbt'")"
+reset_jobs
+queue_dbt "not-a-commit" "$head_commit"
+assert_eq "unknown tag queued" 1 "$(psql_query "SELECT count(*) FROM source.admin_jobs WHERE job_type = 'dbt'")"
+
+echo "==> a pending job is left alone and does not fail the deploy"
+reset_jobs
+psql_query "INSERT INTO source.admin_jobs (job_type, requested_by) VALUES ('scrape','e2e')" >/dev/null
+queue_dbt "${dbt_commit}^" "$dbt_commit"
+assert_eq "exit status" 0 "$?"
+assert_eq "only the pending job" "scrape" "$(psql_query "SELECT string_agg(job_type, ',') FROM source.admin_jobs")"
 
 echo
 echo "test-admin-jobs: ${PASS} passed, ${FAIL} failed"

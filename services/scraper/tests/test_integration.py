@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -721,7 +721,9 @@ def test_dbt_failed_nodes_round_trip_and_clear_on_success(db_session_factory) ->
         run_id = start_run(session, triggered_by="cron", scrape_action="daily")
         finish_run(session, run_id, status="success", scrape_exit=0, detail="scraped")
     update_run_dbt_exit(run_id, 1, failed_nodes=["model fct_x", "test not_null_fct_x_id"])
-    standalone = record_dbt_only_run(0, detail="make dbt", failed_nodes=None)
+    standalone = record_dbt_only_run(
+        0, detail="make dbt", failed_nodes=None, started_at=datetime.now(UTC) - timedelta(minutes=3)
+    )
     # dbt died before reporting a node: failed, but nothing to name.
     unparsed = record_dbt_only_run(2, detail="make dbt", failed_nodes=[])
 
@@ -743,6 +745,26 @@ def test_dbt_failed_nodes_round_trip_and_clear_on_success(db_session_factory) ->
     assert nodes[run_id] == ["model fct_x", "test not_null_fct_x_id"]
     assert nodes[standalone] is None
     assert nodes[unparsed] == []
+
+    # Written after dbt exits: the given start keeps the duration real, and
+    # without one the row falls back to a 0s run.
+    with db_session_factory() as session:
+        durations = dict(
+            session.execute(
+                text(
+                    """
+                    SELECT
+                        pipeline_runs.run_id,
+                        EXTRACT(EPOCH FROM (pipeline_runs.finished_at - pipeline_runs.started_at))
+                    FROM source.pipeline_runs
+                    WHERE pipeline_runs.run_id IN (:b, :c)
+                    """
+                ),
+                {"b": standalone, "c": unparsed},
+            ).all()
+        )
+    assert durations[standalone] >= 180
+    assert durations[unparsed] < 1
 
 
 @pytest.mark.integration

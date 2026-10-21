@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import date
+from datetime import date, datetime
 
 import click
 from notify import SyncAlert, format_stage_failure_text, post_webhook_text
@@ -511,13 +511,22 @@ def pipeline_mark_ml_cmd(run_id: int, ml_exit: int, detail: str | None, notify: 
 @pipeline_group.command("record-dbt")
 @click.option("--dbt-exit", required=True, type=int)
 @click.option("--detail", default=None)
+@click.option(
+    "--started-at",
+    default=None,
+    type=click.DateTime(formats=["%Y-%m-%dT%H:%M:%S%z"]),
+    help="When dbt started (ISO 8601 with offset); defaults to now, which records 0s.",
+)
 @_FAILED_NODE_OPTION
 def pipeline_record_dbt_cmd(
-    dbt_exit: int, detail: str | None, failed_nodes: tuple[str, ...]
+    dbt_exit: int, detail: str | None, started_at: datetime | None, failed_nodes: tuple[str, ...]
 ) -> None:
     """Log a standalone dbt run (no scrape) to source.pipeline_runs."""
     run_id = record_dbt_only_run(
-        dbt_exit, detail=detail, failed_nodes=_failed_nodes(dbt_exit, failed_nodes)
+        dbt_exit,
+        detail=detail,
+        failed_nodes=_failed_nodes(dbt_exit, failed_nodes),
+        started_at=started_at,
     )
     click.echo(f"Recorded run_id={run_id} dbt_exit={dbt_exit}")
 

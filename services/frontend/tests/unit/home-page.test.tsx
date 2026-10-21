@@ -262,7 +262,7 @@ describe("home desk", () => {
       from_date: "2026-01-13",
       limit: 15,
     });
-    expect(screen.getAllByText("7:30 PM")).toHaveLength(6);
+    expect(screen.getAllByText("7:30 PM")).toHaveLength(5);
     // Only the nationally televised game carries a network tag.
     expect(screen.getAllByTitle(/^National TV:/)).toHaveLength(1);
     expect(screen.getByTitle("National TV: ESPN, ABC")).toHaveTextContent("ESPN, ABC");

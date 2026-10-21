@@ -14,7 +14,7 @@ function daysUntil(gameDate: string, today: string) {
   return Math.round((day(gameDate) - day(today)) / 86_400_000);
 }
 
-const ROW = "flex items-baseline justify-between gap-4 py-2 text-sm";
+const ROW = "flex items-baseline justify-between gap-4 px-3 py-2 text-sm";
 
 /**
  * The game's injury report as one panel row: a count that opens to each
@@ -59,7 +59,7 @@ export function InjuryReportRow({ game, final }: { game: GameDetail; final: bool
           </span>
         </span>
       </summary>
-      <div className="pb-3">
+      <div className="px-3 pb-3">
         <p className="type-caption">
           {final
             ? "The Basketball-Reference report from the morning of the game, and whether each player got on the floor."

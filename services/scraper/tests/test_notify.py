@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -457,7 +458,9 @@ def test_dbt_failed_nodes_are_recorded_only_for_a_failed_build(
     )
     monkeypatch.setattr(
         "main.record_dbt_only_run",
-        lambda code, detail=None, failed_nodes=None: logged.append(failed_nodes) or 1,
+        lambda code, detail=None, failed_nodes=None, started_at=None: (
+            logged.append(failed_nodes) or 1
+        ),
     )
     runner = CliRunner()
     nodes = ["--failed-node", "model fct_x", "--failed-node", "test not_null_x"]
@@ -475,6 +478,26 @@ def test_dbt_failed_nodes_are_recorded_only_for_a_failed_build(
     # A passing build must clear the list rather than carry a stale one.
     assert marked == [["model fct_x", "test not_null_x"], None]
     assert logged == [["model fct_x", "test not_null_x"], None]
+
+
+@pytest.mark.unit
+def test_record_dbt_passes_the_build_start_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The row is written after dbt exits, so the start must come from the caller."""
+    seen: list = []
+    monkeypatch.setattr(
+        "main.record_dbt_only_run",
+        lambda code, detail=None, failed_nodes=None, started_at=None: seen.append(started_at) or 1,
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        ["pipeline", "record-dbt", "--dbt-exit", "0", "--started-at", "2026-10-21T08:15:00+0000"],
+    )
+    assert result.exit_code == 0, result.output
+    assert runner.invoke(cli, ["pipeline", "record-dbt", "--dbt-exit", "0"]).exit_code == 0
+
+    assert seen == [datetime(2026, 10, 21, 8, 15, tzinfo=UTC), None]
 
 
 @pytest.mark.unit

@@ -632,7 +632,11 @@ def run_pipeline_scrape(
 
 
 def record_dbt_only_run(
-    dbt_exit: int, *, detail: str | None = None, failed_nodes: list[str] | None = None
+    dbt_exit: int,
+    *,
+    detail: str | None = None,
+    failed_nodes: list[str] | None = None,
+    started_at: datetime | None = None,
 ) -> int:
     """Log a dbt run that had no scrape attached, returning the new run_id.
 
@@ -640,6 +644,9 @@ def record_dbt_only_run(
     refresh-daily, so there is no run row to mark. Recording one keeps the
     admin view honest: a fixed failure clears on the next successful build
     instead of showing the last refresh's exit code indefinitely.
+
+    The row is written once dbt has finished, so `started_at` is when the
+    build began; without it the run is stamped as taking 0s.
     """
     with get_session() as session:
         run_id = int(
@@ -650,6 +657,7 @@ def record_dbt_only_run(
                     "dbt_exit": dbt_exit,
                     "detail": detail,
                     "failed_nodes": failed_nodes,
+                    "started_at": started_at,
                 },
             ).scalar_one()
         )
