@@ -17,10 +17,10 @@ from identity import (
     resolve_team_id,
     seed_team_catalog,
 )
-from sqlalchemy import func
+from sqlalchemy import func, select
 
 from db import get_session
-from models import Game, Team
+from models import Game, PlayerGameLog, Team
 from scrapers import (
     BREF_BASE_URL,
     bref_get,
@@ -322,13 +322,28 @@ def _ensure_teams() -> None:
 
 
 def scrape_todays_games(today: date | None = None, *, days_ahead: int = 7) -> list[dict]:
-    """Refresh the current season schedule and return Final games in the horizon."""
+    """Refresh the current season schedule and return Final games with no box score yet."""
     del days_ahead
     target = today or date.today()
+    season = current_season(target)
     _ensure_teams()
-    scrape_games(current_season(target))
+    scrape_games(season)
+    # The daily run fires the morning after games are played, so "Finals dated
+    # today" is always empty. Keying on missing logs picks up last night's
+    # games and backfills any day a run was skipped or failed.
+    has_logs = select(PlayerGameLog.game_id).where(PlayerGameLog.game_id == Game.game_id).exists()
     with get_session() as session:
-        rows = session.query(Game).filter(Game.game_date == target, Game.status == "Final").all()
+        rows = (
+            session.query(Game)
+            .filter(
+                Game.season == season,
+                Game.status == "Final",
+                Game.game_date <= target,
+                ~has_logs,
+            )
+            .order_by(Game.game_date)
+            .all()
+        )
         return [
             {
                 "game_id": row.game_id,

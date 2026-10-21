@@ -385,7 +385,7 @@ def test_daily_records_skipped_sources_rather_than_omitting_them(
     # Present-but-skipped, not missing entirely.
     assert by_step["player_game_logs"].status == "skipped"
     assert by_step["play_by_play"].status == "skipped"
-    assert "No completed games today" in (by_step["play_by_play"].error_detail or "")
+    assert "No completed games without box scores" in (by_step["play_by_play"].error_detail or "")
     assert "contracts" not in by_step
     assert by_step["todays_games"].rows == 0
     assert by_step["broadcasts"].rows == 9
