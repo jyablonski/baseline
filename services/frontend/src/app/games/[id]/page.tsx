@@ -439,7 +439,8 @@ function PregameCalls({ game, pick }: { game: GameDetail; pick: UserPick | undef
             </div>
           ))}
           <p className="type-caption pt-3">
-            Market is the vig-free morning line. Model is Baseline&apos;s pregame estimate.{" "}
+            Market is the betting odds from the morning of the game, with the sportsbook&apos;s cut
+            taken out. Model is Baseline&apos;s pregame estimate.{" "}
             <Link href="/predictions" className="text-primary hover:underline">
               How accurate is the model?
             </Link>
