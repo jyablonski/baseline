@@ -35,6 +35,10 @@ compose_run() {
 LOG_FILE="$(mktemp -t nba-dbt-build.XXXXXX)"
 trap 'rm -f "$LOG_FILE"' EXIT
 
+# A standalone run's row is only written once dbt exits, so the start time has
+# to be captured here or the run is recorded as taking 0s.
+STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%S+0000)"
+
 set +e
 # -T: no pseudo-TTY, so the tee'd copy has no carriage returns.
 compose_run -T dbt sh -c \
@@ -75,7 +79,7 @@ if [[ -n "$RUN_ID" ]]; then
     >/dev/null || true
 else
   compose_run scraper python -m main pipeline record-dbt \
-    --dbt-exit "$DBT_EXIT" --detail "${LABEL}: ${DETAIL}" "${node_args[@]}" >/dev/null || true
+    --dbt-exit "$DBT_EXIT" --started-at "$STARTED_AT" --detail "${LABEL}: ${DETAIL}" "${node_args[@]}" >/dev/null || true
 fi
 
 exit "$DBT_EXIT"

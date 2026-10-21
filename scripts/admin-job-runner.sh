@@ -38,10 +38,8 @@ LOCK_BUSY_EXIT=75
 # at an incident. One row a minute is ~10k rows a week.
 HOST_SNAPSHOT_RETENTION="${HOST_SNAPSHOT_RETENTION:-7 days}"
 
-psql_query() {
-  $COMPOSE exec -T postgres \
-    sh -c 'psql -X -A -t -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "$0"' "$1"
-}
+# shellcheck source=scripts/lib/psql.sh
+source "$ROOT/scripts/lib/psql.sh"
 
 # Claim exactly one job. FOR UPDATE SKIP LOCKED means a second runner takes the
 # next row instead of blocking or double-running this one.

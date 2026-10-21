@@ -39,6 +39,10 @@ export PUBLIC_URL
 # command line > environment > deployed tag > the defaults below.
 DEPLOY_ENV ?= .env.deploy
 -include $(DEPLOY_ENV)
+# The tag prod was running before this invocation, read at parse time so it
+# survives prod-record-deploy rewriting the file mid-release. prod-release
+# diffs it against IMAGE_TAG to decide whether gold needs rebuilding.
+PREVIOUS_IMAGE_TAG := $(shell sed -n 's/^IMAGE_TAG ?= //p' $(DEPLOY_ENV) 2>/dev/null)
 
 # Registry coordinates for bake tags and the prod overlay's `image:` refs.
 # Empty IMAGE_PREFIX = local images (`nba-api:latest`) built on this machine;
@@ -77,7 +81,7 @@ prod-deploy: ## Server: ff-only pull main, then prod-release
 	git pull --ff-only origin main
 	$(MAKE) prod-release
 
-prod-release: $(PROD_IMAGES) ## Images, migrate, up, caddy reload, health gate, record tag, prune
+prod-release: $(PROD_IMAGES) ## Images, migrate, up, caddy reload, health gate, record tag, prune, queue dbt if its SQL changed
 	DOCKER_TARGET=runtime $(COMPOSE_PROD) up -d postgres --wait
 	$(MAKE) prod-migrate
 	$(MAKE) prod-up
@@ -85,6 +89,8 @@ prod-release: $(PROD_IMAGES) ## Images, migrate, up, caddy reload, health gate, 
 	$(MAKE) prod-health
 	$(MAKE) prod-record-deploy
 	$(MAKE) prod-prune
+	COMPOSE="$(COMPOSE_PROD)" PREVIOUS_TAG="$(PREVIOUS_IMAGE_TAG)" IMAGE_TAG="$(IMAGE_TAG)" \
+		./scripts/queue-dbt-if-changed.sh
 
 # `caddy reload` cannot pick up a changed Caddyfile here. It is a single-file
 # bind mount, and `git pull` replaces the file rather than editing it in place,

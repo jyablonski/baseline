@@ -201,7 +201,7 @@ export function PanelRow({
 }) {
   return (
     <div
-      className="flex items-baseline justify-between gap-4 border-b border-rule py-2 text-sm"
+      className="flex items-baseline justify-between gap-4 border-b border-rule px-3 py-2 text-sm"
       data-testid={testId}
     >
       <span>{label}</span>
@@ -321,7 +321,7 @@ export function SeriesPanel({
               <li
                 key={meeting.game_id}
                 className={cn(
-                  "flex items-baseline gap-4 border-b border-rule py-2 text-sm",
+                  "flex items-baseline gap-4 border-b border-rule px-3 py-2 text-sm",
                   current && "bg-tint font-semibold"
                 )}
                 data-testid="series-meeting"

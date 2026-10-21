@@ -56,14 +56,14 @@ describe("predictions page", () => {
       expect(screen.getByRole("heading", { name: "2025-26" })).toBeInTheDocument();
     });
     const eloRow = screen.getByRole("row", { name: /^Elo v0/ });
-    expect(within(eloRow).getByText("On schedule")).toBeInTheDocument();
+    expect(within(eloRow).getByText("On Schedule Tab")).toBeInTheDocument();
     expect(within(eloRow).getByText("0.651")).toBeInTheDocument();
     expect(within(eloRow).getByText("64%")).toBeInTheDocument();
     const shadowEloRow = screen.getByRole("row", { name: /^Elo v1/ });
-    expect(within(shadowEloRow).queryByText("On schedule")).not.toBeInTheDocument();
+    expect(within(shadowEloRow).queryByText("On Schedule Tab")).not.toBeInTheDocument();
     expect(within(shadowEloRow).getByText("0.598")).toBeInTheDocument();
     const logitRow = screen.getByRole("row", { name: /Logistic regression v1/ });
-    expect(within(logitRow).queryByText("On schedule")).not.toBeInTheDocument();
+    expect(within(logitRow).queryByText("On Schedule Tab")).not.toBeInTheDocument();
     const marketRow = screen.getByRole("row", { name: /Sportsbook market/ });
     expect(within(marketRow).getByText("0.620")).toBeInTheDocument();
     const homeRow = screen.getByRole("row", { name: /Always pick the home team/ });

@@ -15,7 +15,8 @@ INSERT_PIPELINE_RUN = text(
 # A dbt invocation with no scrape attached (`make dbt` / `make prod-dbt`).
 # Without this, a standalone dbt run leaves no trace and the admin view keeps
 # reporting the last refresh-daily exit code forever, so a fixed failure never
-# clears on its own.
+# clears on its own. The row is written after dbt exits, so `started_at` must be
+# passed in: defaulting it to NOW() records every standalone build as 0s.
 INSERT_DBT_ONLY_RUN = text(
     """
     INSERT INTO source.pipeline_runs (
@@ -26,6 +27,7 @@ INSERT_DBT_ONLY_RUN = text(
         dbt_exit,
         dbt_failed_nodes,
         detail,
+        started_at,
         finished_at
     )
     VALUES (
@@ -36,6 +38,7 @@ INSERT_DBT_ONLY_RUN = text(
         :dbt_exit,
         :failed_nodes,
         :detail,
+        COALESCE(CAST(:started_at AS timestamptz), NOW()),
         NOW()
     )
     RETURNING run_id

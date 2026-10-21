@@ -40,6 +40,7 @@ Gotchas the target names don't tell you:
 - `make ml-train` / `ml-eval` / `ml-snapshot` are manual only, never on the daily cron. `ml-snapshot` stores Elo ratings in `source.model_artifacts` so they survive deleting the seasons behind them (`docs/ml.md`).
 - `make prod-record-deploy` writes `.env.deploy`, which every target `-include`s, so a bare `make prod-refresh` on cron gets the deployed sha. Precedence: command line > environment > `.env.deploy` > defaults. `prod-refresh` re-pulls the tool images first because `compose run` never pulls.
 - `make prod-release IMAGE_TAG=<sha>` is the rollback path: no rebuild, no Alembic.
+- `prod-release` ends by queueing a `dbt` admin job when `services/dbt` changed since the previously deployed tag (`scripts/queue-dbt-if-changed.sh`); the host runner does the rebuild, not the deploy.
 - `db-restore` / `prod-db-restore` replace the live DB and need `CONFIRM_RESTORE=RESTORE`.
 - Compose profile `tools` holds scraper/dbt/ml; MCP and Cube are on the default stack. No `platform: linux/amd64` pins; bases are multi-arch.
 

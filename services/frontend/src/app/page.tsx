@@ -4,6 +4,7 @@ import { Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
+import { GamesBackHeader } from "@/components/column-help";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { ResultTags } from "@/components/games/result-tags";
 import { TeamAbbrLink, TeamLogo } from "@/components/team-logo";
@@ -37,6 +38,7 @@ export default function HomePage() {
 // Enough for a full night: 30 teams is at most 15 games.
 const SLATE_FETCH = 15;
 const SLATE_LIMIT = 6;
+const UPCOMING_LIMIT = 5;
 // Seeds 1-6 are in outright; 7-10 go to the play-in.
 const PLAYOFF_LOCK_SEED = 6;
 const SOCIAL_LIMIT = 3;
@@ -285,7 +287,7 @@ function UpcomingList({
 }) {
   const { timezone } = useProfile();
   const date = games[0]?.game_date;
-  const shown = games.slice(0, SLATE_LIMIT);
+  const shown = games.slice(0, UPCOMING_LIMIT);
   // The heading names the zone once for every time under it. A game with no
   // start time has no zone to give, so the first one that does speaks for all.
   const zone =
@@ -422,11 +424,11 @@ function SocialDigest() {
                 target="_blank"
                 rel="noreferrer"
                 title={post.title}
-                className="line-clamp-3 text-[var(--ct-fs-cell)] leading-snug hover:underline"
+                className="line-clamp-3 text-[var(--ct-fs-cell)] leading-tight hover:underline"
               >
                 {post.title}
               </a>
-              <p className="type-caption mt-1 flex flex-wrap gap-x-3">
+              <p className="type-caption mt-0.5 flex flex-wrap gap-x-3">
                 <span>
                   <span className="tabular">{formatCount(post.score)}</span> score
                 </span>
@@ -469,7 +471,7 @@ function ConferenceTable({
             <th>#</th>
             <th>Team</th>
             <th className="text-right">W–L</th>
-            <th className="text-right">GB</th>
+            <GamesBackHeader />
             <th className="text-right">L10</th>
             <th className="text-right">Strk</th>
           </tr>

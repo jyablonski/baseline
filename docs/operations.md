@@ -179,6 +179,8 @@ What the runner guarantees:
 
 The buttons only work on the prod overlay, which sets `ADMIN_JOBS_ENABLED=true` on the frontend. Anywhere else (Tilt, `make up`) they are disabled and the server action refuses to queue: nothing drains the queue locally, and the runner only maps jobs to `prod-*` targets. Run `make scrape` / `make dbt` / `make ml` / `make refresh-daily-once` directly instead.
 
+**Deploys queue dbt when its SQL changed.** The last step of `prod-release` runs `scripts/queue-dbt-if-changed.sh`, which diffs `services/dbt` (minus `e2e/`) between the tag prod was running (read from `.env.deploy` before the release rewrites it) and the one just deployed. On a change it inserts a `dbt` job requested by `deploy <sha>`, so the runner rebuilds gold with `--full-refresh` within a minute, under the same lock and visible in `/admin` like a button press. Because it compares against the last _deployed_ commit, dbt changes from pushes that never deployed still count, and a rollback across a dbt change rebuilds too. If the previous tag is missing or not a commit in the checkout it queues anyway. If another job is already pending it does not queue (a still-queued `dbt` job covers it) and prints a warning in the deploy log, without failing the deploy: re-run dbt from `/admin` once that job finishes.
+
 `make test-admin-jobs` covers all of this against a real Postgres; CI runs it in its own Compose project.
 
 ## VM health

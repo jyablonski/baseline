@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { TeamRatingsScatter } from "@/components/charts/team-ratings-scatter";
+import { GamesBackHeader } from "@/components/column-help";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamAbbrLink } from "@/components/team-logo";
 import { useSeason } from "@/hooks/use-season";
@@ -95,7 +96,7 @@ function ConferenceTable({
               <th>Team</th>
               <th className="text-right">W-L</th>
               <th className="text-right">Win %</th>
-              <th className="text-right">GB</th>
+              <GamesBackHeader />
               <th>Streak</th>
               <th className="text-right">L10</th>
             </tr>
