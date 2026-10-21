@@ -36,18 +36,34 @@ POST_SOURCE = r"""
     END
 """
 
-# Four buckets the feed can filter on. A bracket tag is the strongest signal we
+# Brackets that name a source but are not news: satire reads as an ordinary link
+# or self post rather than as a report.
+SATIRE_TAGS = ("the onion",)
+
+# The buckets the feed can filter on. A bracket tag is the strongest signal we
 # have; below that, self-post versus link-post is the only split left.
+# "[All-Access]" is the league's own video account, so it is a highlight. Game
+# threads carry a "[Post Game Thread]" bracket or flair; live ones open with
+# "GAME THREAD:" and no bracket.
 POST_CONTENT_TYPE = f"""
     CASE
-        WHEN {POST_TAG} ILIKE 'highlight%' OR {POST_TAG} ILIKE 'lowlight%' THEN 'highlight'
-        WHEN {POST_TAG} IS NOT NULL THEN 'report'
+        WHEN {POST_TAG} ILIKE 'highlight%'
+            OR {POST_TAG} ILIKE 'lowlight%'
+            OR {POST_TAG} ILIKE 'all-access%'
+            THEN 'highlight'
+        WHEN {POST_TAG} ILIKE '%game thread'
+            OR posts.flair ILIKE '%game thread'
+            OR btrim(posts.title) ILIKE 'game thread:%'
+            THEN 'game_thread'
+        WHEN {POST_TAG} IS NOT NULL
+            AND lower(btrim({POST_TAG})) NOT IN ({", ".join(f"'{tag}'" for tag in SATIRE_TAGS)})
+            THEN 'report'
         WHEN posts.is_self THEN 'discussion'
         ELSE 'link'
     END
 """
 
-CONTENT_TYPES = ("highlight", "report", "discussion", "link")
+CONTENT_TYPES = ("highlight", "report", "game_thread", "discussion", "link")
 
 # A live game thread is busy by design and rarely upvoted, so it passes both bounds
 # without anyone arguing. "[Post Game Thread]" opens with a bracket and is kept.

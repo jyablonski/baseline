@@ -5,6 +5,9 @@ import {
   daySummary,
   formatDayShort,
   formatDayTitle,
+  gameOdds,
+  isUpsetWin,
+  rankSlate,
   resultSides,
 } from "@/lib/results";
 import type { LeagueGame } from "@/lib/types";
@@ -95,9 +98,9 @@ describe("daySummary", () => {
 });
 
 describe("resultSides", () => {
-  it("puts the winner first with the margin in words", () => {
-    const { winner, loser, margin } = resultSides(GAME);
-    expect([winner.abbreviation, loser.abbreviation, margin]).toEqual(["SAS", "NYK", "SAS by 6"]);
+  it("puts the winner first", () => {
+    const { winner, loser } = resultSides(GAME);
+    expect([winner.abbreviation, loser.abbreviation]).toEqual(["SAS", "NYK"]);
     expect(resultSides({ ...GAME, home_score: 99 }).winner.abbreviation).toBe("NYK");
   });
 
@@ -111,6 +114,84 @@ describe("resultSides", () => {
     });
     expect(sides.winner.abbreviation).toBe("NYK");
     expect(sides.loser.abbreviation).toBe("Home");
-    expect(sides.margin).toBeNull();
+  });
+});
+
+describe("game odds", () => {
+  const game = (id: string, home: number, away: number): LeagueGame => ({
+    game_id: id,
+    season: "2025-26",
+    game_date: "2026-10-20",
+    home_team_id: `${id}-home`,
+    away_team_id: `${id}-away`,
+    home_team_abbreviation: `H${id}`,
+    away_team_abbreviation: `A${id}`,
+    home_score: home,
+    away_score: away,
+  });
+
+  it("reads a missing or even line as no market favourite", () => {
+    const odds = gameOdds(game("1", 100, 90));
+    expect(odds.market).toBeNull();
+    expect(odds.winnerMarketWp).toBeNull();
+    expect(odds.isUpset).toBe(false);
+    expect(gameOdds({ ...game("1", 100, 90), winner_market_wp: 0.5 }).market).toBeNull();
+  });
+
+  it("flags an away underdog's win as an upset, with the market's favourite", () => {
+    const odds = gameOdds({ ...game("1", 100, 106), winner_market_wp: 0.39 });
+    expect(odds.winner.abbreviation).toBe("A1");
+    expect(odds.winnerMarketWp).toBeCloseTo(0.39);
+    expect(odds.isUpset).toBe(true);
+    expect(odds.market?.abbreviation).toBe("H1");
+    expect(odds.market?.wp).toBeCloseTo(0.61);
+  });
+
+  it("needs a steep underdog for an upset and a 10-point deficit for a comeback", () => {
+    const close = gameOdds({
+      ...game("1", 100, 106),
+      largest_lead_blown: 10,
+      winner_market_wp: 0.46,
+    });
+    expect(close.isUpset).toBe(false);
+    expect(close.isComeback).toBe(true);
+    expect(gameOdds({ ...game("1", 100, 90), largest_lead_blown: 9 }).isComeback).toBe(false);
+    expect(isUpsetWin(0.4)).toBe(true);
+    expect(isUpsetWin(0.41)).toBe(false);
+    expect(isUpsetWin(null)).toBe(false);
+  });
+});
+
+describe("rank slate", () => {
+  const game = (id: string, overrides: Partial<LeagueGame> = {}): LeagueGame => ({
+    game_id: id,
+    season: "2025-26",
+    game_date: "2026-10-21",
+    home_team_id: `${id}-home`,
+    away_team_id: `${id}-away`,
+    home_score: 110,
+    away_score: 100,
+    ...overrides,
+  });
+
+  it("puts upsets first, then comebacks, then the closest finishes", () => {
+    const ranked = rankSlate([
+      game("blowout", { home_score: 130, away_score: 95 }),
+      game("close", { home_score: 101, away_score: 100 }),
+      game("small-comeback", { largest_lead_blown: 11 }),
+      game("long-shot", { winner_market_wp: 0.2 }),
+      game("big-comeback", { largest_lead_blown: 25 }),
+      game("upset", { winner_market_wp: 0.35, largest_lead_blown: 30 }),
+      game("no-score", { home_score: null, away_score: null }),
+    ]);
+    expect(ranked.map((item) => item.game_id)).toEqual([
+      "long-shot",
+      "upset",
+      "big-comeback",
+      "small-comeback",
+      "close",
+      "blowout",
+      "no-score",
+    ]);
   });
 });

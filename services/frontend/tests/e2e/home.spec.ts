@@ -7,12 +7,10 @@ test("home desk shows the latest slate, next games, standings, and r/nba", async
   await page.goto("/");
   // The fixture slate is long past, so it is the latest one, not last night's.
   await expect(page.getByRole("heading", { name: "Latest results" })).toBeVisible();
-  await expect(page.getByText("Tue 22 Oct · 1 game")).toBeVisible();
+  await expect(page.getByText("Tuesday, October 22 · 1 game")).toBeVisible();
   await expect(page.getByRole("link", { name: "LAL 110, GSW 120: game flow" })).toBeVisible();
-  // The featured card and the line under the score are the same highlight.
-  await expect(page.getByRole("heading", { name: "What stood out" })).toBeVisible();
-  await expect(page.getByText("Scoring duel")).toBeVisible();
-  await expect(page.getByText("Stephen Curry 38, LeBron James 35")).toHaveCount(2);
+  await expect(page.getByRole("heading", { name: "What stood out" })).toHaveCount(0);
+  await expect(page.getByText("Stephen Curry 38, LeBron James 35")).toBeVisible();
   await expect(page.getByTitle("National TV: ESPN")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Next up" })).toBeVisible();
   await expect(page.getByText("Thu 22 Oct · ET")).toBeVisible();
@@ -30,7 +28,6 @@ test("home empty warehouse shows empty copy for every module", async ({ page }) 
   await expect(page.getByText("No upcoming games on the schedule.")).toBeVisible();
   await expect(page.getByText("No standings yet")).toBeVisible();
   await expect(page.getByText("No posts have been collected yet.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "What stood out" })).toHaveCount(0);
   await expectNo2010Range(page);
 });
 

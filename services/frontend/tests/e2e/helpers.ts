@@ -887,30 +887,6 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         });
       }
 
-      // Must precede the generic /games branch.
-      if (url.includes("/games/highlights")) {
-        return json({
-          data: empty
-            ? []
-            : [
-                {
-                  highlight_id: "hl-1",
-                  game_date: "2024-10-22",
-                  season: "2025-26",
-                  game_id: "0022400001",
-                  highlight_type: "scoring_duel",
-                  subject_type: "game",
-                  headline: "Stephen Curry 38, LeBron James 35",
-                  detail: "Opposing 30-point games. GSW 120, LAL 110.",
-                  score: 14.2,
-                  day_rank: 1,
-                  is_featured: true,
-                },
-              ],
-          meta: { total: empty ? 0 : 1, limit: 15, offset: 0 },
-        });
-      }
-
       if (url.includes("/games/collapses")) {
         const search = new URL(url, window.location.origin).searchParams;
         const team = search.get("team");
@@ -1163,6 +1139,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                   away_score: 110,
                   score_margin: 10,
                   arena_city: "San Francisco",
+                  lead_highlight: "Stephen Curry 38, LeBron James 35",
                 },
               ],
           meta: { total: empty ? 0 : 1, limit: 10, offset: 0 },

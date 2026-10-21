@@ -5,23 +5,26 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
+import { ResultTags } from "@/components/games/result-tags";
 import { TeamAbbrLink, TeamLogo } from "@/components/team-logo";
 import { useProfile } from "@/hooks/use-profile";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import {
   formatGamesBack,
+  formatProbability,
   formatRecord,
   formatSlateDate,
   isoDateET,
   isoDayBefore,
 } from "@/lib/format";
 import { teamHref, withSeason } from "@/lib/nav";
+import { formatDayTitle, gameOdds, rankSlate } from "@/lib/results";
 import { CONTENT_TYPE_LABELS, formatCount, rangeToDates } from "@/lib/social";
 import { conferenceStandings, standingsSeed } from "@/lib/team-form";
 import { cn } from "@/lib/utils";
 import { formatGameTime, formatScrapedAt } from "@/lib/timezones";
-import type { GameHighlight, LeagueGame, ScheduledGame, StandingRow } from "@/lib/types";
+import type { LeagueGame, ScheduledGame, StandingRow } from "@/lib/types";
 
 export default function HomePage() {
   return (
@@ -76,20 +79,6 @@ function HomeDesk() {
   });
 
   const results = sameDay(gamesQuery.data?.data ?? []);
-  // Pinned to the slate above so the cards and the scores are the same night.
-  const slateDate = results[0]?.game_date.slice(0, 10);
-  const highlightsQuery = useQuery({
-    queryKey: ["highlights", season, slateDate],
-    queryFn: () =>
-      api.listHighlights({
-        season: season || undefined,
-        game_date: slateDate,
-        limit: SLATE_FETCH,
-      }),
-    enabled: Boolean(slateDate),
-  });
-  const highlights = highlightsQuery.data?.data ?? [];
-  const featured = highlights.filter((highlight) => highlight.is_featured);
   const upcoming = sameDay(scheduleQuery.data?.data ?? []);
   const standings = standingsQuery.data?.data ?? [];
   const east = conferenceStandings(standings, "east");
@@ -102,7 +91,6 @@ function HomeDesk() {
       <section className="border-b border-rule-strong pb-[var(--ct-space-3)]">
         <ResultsStrip
           games={results}
-          highlights={highlights}
           isLoading={gamesQuery.isLoading}
           error={gamesQuery.isError ? gamesQuery.error : null}
         />
@@ -110,24 +98,6 @@ function HomeDesk() {
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="lg:pr-[var(--ct-space-5)]">
-          {highlightsQuery.isError ? (
-            <section className="border-b border-rule py-[var(--ct-space-4)]">
-              <h2 className="type-module">What stood out</h2>
-              <ErrorState message={queryErrorMessage(highlightsQuery.error)} />
-            </section>
-          ) : featured.length > 0 ? (
-            <section className="border-b border-rule py-[var(--ct-space-4)]">
-              <h2 className="type-module mb-3">What stood out</h2>
-              <ul className="grid gap-x-[var(--ct-space-5)] gap-y-[var(--ct-space-4)] sm:grid-cols-3">
-                {featured.map((highlight) => (
-                  <li key={highlight.highlight_id}>
-                    <HighlightCard highlight={highlight} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
           <section className="py-[var(--ct-space-4)]">
             <div className="mb-2 flex items-end justify-between gap-3">
               <h2 className="type-module">Standings</h2>
@@ -179,17 +149,16 @@ function HomeDesk() {
 
 function ResultsStrip({
   games,
-  highlights,
   isLoading,
   error,
 }: {
   games: LeagueGame[];
-  highlights: GameHighlight[];
   isLoading: boolean;
   error: unknown;
 }) {
   const date = games[0]?.game_date;
-  const shown = games.slice(0, SLATE_LIMIT);
+  const shown = rankSlate(games).slice(0, SLATE_LIMIT);
+  const day = date?.slice(0, 10);
   // The scrape lands the morning after, so "last night" only holds until the
   // next one; an off day or the offseason shows an older slate.
   const title =
@@ -201,8 +170,8 @@ function ResultsStrip({
           <h2 className="type-module">{title}</h2>
           {date ? (
             <p className="text-sm text-ink-2">
-              {formatSlateDate(date)} · {games.length} {games.length === 1 ? "game" : "games"}
-              {games.length > shown.length ? `, ${shown.length} shown` : ""}
+              {formatDayTitle(date.slice(0, 10))} · {games.length}{" "}
+              {games.length === 1 ? "game" : "games"}
             </p>
           ) : null}
         </div>
@@ -217,46 +186,64 @@ function ResultsStrip({
       ) : shown.length === 0 ? (
         <QuietNote>No games yet for this season.</QuietNote>
       ) : (
-        <ul className="grid grid-cols-2 gap-x-[var(--ct-space-4)] gap-y-[var(--ct-space-3)] sm:grid-cols-3 lg:grid-cols-6">
+        <ul className="grid border-t border-rule-strong sm:grid-cols-2 lg:grid-cols-3 [&>li]:border-b [&>li]:border-rule">
           {shown.map((game) => (
-            <li key={game.game_id}>
-              <ResultCard
-                game={game}
-                note={highlights.find((highlight) => highlight.game_id === game.game_id)?.headline}
-              />
+            <li
+              key={game.game_id}
+              className="lg:[&:not(:nth-child(3n))]:border-r sm:max-lg:[&:nth-child(odd)]:border-r"
+            >
+              <ResultCard game={game} />
             </li>
           ))}
         </ul>
       )}
+      {games.length > shown.length && day ? (
+        <p className="mt-3 text-sm">
+          {/* Pinned to the night, so it still lands there once a newer slate is in. */}
+          <Link href={`/games?date=${day}`} className="text-primary">
+            See all {games.length} games →
+          </Link>
+        </p>
+      ) : null}
     </>
   );
 }
 
-function ResultCard({ game, note }: { game: LeagueGame; note?: string }) {
+function ResultCard({ game }: { game: LeagueGame }) {
   const away = game.away_team_abbreviation ?? "Away";
   const home = game.home_team_abbreviation ?? "Home";
-  const awayWon = game.winning_team_id
-    ? game.winning_team_id === game.away_team_id
-    : (game.away_score ?? 0) > (game.home_score ?? 0);
+  const odds = gameOdds(game);
+  // Market only: the home page does not show Baseline's own model.
+  const market = odds.market
+    ? `Market favored ${odds.market.abbreviation} ${formatProbability(odds.market.wp)}`
+    : null;
   return (
     <Link
       href={`/games/${game.game_id}`}
       aria-label={`${away} ${game.away_score ?? "—"}, ${home} ${game.home_score ?? "—"}: game flow`}
-      className="block space-y-1 px-1 py-1 hover:bg-row-hover"
+      className="block h-full space-y-1.5 px-[var(--ct-space-3)] py-[var(--ct-space-3)] hover:bg-row-hover"
     >
       <ResultLine
         teamId={game.away_team_id}
         abbreviation={away}
         score={game.away_score}
-        won={awayWon}
+        won={!odds.homeWon}
       />
       <ResultLine
         teamId={game.home_team_id}
         abbreviation={home}
         score={game.home_score}
-        won={!awayWon}
+        won={odds.homeWon}
       />
-      {note ? <span className="type-caption line-clamp-2 block pt-1">{note}</span> : null}
+      {game.lead_highlight ? (
+        <span className="line-clamp-2 block pt-1 text-sm">{game.lead_highlight}</span>
+      ) : null}
+      {market || odds.isUpset || odds.isComeback ? (
+        <span className="type-caption flex flex-wrap items-center gap-x-2 gap-y-1">
+          <ResultTags game={game} odds={odds} />
+          {market ? <span>{market}</span> : null}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -273,48 +260,11 @@ function ResultLine({
   won: boolean;
 }) {
   return (
-    <span className={cn("flex items-center gap-1.5", won ? "font-semibold" : "text-ink-2")}>
+    <span className={cn("flex items-center gap-2 text-lg", won ? "font-semibold" : "text-ink-2")}>
       <TeamLogo teamId={teamId} abbreviation={abbreviation} />
       <span>{abbreviation}</span>
       <span className="tabular ml-auto">{score ?? "—"}</span>
     </span>
-  );
-}
-
-// Eyebrow per highlight type. "loss" marks the ones that are bad news for the
-// team they are about; everything else reads as a positive.
-const HIGHLIGHT_LABELS: Record<string, { label: string; tone?: "loss" }> = {
-  league_season_high: { label: "League season high" },
-  season_high: { label: "Season high" },
-  elite_game: { label: "Elite game" },
-  big_scoring_night: { label: "Scoring night" },
-  triple_double: { label: "Triple-double" },
-  top_performer: { label: "Top performer" },
-  scoring_duel: { label: "Scoring duel" },
-  win_streak: { label: "Win streak" },
-  win_streak_snapped: { label: "Streak ended", tone: "loss" },
-  losing_streak: { label: "Losing streak", tone: "loss" },
-  losing_streak_snapped: { label: "Skid over" },
-  blown_lead: { label: "Blown lead", tone: "loss" },
-  lead_changes: { label: "Back and forth" },
-  overtime: { label: "Overtime" },
-  blowout: { label: "Blowout" },
-  upset: { label: "Upset" },
-  heavyweight_clash: { label: "Heavyweights" },
-};
-
-function HighlightCard({ highlight }: { highlight: GameHighlight }) {
-  const meta = HIGHLIGHT_LABELS[highlight.highlight_type];
-  return (
-    <Link href={`/games/${highlight.game_id}`} className="group block">
-      <p
-        className={cn("type-eyebrow", meta?.tone === "loss" ? "text-destructive" : "text-primary")}
-      >
-        {meta?.label ?? highlight.highlight_type.replaceAll("_", " ")}
-      </p>
-      <p className="mt-1 font-semibold leading-snug group-hover:underline">{highlight.headline}</p>
-      <p className="mt-1 text-sm text-ink-2">{highlight.detail}</p>
-    </Link>
   );
 }
 

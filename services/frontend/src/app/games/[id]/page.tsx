@@ -1,13 +1,13 @@
 "use client";
 
-import { Suspense } from "react";
+import { Fragment, Suspense, useId, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { GameFlowChart } from "@/components/charts/game-flow-chart";
 import { BoxScore } from "@/components/games/box-score";
-import { pickSummary, WhoWins } from "@/components/games/game-pick";
+import { impliedProbability, WhoWins } from "@/components/games/game-pick";
 import {
   BeforeTipoff,
   GameHeader,
@@ -16,7 +16,6 @@ import {
   ThisSeasonPanel,
 } from "@/components/games/game-summary";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
-import { Badge } from "@/components/ui/badge";
 import { usePicks } from "@/hooks/use-picks";
 import { useProfile } from "@/hooks/use-profile";
 import { useSeasonMeetings } from "@/hooks/use-season-meetings";
@@ -33,8 +32,11 @@ import {
   type Meeting,
   type RecapCard,
 } from "@/lib/game-story";
+import { formatMoney, formatPrice, formatSignedMoney, pickProfit } from "@/lib/picks";
+import { isUpsetWin } from "@/lib/results";
 import { hasTipped } from "@/lib/timezones";
-import type { GameDetail, GameFlow } from "@/lib/types";
+import type { GameDetail, GameFlow, UserPick } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export default function GamePage() {
   return (
@@ -219,11 +221,6 @@ function RecapSummary({
 }) {
   const picks = usePicks();
   const pick = picks.sheet?.picks.find((item) => item.game_id === game.game_id);
-  const calls = [
-    ["Model", callLine(game, game.home_win_probability)],
-    ["Market", callLine(game, game.market_home_wp)],
-    ["Your pick", pick ? pickSummary(pick) : null],
-  ].filter((call): call is [string, string] => call[1] != null);
 
   return (
     <section className="space-y-4">
@@ -234,7 +231,6 @@ function RecapSummary({
           {meetingsLoading ? "\u00a0" : recapHeadline(game, meetings)}
         </h2>
       )}
-      <UpsetNote game={game} />
       {cards.length > 0 ? (
         <div
           className="grid border-y border-rule sm:grid-cols-3 sm:divide-x sm:divide-rule"
@@ -252,45 +248,230 @@ function RecapSummary({
           ))}
         </div>
       ) : null}
-      {calls.length > 0 ? (
-        <p className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-ink-2">
-          {calls.map(([label, value]) => (
-            <span key={label} data-testid="recap-call">
-              <span className="font-semibold text-foreground">{label}</span> {value}
-            </span>
-          ))}
-        </p>
-      ) : null}
+      <PregameCalls game={game} pick={pick} />
     </section>
   );
 }
 
+type PregameCall = {
+  key: string;
+  label: string;
+  sub: string;
+  /** The side it favoured, and how strongly, for the one-line summary. */
+  summary: string;
+  /** Where it had the eventual winner, 0 to 1; null draws no marker. */
+  winnerWp: number | null;
+  outcome: string;
+  /** Good news reads in the primary colour, a miss in the loss colour. */
+  tone: "hit" | "miss" | null;
+  outcomeSub: string | null;
+};
+
+// Within this of a coin flip, a miss is "barely".
+const BARELY = 0.05;
+
+function callOutcome(winnerWp: number) {
+  // An even 50% is no call at all, as on the home page.
+  if (winnerWp === 0.5) return { outcome: "Coin flip", tone: null };
+  if (winnerWp > 0.5) return { outcome: "Called it", tone: "hit" as const };
+  return { outcome: winnerWp > 0.5 - BARELY ? "Missed, barely" : "Missed", tone: "miss" as const };
+}
+
 /**
- * "Upset: BOS won at 28%". The line is the morning scrape, not a close, so the
- * copy never calls it the closing line.
+ * The market, the model, and the visitor's pick before tip-off: one line, and
+ * a Compare panel that puts all three on the same winner-WP axis.
  */
-function UpsetNote({ game }: { game: GameDetail }) {
-  if (!game.is_upset || game.winner_market_wp == null) return null;
-  const winner = homeWon(game) ? game.home_team_abbreviation : game.away_team_abbreviation;
+/** The winner's and the loser's abbreviations, for the bar and the Compare axis. */
+function finalSides(game: GameDetail) {
+  const homeSideWon = homeWon(game);
+  return {
+    homeSideWon,
+    winner: (homeSideWon ? game.home_team_abbreviation : game.away_team_abbreviation) ?? "",
+    loser: (homeSideWon ? game.away_team_abbreviation : game.home_team_abbreviation) ?? "",
+  };
+}
+
+function pregameCalls(game: GameDetail, pick: UserPick | undefined): PregameCall[] {
+  if (game.home_score == null || game.away_score == null) return [];
+  const { homeSideWon, winner, loser } = finalSides(game);
+  const forWinner = (homeWp: number) => (homeSideWon ? homeWp : 1 - homeWp);
+  const favourite = (winnerWp: number) =>
+    winnerWp === 0.5
+      ? "had it even"
+      : `favored ${winnerWp > 0.5 ? winner : loser} ${formatProbability(Math.max(winnerWp, 1 - winnerWp))}`;
+
+  const calls: PregameCall[] = [];
+  const market = game.market_home_wp == null ? null : forWinner(game.market_home_wp);
+  if (market != null) {
+    const sides: [string | null | undefined, number | null | undefined][] = [
+      [game.away_team_abbreviation, game.away_moneyline],
+      [game.home_team_abbreviation, game.home_moneyline],
+    ];
+    const prices = sides
+      .flatMap(([team, price]) => (price == null ? [] : [`${team} ${formatPrice(price)}`]))
+      .join(" · ");
+    calls.push({
+      key: "market",
+      label: "Market",
+      sub: "Morning line",
+      summary: favourite(market),
+      winnerWp: market,
+      ...callOutcome(market),
+      outcomeSub: prices || null,
+    });
+  }
+  if (game.home_win_probability != null) {
+    const model = forWinner(game.home_win_probability);
+    const gap = market == null ? 0 : Math.round(Math.abs(model - market) * 100);
+    calls.push({
+      key: "model",
+      label: "Model",
+      sub: game.prediction_model_version ?? "Pregame estimate",
+      summary: favourite(model),
+      winnerWp: model,
+      ...callOutcome(model),
+      outcomeSub:
+        market == null
+          ? null
+          : gap === 0
+            ? "Level with the market"
+            : `${gap} pts ${model > market ? "closer" : "further off"} than the market`,
+    });
+  }
+  if (pick && (pick.result === "won" || pick.result === "lost")) {
+    const pickedWinner = pick.result === "won";
+    const picked = pickedWinner ? winner : loser;
+    const implied = impliedProbability(pick.moneyline);
+    const price = formatPrice(pick.moneyline);
+    const upside =
+      pick.stake != null && pick.moneyline != null ? pickProfit(pick.stake, pick.moneyline) : null;
+    calls.push({
+      key: "pick",
+      label: "Your pick",
+      sub: pick.stake != null ? `${formatMoney(pick.stake)} stake` : "No stake",
+      summary: `${picked}, ${pick.result}${pick.profit != null ? ` ${formatMoney(Math.abs(pick.profit))}` : ""}`,
+      winnerWp: implied == null ? null : pickedWinner ? implied : 1 - implied,
+      outcome: `${pickedWinner ? "Won" : "Lost"}${pick.profit != null ? ` · ${formatSignedMoney(pick.profit)}` : ""}`,
+      tone: pickedWinner ? "hit" : "miss",
+      outcomeSub:
+        upside == null
+          ? price
+            ? `At ${price}`
+            : null
+          : pickedWinner
+            ? `At ${price}`
+            : `Would have won ${formatMoney(upside)}`,
+    });
+  }
+  return calls;
+}
+
+function PregameCalls({ game, pick }: { game: GameDetail; pick: UserPick | undefined }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const calls = pregameCalls(game, pick);
+  if (calls.length === 0) return null;
+  const upset = isUpsetWin(game.winner_market_wp);
+  const { winner, loser } = finalSides(game);
+  const tone = (call: PregameCall) =>
+    call.tone === "hit" ? "text-primary" : call.tone === "miss" ? "text-destructive" : "";
   return (
-    <div className="text-center text-sm text-ink-2" data-testid="upset-note">
-      <p>
-        <Badge variant="destructive">Upset</Badge>{" "}
-        <span className="font-semibold text-foreground">{winner}</span> won at{" "}
-        {formatProbability(game.winner_market_wp)} on the morning line
-      </p>
-      {game.model_called_upset ? <p className="mt-1">The model had {winner} favoured</p> : null}
+    <div className="border-b border-rule" data-testid="pregame-calls">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "flex w-full flex-wrap items-baseline gap-x-3 gap-y-1 px-1 py-3 text-left text-sm text-ink-2 hover:bg-row-hover",
+          open && "bg-row-hover"
+        )}
+      >
+        {upset ? (
+          <span
+            data-testid="upset-tag"
+            title={`The market gave ${winner} a ${formatProbability(game.winner_market_wp)} chance`}
+            className="type-eyebrow self-center border border-ink px-1 tracking-normal text-ink"
+          >
+            Upset
+          </span>
+        ) : null}
+        <span className="font-semibold text-foreground">Before tip-off</span>
+        {calls.map((call, index) => (
+          <Fragment key={call.key}>
+            {index > 0 ? <span className="text-ink-3">·</span> : null}
+            <span data-testid="recap-call">
+              {call.label}{" "}
+              <span className={cn(call.key === "pick" && tone(call))}>{call.summary}</span>
+            </span>
+          </Fragment>
+        ))}
+        <span className="ml-auto text-primary">
+          {open ? "Hide" : "Compare"} <span aria-hidden>{open ? "▲" : "▼"}</span>
+        </span>
+      </button>
+      {open ? (
+        <div id={panelId} className="pb-3">
+          <div className="type-eyebrow grid grid-cols-[8rem_minmax(0,1fr)_10rem] gap-x-6 border-b border-rule-soft py-2 sm:grid-cols-[10rem_minmax(0,1fr)_12rem]">
+            <span />
+            <span className="flex justify-between">
+              <span>{loser}</span>
+              <span>50/50</span>
+              <span>{winner}</span>
+            </span>
+            <span className="text-right">Outcome</span>
+          </div>
+          {calls.map((call) => (
+            <div
+              key={call.key}
+              data-testid="pregame-row"
+              className="grid grid-cols-[8rem_minmax(0,1fr)_10rem] items-center gap-x-6 border-b border-rule-soft py-3 sm:grid-cols-[10rem_minmax(0,1fr)_12rem]"
+            >
+              <div>
+                <p className="font-semibold">{call.label}</p>
+                <p className="type-caption">{call.sub}</p>
+              </div>
+              <WinnerMeter value={call.winnerWp} />
+              <div className="text-right">
+                <p className={cn("font-semibold", tone(call))}>{call.outcome}</p>
+                {call.outcomeSub ? <p className="type-caption">{call.outcomeSub}</p> : null}
+              </div>
+            </div>
+          ))}
+          <p className="type-caption pt-3">
+            Market is the betting odds from the morning of the game, with the sportsbook&apos;s cut
+            taken out. Model is Baseline&apos;s pregame estimate.{" "}
+            <Link href="/predictions" className="text-primary hover:underline">
+              How accurate is the model?
+            </Link>
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-/** "Had SAS at 60% before tip-off · Missed", or null without a line. */
-function callLine(game: GameDetail, homeWp: number | null | undefined) {
-  if (homeWp == null || game.home_score == null || game.away_score == null) return null;
-  const homeFavoured = homeWp >= 0.5;
-  const favourite = homeFavoured ? game.home_team_abbreviation : game.away_team_abbreviation;
-  const right = homeFavoured === homeWon(game);
-  return `Had ${favourite} at ${formatProbability(homeFavoured ? homeWp : 1 - homeWp)} before tip-off · ${right ? "Called it" : "Missed"}`;
+/** A dot at the winner's WP on a loser-to-winner track, shaded back to 50/50. */
+function WinnerMeter({ value }: { value: number | null }) {
+  const percent = value == null ? null : Math.round(Math.min(Math.max(value, 0), 1) * 100);
+  return (
+    <div className="relative h-4" aria-hidden>
+      <div className="absolute inset-x-0 top-1/2 h-px bg-rule" />
+      <div className="absolute top-0 bottom-0 left-1/2 w-px bg-ink-3" />
+      {percent == null ? null : (
+        <>
+          <div
+            className="absolute top-1/2 h-[3px] -translate-y-1/2 bg-rule-strong opacity-40"
+            style={{ left: `${Math.min(percent, 50)}%`, width: `${Math.abs(percent - 50)}%` }}
+          />
+          <div
+            className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground"
+            style={{ left: `${percent}%` }}
+          />
+        </>
+      )}
+    </div>
+  );
 }
 
 /** The flow in four numbers beside the heading: who led, by most, and how often it swung. */

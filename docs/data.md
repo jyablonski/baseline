@@ -118,7 +118,7 @@ Every threshold and weight is a `highlight_*` var in `services/dbt/dbt_project.y
 - **As-of caveat**: season highs, streaks, and team rank are computed as of the game. MVP rank and the elite-game percentile use the season as it stands today, so an old day's scores can drift as the season goes on.
 - `lead_changes` counts direct lead flips only (`fct_game_flow` treats a pass through a tie as a tie), so it runs lower than a box score's number. That is why the bar is 20, not 30.
 
-Served by REST (`GET /api/v1/games/highlights`, one lead highlight per game for a day), Cube (`daily_highlights`), and MCP (`get_daily_highlights`). The home page shows the featured ones as cards and each game's lead headline under its score.
+Served by REST (`GET /api/v1/games/highlights`, one lead highlight per game for a day), Cube (`daily_highlights`), and MCP (`get_daily_highlights`). The home page shows each game's lead headline under its score (from `lead_highlight` on `GET /api/v1/games`).
 
 ### Injuries
 

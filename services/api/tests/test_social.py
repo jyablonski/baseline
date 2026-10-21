@@ -533,3 +533,43 @@ def test_fanbase_sql_counts_posts_and_comments_together() -> None:
     assert "author_flair IS NOT NULL" in sql
     # The rail is 320px, so it needs the nickname rather than the full club name.
     assert "teams.nickname AS flair_team_nickname" in sql
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("title", "flair", "is_self", "expected"),
+    [
+        ("[Highlight] Mara stuffs the lob", "Highlight", False, "highlight"),
+        ("[Lowlights] Wembanyama misses back to back 3s", None, False, "highlight"),
+        ("[All-Access] View from the crowd", "All-Access", False, "highlight"),
+        ("[Post Game Thread] The 76ers defeat the Knicks", "Post Game Thread", True, "game_thread"),
+        ("GAME THREAD: Knicks (0-0) @ 76ers (0-0)", None, True, "game_thread"),
+        ("Pistons storm back", "Post Game Thread", True, "game_thread"),
+        ("[Oram] Tom Dundon went crazy over the fee", None, False, "report"),
+        ("[The Athletic] The Knicks' banner gets company", None, False, "report"),
+        ("[The Onion] LeBron James squeezes eyes shut", None, False, "link"),
+        ("[The Onion] LeBron James squeezes eyes shut", None, True, "discussion"),
+        ("Is Boston's defense a problem", None, True, "discussion"),
+        ("Some link", None, False, "link"),
+    ],
+)
+def test_post_content_type_buckets_real_titles(postgres_engine, title, flair, is_self, expected):
+    """The CASE runs in Postgres: ILIKE, the tag regex, and the satire list together."""
+    from sqlalchemy import text
+
+    from queries.social import POST_CONTENT_TYPE
+
+    sql = text(
+        f"""
+        SELECT {POST_CONTENT_TYPE} AS content_type
+        FROM (
+            SELECT
+                CAST(:title AS text) AS title,
+                CAST(:flair AS text) AS flair,
+                CAST(:is_self AS boolean) AS is_self
+        ) AS posts
+        """
+    )
+    with postgres_engine.connect() as connection:
+        params = {"title": title, "flair": flair, "is_self": is_self}
+        assert connection.execute(sql, params).scalar_one() == expected

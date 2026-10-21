@@ -114,6 +114,10 @@ def test_games_and_seasons(integration_client) -> None:
     assert opener["game_id"] == GAME_ONE
     # Only the top-ranked highlight, and no series number outside the playoffs.
     assert opener["lead_highlight"] == "Stephen Curry scores 42"
+    # GSW came back from 8 down, from fct_game_flow.
+    assert opener["largest_lead_blown"] == 8
+    # GSW won at 30% on the morning line, from fct_game_upsets.
+    assert opener["winner_market_wp"] == pytest.approx(0.30)
     assert opener["series_game_number"] is None
     assert opener["home_team_conference"] == opener["away_team_conference"] == "West"
 

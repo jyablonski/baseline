@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { DayPicker } from "@/components/games/day-picker";
+import { ResultTags } from "@/components/games/result-tags";
 import { SeasonNotables } from "@/components/games/season-notables";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamLogo } from "@/components/team-logo";
@@ -139,7 +140,7 @@ function ResultsDay({
 }
 
 function ResultRow({ game }: { game: LeagueGame }) {
-  const { winner, loser, margin } = resultSides(game);
+  const { winner, loser } = resultSides(game);
   const label = `${winner.abbreviation} ${winner.score ?? ""}, ${loser.abbreviation} ${loser.score ?? ""}`;
   return (
     <li className="border-b border-rule" data-testid="result-row">
@@ -161,7 +162,10 @@ function ResultRow({ game }: { game: LeagueGame }) {
           <TeamLogo teamId={loser.teamId} abbreviation={loser.abbreviation} />
           <span className="w-10 text-ink-2">{loser.abbreviation}</span>
         </span>
-        <span className="hidden w-24 text-sm text-ink-2 sm:block">{margin}</span>
+        {/* Holds its width when empty so every highlight starts in the same column. */}
+        <span className="max-sm:empty:hidden sm:w-44 sm:shrink-0">
+          <ResultTags game={game} />
+        </span>
         <span className="order-last basis-full truncate text-sm text-ink-2 sm:order-none sm:flex-1 sm:basis-auto">
           {game.lead_highlight}
         </span>

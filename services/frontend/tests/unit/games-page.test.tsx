@@ -74,13 +74,35 @@ describe("games index", () => {
     expect(screen.getByText("Finals · Game 5 · 1 game")).toBeInTheDocument();
     const link = within(row).getByRole("link", { name: "NYK 94, SAS 90" });
     expect(link).toHaveAttribute("href", "/games/g-finals-5");
-    expect(within(row).getByText("NYK by 4")).toBeInTheDocument();
+    expect(within(row).queryByText("NYK by 4")).not.toBeInTheDocument();
     expect(within(row).getByText("Knicks win the NBA Finals")).toBeInTheDocument();
+    expect(within(row).queryByText("Upset")).not.toBeInTheDocument();
+    expect(within(row).queryByText("Comeback")).not.toBeInTheDocument();
     // Upcoming games live on the schedule; notables sit below the results.
     expect(screen.getByRole("link", { name: "schedule" })).toHaveAttribute("href", "/schedule");
     expect(screen.getByRole("heading", { name: "Season notables" })).toBeInTheDocument();
     // Nothing newer than the latest day.
     expect(screen.getByRole("button", { name: "Later game day" })).toBeDisabled();
+  });
+
+  it("tags a steep upset and a comeback, but not a near coin flip", async () => {
+    listGames.mockResolvedValue({
+      data: [
+        { ...FINALS_GAME, winner_market_wp: 0.3, largest_lead_blown: 14 },
+        { ...FINALS_GAME, game_id: "g-close", winner_market_wp: 0.46, largest_lead_blown: 9 },
+      ],
+      meta: { total: 2, limit: 20, offset: 0 },
+    });
+    renderPage();
+    await screen.findAllByTestId("result-row");
+    const [tagged, close] = screen.getAllByTestId("result-row");
+    expect(within(tagged).getByText("Upset")).toBeInTheDocument();
+    expect(within(tagged).getByText("Comeback")).toHaveAttribute(
+      "title",
+      "NYK came back from 14 down"
+    );
+    expect(within(close).queryByText("Upset")).not.toBeInTheDocument();
+    expect(within(close).queryByText("Comeback")).not.toBeInTheDocument();
   });
 
   it("steps back a game day through the URL, and forward to latest without a date", async () => {

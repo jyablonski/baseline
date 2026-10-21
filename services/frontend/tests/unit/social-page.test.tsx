@@ -253,6 +253,16 @@ describe("social page", () => {
       </Providers>
     );
     expect(screen.getAllByText("Highlight")).toHaveLength(1);
+    // A post game thread keeps its bracket, which tells it from a live thread.
+    rerender(
+      <Providers>
+        <PostCard
+          post={{ ...contestedPost, content_type: "game_thread", tag: "Post Game Thread" }}
+        />
+      </Providers>
+    );
+    expect(screen.getByText("Game thread")).toBeInTheDocument();
+    expect(screen.getByText("Post Game Thread")).toBeInTheDocument();
   });
 
   it("keeps comments collapsed until asked, then previews the top few", async () => {

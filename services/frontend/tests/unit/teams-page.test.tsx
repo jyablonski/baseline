@@ -131,7 +131,7 @@ describe("teams page", () => {
       meta: { total: 1, limit: 30, offset: 0 },
     });
     renderPage();
-    const plot = await screen.findByRole("heading", { name: "Team offensive vs defensive rating" });
+    const plot = await screen.findByRole("heading", { name: "Offense vs defense" });
     const east = screen.getByRole("region", { name: "Eastern Conference" });
     expect(east.compareDocumentPosition(plot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -140,9 +140,7 @@ describe("teams page", () => {
     listStandings.mockResolvedValue({ data: [], meta: { total: 0, limit: 30, offset: 0 } });
     renderPage();
     expect(await screen.findByText("No standings yet")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "Team offensive vs defensive rating" })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Offense vs defense" })).not.toBeInTheDocument();
   });
 
   it("shows an error loading the standings", async () => {

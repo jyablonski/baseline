@@ -340,6 +340,10 @@ export type LeagueGame = {
   series_game_number?: number | null;
   /** The game's top highlight headline, when it has one. */
   lead_highlight?: string | null;
+  /** The winner's biggest deficit (0 if it never trailed); null without play-by-play. */
+  largest_lead_blown?: number | null;
+  /** The winner's market WP from that morning's line; null without a captured line. */
+  winner_market_wp?: number | null;
 };
 
 // A date with Final games, for the results date picker.
@@ -690,31 +694,6 @@ export type Transaction = {
 };
 
 // A game's lead highlight for the day; the featured few are the home page cards.
-export type GameHighlight = {
-  highlight_id: string;
-  game_date: string;
-  season: string;
-  season_type?: string | null;
-  game_id: string;
-  highlight_type: string;
-  subject_type: string;
-  player_id?: string | null;
-  player_name?: string | null;
-  team_id?: string | null;
-  team_abbreviation?: string | null;
-  home_team_abbreviation?: string | null;
-  away_team_abbreviation?: string | null;
-  home_score?: number | null;
-  away_score?: number | null;
-  headline: string;
-  detail: string;
-  stat_name?: string | null;
-  stat_value?: number | null;
-  score: number;
-  day_rank?: number | null;
-  is_featured: boolean;
-};
-
 export type GameFlow = {
   game_id: string;
   season: string;

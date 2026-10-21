@@ -21,7 +21,6 @@ import type {
   GameUpset,
   Transaction,
   GameFlow,
-  GameHighlight,
   HeadToHeadComparison,
   LeagueGame,
   ListGamesParams,
@@ -490,17 +489,6 @@ export const api = {
           player_id: params.player_id,
           limit: params.limit,
           offset: params.offset,
-        })}`
-      )
-    ),
-
-  listHighlights: async (params: { season?: string; game_date?: string; limit?: number } = {}) =>
-    asPaginated<GameHighlight>(
-      await fetchApi(
-        `/api/v1/games/highlights${buildQuery({
-          season: params.season,
-          game_date: params.game_date,
-          limit: params.limit,
         })}`
       )
     ),
