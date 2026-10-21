@@ -743,3 +743,80 @@ def test_dbt_failed_nodes_round_trip_and_clear_on_success(db_session_factory) ->
     assert nodes[run_id] == ["model fct_x", "test not_null_fct_x_id"]
     assert nodes[standalone] is None
     assert nodes[unparsed] == []
+
+
+@pytest.mark.integration
+def test_daily_games_are_finals_without_logs(db_session_factory, monkeypatch) -> None:
+    import scrapers.games as games_module
+
+    monkeypatch.setattr(games_module, "_ensure_teams", lambda: None)
+    monkeypatch.setattr(games_module, "scrape_games", lambda season: 0)
+    now = datetime.now(UTC)
+    logged = UUID("00000000-0000-4000-8000-000000000411")
+    last_night = UUID("00000000-0000-4000-8000-000000000412")
+    missed_day = UUID("00000000-0000-4000-8000-000000000413")
+    tonight = UUID("00000000-0000-4000-8000-000000000414")
+    old_season = UUID("00000000-0000-4000-8000-000000000415")
+
+    def game(game_id: UUID, game_date: date, status: str, season: str = "2026-27") -> dict:
+        return {
+            "game_id": game_id,
+            "season": season,
+            "season_type": "Regular Season",
+            "game_date": game_date,
+            "home_team_id": TEAM_HOME,
+            "away_team_id": TEAM_AWAY,
+            "status": status,
+            "scraped_at": now,
+        }
+
+    with get_session() as session:
+        upsert_rows(session, Team, _teams(now), ["team_id"])
+        upsert_rows(
+            session,
+            Player,
+            [
+                {
+                    "player_id": PLAYER_ONE,
+                    "first_name": "Test",
+                    "last_name": "Player",
+                    "full_name": "Test Player",
+                    "is_active": True,
+                    "team_id": TEAM_HOME,
+                    "scraped_at": now,
+                }
+            ],
+            ["player_id"],
+        )
+        upsert_rows(
+            session,
+            Game,
+            [
+                game(logged, date(2026, 10, 19), "Final"),
+                game(last_night, date(2026, 10, 20), "Final"),
+                game(missed_day, date(2026, 10, 18), "Final"),
+                game(tonight, date(2026, 10, 21), "Scheduled"),
+                game(old_season, date(2026, 4, 1), "Final", season="2025-26"),
+            ],
+            ["game_id"],
+        )
+        upsert_rows(
+            session,
+            PlayerGameLog,
+            [
+                {
+                    "player_id": PLAYER_ONE,
+                    "game_id": logged,
+                    "team_id": TEAM_HOME,
+                    "game_date": date(2026, 10, 19),
+                    "season": "2026-27",
+                    "matchup": "TST vs. AWY",
+                    "scraped_at": now,
+                }
+            ],
+            ["player_id", "game_id"],
+        )
+
+    games = games_module.scrape_todays_games(date(2026, 10, 21))
+
+    assert [game["game_id"] for game in games] == [missed_day, last_night]

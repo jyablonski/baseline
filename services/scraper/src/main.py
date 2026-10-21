@@ -294,16 +294,16 @@ def scrape_daily_cmd() -> None:
     alert = SyncAlert("scrape-daily")
     games = alert.try_run("todays_games", scrape_todays_games)
     if games:
-        click.echo(f"Found {len(games)} completed game(s) today.")
+        click.echo(f"Found {len(games)} completed game(s) without box scores.")
         count = alert.try_run("player_game_logs", lambda: scrape_logs_for_games(games))
         if count is not None:
-            click.echo(f"Upserted {count} player game logs for today's games.")
+            click.echo(f"Upserted {count} player game logs for those games.")
         game_ids = [str(game["game_id"]) for game in games if game.get("game_id")]
         n_pbp = alert.try_run("play_by_play", lambda: scrape_play_by_play(game_ids=game_ids))
         if n_pbp is not None:
             click.echo(f"Play-by-play: {n_pbp}")
     elif games is not None:
-        click.echo("No completed games today.")
+        click.echo("No completed games without box scores.")
     n_standings = alert.try_run(
         "standings",
         lambda: scrape_standings(current_season()),

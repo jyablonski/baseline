@@ -294,11 +294,11 @@ def execute_scrape(
             # absent row is indistinguishable from a step that silently stopped
             # existing, and off-days are the common case.
             for game_step in ("player_game_logs", "play_by_play"):
-                collector.record_skipped(game_step, reason="No completed games today")
+                collector.record_skipped(game_step, reason="No completed games without box scores")
             collector.raise_if_failed()
             return (
                 snapshot_count,
-                f"No completed games today; {extra}",
+                f"No completed games without box scores; {extra}",
             )
         game_ids = _final_game_ids(games)
         count = collector.try_run("player_game_logs", lambda: scrape_logs_for_games(games))
