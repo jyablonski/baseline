@@ -12,7 +12,7 @@
 #   * * * * * cd /opt/nba && make prod-admin-jobs >> /opt/nba/logs/admin-jobs.log 2>&1
 #
 # Shares LOCK_FILE with the daily refresh so an operator button press can never
-# overlap the 08:15 cron. If the lock is held the job goes back to 'queued' and
+# overlap the 12:00 UTC cron. If the lock is held the job goes back to 'queued' and
 # is retried on the next tick rather than being reported as a failure.
 set -euo pipefail
 

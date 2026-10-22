@@ -13,7 +13,7 @@
 # or unbuildable tools image). Run it from a SEPARATE cron entry, hours after
 # the refresh window:
 #
-#   45 11 * * * cd /opt/nba && ./scripts/check-freshness.sh >> /opt/nba/logs/freshness.log 2>&1
+#   30 12 * * * cd /opt/nba && ./scripts/check-freshness.sh >> /opt/nba/logs/freshness.log 2>&1
 #
 # Exit 0 = healthy or intentionally disabled. Exit 1 = stale (alert posted).
 set -euo pipefail

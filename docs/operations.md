@@ -70,12 +70,14 @@ A successful refresh is otherwise silent. The freshness check below covers the o
 Five cron entries on the VM. None of this starts with `make up`.
 
 ```cron
-15 8  * * * cd /opt/nba && flock -n /tmp/nba-refresh.lock make prod-refresh TRIGGER=scheduled >> /opt/nba/logs/refresh-daily.log 2>&1
-45 11 * * * cd /opt/nba && make prod-check-freshness >> /opt/nba/logs/freshness.log 2>&1
+0 12  * * * cd /opt/nba && flock -n /tmp/nba-refresh.lock make prod-refresh TRIGGER=scheduled >> /opt/nba/logs/refresh-daily.log 2>&1
+30 12 * * * cd /opt/nba && make prod-check-freshness >> /opt/nba/logs/freshness.log 2>&1
 *     * * * * cd /opt/nba && make prod-admin-jobs >> /opt/nba/logs/admin-jobs.log 2>&1
-30 7  * * * cd /opt/nba && make prod-db-backup >> /opt/nba/logs/backup.log 2>&1
-0 12  * * 0 cd /opt/nba && make db-restore-test >> /opt/nba/logs/restore-test.log 2>&1
+0 17  * * * cd /opt/nba && make prod-db-backup >> /opt/nba/logs/backup.log 2>&1
+0 15  * * 0 cd /opt/nba && make db-restore-test >> /opt/nba/logs/restore-test.log 2>&1
 ```
+
+The refresh stays on 12:00 UTC all year; `/about` shows it in the reader's time zone (Eastern by default), so its local time moves with daylight saving. The page reads the hour from `DAILY_REFRESH_UTC_HOUR` in `services/frontend/src/lib/timezones.ts`: change it with the crontab, along with the hand-maintained `source.scrape_pipeline.daily_refresh_utc`.
 
 **Always use the `make prod-*` targets, never raw `docker compose`.** Without `IMAGE_PREFIX`/`IMAGE_TAG` the overlay resolves bare `nba-*:latest`, which does not exist on the box — so Compose silently _builds_ it from the working tree instead of failing. `make refresh` has the same trap. `/opt/nba/logs/` must also exist, or cron's redirect fails before `make` runs.
 
@@ -91,7 +93,7 @@ Cron carries no registry coordinates: `prod-release` writes the deployed tag to 
 
 A dump is kept only after `pg_restore --list` reads it back, and old dumps rotate only after that, so a failed run never deletes the last good one. Failure exits non-zero and posts to `SLACK_WEBHOOK_URL` when set.
 
-The backup runs at 07:30, before the 08:15 refresh, and deliberately does **not** take the refresh lock: the refresh cron uses `flock -n`, so a backup holding it would silently skip that day's refresh. `pg_dump` reads one consistent snapshot either way; the gap is for memory.
+The backup runs at 17:00, well after the 12:00 refresh, and deliberately does **not** take the refresh lock: the refresh cron uses `flock -n`, so a backup holding it would silently skip that day's refresh. `pg_dump` reads one consistent snapshot either way; the gap is for memory.
 
 `make db-restore-test` (weekly in cron; Slack on failure) restores the newest dump — or `DUMP=<path>` — into a throwaway Postgres container, checks that `source`/`silver`/`gold` and `alembic_version` came back, and prints the largest tables. It never touches the stack's database.
 
