@@ -15,12 +15,12 @@
 #   make db-backup             # local stack
 #   make prod-db-backup        # production overlay
 #
-# Cron, before the 08:15 refresh (see docs/operations.md):
+# Cron, well after the 12:00 UTC refresh (see docs/operations.md):
 #
-#   30 7 * * * cd /opt/nba && make prod-db-backup >> /opt/nba/logs/backup.log 2>&1
+#   0 17 * * * cd /opt/nba && make prod-db-backup >> /opt/nba/logs/backup.log 2>&1
 #
 # It deliberately does NOT take the refresh lock. The refresh cron uses
-# `flock -n`, so a backup holding that lock at 08:15 would silently skip the
+# `flock -n`, so a backup holding that lock at 12:00 would silently skip the
 # day's refresh. pg_dump reads one MVCC snapshot, so a dump taken beside a
 # refresh is still consistent; the schedule only keeps them apart for memory.
 #

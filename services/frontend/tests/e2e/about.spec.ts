@@ -13,9 +13,9 @@ test("About lists ingest sources without salary jargon or 2010-11 copy", async (
   await expect(about.getByText("Basketball-Reference")).toBeVisible();
   await expect(about.getByText("The Odds API")).toBeVisible();
   await expect(about.getByText(/r\/nba posts/)).toBeVisible();
-  // 08:15 UTC is 4:15 in summer and 3:15 in winter.
+  // 12:00 UTC is 8:00 AM Eastern in summer and 7:00 AM in winter.
   await expect(about.getByText(/transformed and enriched/)).toContainText(
-    /scraped everyday around [34]:15 AM ET, picking up the previous day's games and the upcoming slate/
+    /scraped everyday around [78]:00 AM ET, picking up the previous day's games and the upcoming slate/
   );
   await expect(page.getByRole("heading", { name: "How the data gets here" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Coverage" })).toHaveCount(0);

@@ -2,10 +2,19 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import AboutPage from "@/app/about/page";
+import { Providers } from "@/components/providers";
+
+function renderPage() {
+  return render(
+    <Providers>
+      <AboutPage />
+    </Providers>
+  );
+}
 
 describe("about page", () => {
   it("shows the about copy without the removed scraped watermark", () => {
-    render(<AboutPage />);
+    renderPage();
 
     const about = screen.getByRole("article");
     expect(screen.getByRole("heading", { name: "About" })).toBeInTheDocument();
@@ -24,9 +33,9 @@ describe("about page", () => {
     expect(within(sources!).getByText(/r\/nba posts and their top\s+comments/)).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "How the data gets here" })).toBeInTheDocument();
-    // 08:15 UTC is 4:15 in summer and 3:15 in winter.
+    // 12:00 UTC is 8:00 AM Eastern in summer and 7:00 AM in winter.
     expect(screen.getByText(/transformed and enriched/)).toHaveTextContent(
-      /scraped everyday around [34]:15 AM ET, picking up the previous day's games and the upcoming slate\. The data is then transformed and enriched/
+      /scraped everyday around [78]:00 AM ET, picking up the previous day's games and the upcoming slate\. The data is then transformed and enriched/
     );
     expect(screen.queryByRole("heading", { name: "Built with" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Background" })).not.toBeInTheDocument();
@@ -49,7 +58,7 @@ describe("about page", () => {
   });
 
   it("credits the developer with profile links", () => {
-    render(<AboutPage />);
+    renderPage();
 
     const developer = screen.getByRole("heading", { name: "Developer" }).closest("section");
     expect(developer).toBeTruthy();
@@ -69,7 +78,7 @@ describe("about page", () => {
   });
 
   it("reports the build the image was made from", () => {
-    render(<AboutPage />);
+    renderPage();
 
     const version = screen.getByRole("heading", { name: "Version" }).closest("section");
     expect(version).toBeTruthy();

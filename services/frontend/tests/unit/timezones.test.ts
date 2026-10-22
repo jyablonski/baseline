@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatDailyRefresh,
   formatGameTime,
   formatScrapedAt,
   gamePhase,
@@ -65,6 +66,19 @@ describe("the offered time zones", () => {
     }
     expect(isTimezone("Mars/Olympus_Mons")).toBe(false);
     expect(isTimezone(null)).toBe(false);
+  });
+});
+
+describe("formatDailyRefresh", () => {
+  it("keeps the cron on UTC, so Eastern moves an hour with daylight saving", () => {
+    expect(formatDailyRefresh(null, new Date("2026-10-22T03:00:00Z"))).toBe("8:00 AM ET");
+    expect(formatDailyRefresh(null, new Date("2026-12-15T03:00:00Z"))).toBe("7:00 AM ET");
+  });
+
+  it("reads in the account's zone when one is chosen", () => {
+    const summer = new Date("2026-10-22T03:00:00Z");
+    expect(formatDailyRefresh("America/Los_Angeles", summer)).toBe("5:00 AM PDT");
+    expect(formatDailyRefresh("UTC", summer)).toBe("12:00 PM UTC");
   });
 });
 

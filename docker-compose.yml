@@ -236,7 +236,7 @@ services:
       - cron
     # One-shot; pair with an external scheduler if you enable profile cron.
     # Example host cron (still respects DB enabled flag):
-    #   15 8 * * * cd /path/to/nba && make refresh TRIGGER=scheduled
+    #   0 12 * * * cd /path/to/nba && make refresh TRIGGER=scheduled
     entrypoint: ["python", "-m", "main", "pipeline", "run-once", "--triggered-by", "scheduled"]
     restart: "no"
 

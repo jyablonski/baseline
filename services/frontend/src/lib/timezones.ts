@@ -139,6 +139,21 @@ export function formatScrapedAt(
   return `${date} · ${time} ${zone}`;
 }
 
+/** The host cron starts the daily refresh at this UTC hour all year. */
+export const DAILY_REFRESH_UTC_HOUR = 12;
+
+/**
+ * Today's refresh time as one account reads it ("8:00 AM ET"). The cron is
+ * pinned to UTC, so the local time moves with daylight saving.
+ */
+export function formatDailyRefresh(timezone: string | null | undefined, now = new Date()) {
+  const instant = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), DAILY_REFRESH_UTC_HOUR)
+  );
+  const { time, zone } = formatInstant(instant, timezone);
+  return `${time} ${zone}`;
+}
+
 function formatInstant(
   instant: Date,
   timezone: string | null | undefined,
