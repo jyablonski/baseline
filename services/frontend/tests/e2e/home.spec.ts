@@ -3,6 +3,9 @@ import { expect, test } from "@playwright/test";
 import { API_FAILURE_DETAIL, expectNo2010Range, mockApi } from "./helpers";
 
 test("home desk shows the latest slate, next games, standings, and r/nba", async ({ page }) => {
+  // "Next up" turns into "Games today" on the fixtures' Oct 22 slate date, so
+  // the clock is pinned before it.
+  await page.clock.setFixedTime(new Date("2026-10-20T16:00:00Z"));
   await mockApi(page);
   await page.goto("/");
   // The fixture slate is long past, so it is the latest one, not last night's.
