@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  formatBiggestRunCaption,
   formatFlowTooltipLabel,
   formatFlowTooltipPlay,
   formatFlowTooltipScore,
   formatGameClock,
   formatGameOption,
+  formatLead,
   formatMatchupTitle,
+  formatRunSpan,
   parseIsoClockToSeconds,
   periodLabel,
   periodStartElapsed,
@@ -51,21 +52,24 @@ describe("period helpers", () => {
 });
 
 describe("biggest-run and matchup display", () => {
-  it("formats a winner run caption", () => {
+  it("names the leader and the run's span", () => {
+    const teams = { homeAbbreviation: "DAL", awayAbbreviation: "IND" };
+    expect(formatLead(4, teams)).toBe("DAL +4");
+    expect(formatLead(-9, teams)).toBe("IND +9");
+    expect(formatLead(0, teams)).toBe("Tied");
+    expect(formatLead(-2)).toBe("Away +2");
+    expect(formatLead(3, { homeAbbreviation: null })).toBe("Home +3");
     expect(
-      formatBiggestRunCaption({
-        biggest_run_team_abbreviation: "NYK",
-        biggest_run_winner_points: 16,
-        biggest_run_opponent_points: 2,
-      })
-    ).toBe("Biggest run: NYK 16-2");
-    expect(formatBiggestRunCaption({ biggest_run_label: "SAS 12-4" })).toBe(
-      "Biggest run: SAS 12-4"
-    );
-    expect(formatBiggestRunCaption({ biggest_run_label: "Biggest run: NYK 16-2" })).toBe(
-      "Biggest run: NYK 16-2"
-    );
-    expect(formatBiggestRunCaption({})).toBeNull();
+      formatRunSpan(
+        { period: 1, clock: "PT10M04.00S", clock_remaining_seconds: 604 },
+        { period: 1, clock: "PT06M17.00S" }
+      )
+    ).toBe("Q1 10:04–6:17");
+    expect(
+      formatRunSpan({ period: 1, clock: "PT01M20.00S" }, { period: 2, clock: "PT10M00.00S" })
+    ).toBe("Q1 1:20–Q2 10:00");
+    expect(formatRunSpan({ period: 1, clock: null }, { period: 1, clock: null })).toBe("Q1");
+    expect(formatRunSpan({ period: 1, clock: null }, { period: 2, clock: null })).toBe("Q1–Q2");
   });
 
   it("marks the winner on the matchup title", () => {
@@ -152,7 +156,6 @@ describe("biggest-run and matchup display", () => {
         winning_team_id: TEAM_AWAY,
       })
     ).toBe("Away (W) @ Home");
-    expect(formatBiggestRunCaption({ biggest_run_team_abbreviation: "NYK" })).toBeNull();
   });
 });
 
@@ -202,10 +205,12 @@ describe("selectBiggestRun", () => {
       biggest_run_team_abbreviation: "NYK",
       biggest_run_winner_points: 21,
       biggest_run_opponent_points: 2,
-      biggest_run_label: "NYK 21-2",
+      biggest_run_label: "NYK 21–2",
+      biggest_run_start_index: 0,
+      biggest_run_end_index: 4,
     });
     expect(run && run.biggest_run_end_seconds - run.biggest_run_start_seconds).toBeLessThan(80);
-    expect(run?.biggest_run_label).not.toMatch(/79-59|31-15/);
+    expect(run?.biggest_run_label).not.toMatch(/79[-–]59|31[-–]15/);
   });
 
   it("excludes a 31-15 window even when it is the only large net", () => {
@@ -227,7 +232,7 @@ describe("selectBiggestRun", () => {
     expect(
       (run?.biggest_run_winner_points ?? 0) + (run?.biggest_run_opponent_points ?? 0)
     ).toBeLessThan(25);
-    expect(run?.biggest_run_label).not.toBe("NYK 31-15");
+    expect(run?.biggest_run_label).not.toBe("NYK 31–15");
   });
 
   it("ranks 21-0 above 21-3 and 21-2 above a short 12-0", () => {
@@ -237,7 +242,7 @@ describe("selectBiggestRun", () => {
       { away: 21, home: 0, elapsed: 200 },
       { away: 0, home: 3, elapsed: 240 },
     ]);
-    expect(selectBiggestRun(shutoutVsLeaky, teams)?.biggest_run_label).toBe("NYK 21-0");
+    expect(selectBiggestRun(shutoutVsLeaky, teams)?.biggest_run_label).toBe("NYK 21–0");
 
     const burstVsShort = scoringSequence([
       { away: 12, home: 0, elapsed: 20 },
@@ -248,7 +253,65 @@ describe("selectBiggestRun", () => {
       { away: 0, home: 1, elapsed: 230 },
       { away: 15, home: 0, elapsed: 240 },
     ]);
-    expect(selectBiggestRun(burstVsShort, teams)?.biggest_run_label).toBe("NYK 21-2");
+    expect(selectBiggestRun(burstVsShort, teams)?.biggest_run_label).toBe("NYK 21–2");
+  });
+
+  it("points its indices at the run's first and last scoring play", () => {
+    const events = scoringSequence([
+      { away: 0, home: 2 },
+      { away: 0, home: 2 },
+      { away: 3, home: 0 },
+      { away: 2, home: 0 },
+      { away: 3, home: 0 },
+      { away: 0, home: 1 },
+      { away: 2, home: 0 },
+      { away: 0, home: 2 },
+    ]);
+    const run = selectBiggestRun(events, teams);
+    expect(run).toMatchObject({
+      biggest_run_label: "NYK 10–1",
+      biggest_run_start_index: 2,
+      biggest_run_end_index: 6,
+      // Starts from the play before its first, ends on its last.
+      biggest_run_start_seconds: events[1].elapsed_seconds,
+      biggest_run_end_seconds: events[6].elapsed_seconds,
+    });
+  });
+
+  it("starts at index 0 and second 0 when the run opens the game", () => {
+    const run = selectBiggestRun(
+      scoringSequence([
+        { away: 0, home: 3 },
+        { away: 0, home: 2 },
+        { away: 2, home: 0 },
+      ]),
+      teams
+    );
+    expect(run).toMatchObject({
+      biggest_run_team_abbreviation: "SAS",
+      biggest_run_start_index: 0,
+      biggest_run_end_index: 1,
+      biggest_run_start_seconds: 0,
+    });
+  });
+
+  it("keeps plays at the same second apart by index", () => {
+    const events = scoringSequence([
+      { away: 0, home: 2, elapsed: 50 },
+      { away: 0, home: 1, elapsed: 100 },
+      { away: 1, home: 0, elapsed: 100 },
+      { away: 3, home: 0, elapsed: 120 },
+      { away: 3, home: 0, elapsed: 140 },
+      { away: 3, home: 0, elapsed: 160 },
+      { away: 0, home: 2, elapsed: 300 },
+    ]);
+    const run = selectBiggestRun(events, teams);
+    expect(run).toMatchObject({
+      biggest_run_label: "NYK 10–0",
+      biggest_run_start_index: 2,
+      biggest_run_end_index: 5,
+      biggest_run_start_seconds: 100,
+    });
   });
 
   it("returns null when there is no scoring", () => {

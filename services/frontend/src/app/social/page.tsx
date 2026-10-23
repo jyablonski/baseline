@@ -3,13 +3,13 @@
 import { Suspense, useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
-import { SocialControls, SummaryStrip } from "@/components/social/chrome";
+import { AboutSocialData, SocialControls, SummaryStrip } from "@/components/social/chrome";
 import { FeedHeader, FeedPager, PostCard } from "@/components/social/post-card";
 import { EntityBoard, FanbaseBoard, LeaderBoard, Panel } from "@/components/social/panels";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { useSocialFilters } from "@/hooks/use-social-filters";
 import { api, queryErrorMessage } from "@/lib/api";
-import { SOCIAL_SORTS, rangeToDates } from "@/lib/social";
+import { SOCIAL_SORTS, previousWindow, rangeToDates, risingEntity } from "@/lib/social";
 
 const FEED_PAGE_SIZE = 10;
 
@@ -83,6 +83,19 @@ function SocialBody() {
     queryFn: () => api.listSocialEntities("team", dateWindow),
     enabled: anchored,
   });
+  // The window before this one, for "Rising". Deeper lists than the boards
+  // show, so a name just off last window's top few still counts what it had.
+  const before = useMemo(() => previousWindow(dateWindow), [dateWindow]);
+  const previousPlayersQuery = useQuery({
+    queryKey: ["social-players", before, "rising"],
+    queryFn: () => api.listSocialEntities("player", { ...before, limit: 100 }),
+    enabled: anchored,
+  });
+  const previousTeamsQuery = useQuery({
+    queryKey: ["social-teams", before, "rising"],
+    queryFn: () => api.listSocialEntities("team", { ...before, limit: 100 }),
+    enabled: anchored,
+  });
   const fanbasesQuery = useQuery({
     queryKey: ["social-fanbases", dateWindow],
     queryFn: () => api.listSocialFanbases({ ...dateWindow, limit: 12 }),
@@ -104,6 +117,18 @@ function SocialBody() {
   const feedTotal = feedQuery.data?.meta.total ?? 0;
   const contested = contestedQuery.data?.data ?? [];
   const players = playersQuery.data?.data ?? [];
+  const teams = teamsQuery.data?.data ?? [];
+  const previousEntities = [
+    ...(previousPlayersQuery.data?.data ?? []),
+    ...(previousTeamsQuery.data?.data ?? []),
+  ];
+  const rising = risingEntity(
+    [
+      { kind: "player", entities: players },
+      { kind: "team", entities: teams },
+    ],
+    previousEntities
+  );
 
   return (
     <div className="space-y-[var(--ct-space-5)]">
@@ -117,7 +142,15 @@ function SocialBody() {
         </p>
       </header>
 
-      <SummaryStrip summary={summary} topPlayer={players[0]} mostContested={contested[0]} />
+      <SummaryStrip
+        range={range}
+        topTeam={teams[0]}
+        topPlayer={players[0]}
+        rising={rising}
+        compared={previousEntities.length > 0}
+        mostContested={contested[0]}
+        contestedCount={summary?.contested_post_count ?? 0}
+      />
 
       <div>
         <SocialControls
@@ -164,7 +197,7 @@ function SocialBody() {
               note="Nicknames, city names and common shorthand all count."
             >
               <EntityBoard
-                rows={(teamsQuery.data?.data ?? []).slice(0, 8)}
+                rows={teams.slice(0, 8)}
                 unit="Team"
                 emptyMessage="No team mentions in this range."
               />
@@ -197,6 +230,8 @@ function SocialBody() {
           />
         </Panel>
       </div>
+
+      <AboutSocialData summary={summary} />
     </div>
   );
 }

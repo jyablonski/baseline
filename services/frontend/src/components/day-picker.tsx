@@ -11,29 +11,38 @@ const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
 /**
  * ← [Sat, Jun 13 ▾] →: steps between game days, or opens a month grid where
- * only days with games can be picked. Days off are skipped either way.
+ * only days with games can be picked. Days off are skipped either way. Shared
+ * by /games (finished days, home is the newest) and /schedule (days still to
+ * play, home is the soonest); `dayNavigation` works out the neighbours.
  */
 export function DayPicker({
   current,
-  latest,
+  home,
+  homeLabel,
   older,
   newer,
   gameDays,
   onPick,
 }: {
   current: string;
-  latest: string;
+  /** Where the jump-back button goes. */
+  home: string;
+  /** That button's name: "Latest" for results, "Today" or "Next up" for the schedule. */
+  homeLabel: string;
   older: string | null;
   newer: string | null;
-  /** Every date with a game, newest first. */
+  /** Every date with a game, in any order. */
   gameDays: string[];
   onPick: (date: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(monthOf(current));
   const days = new Set(gameDays);
-  const firstMonth = monthOf(gameDays.at(-1) ?? current);
-  const lastMonth = monthOf(latest);
+  const sorted = [...days].sort();
+  // The grid spans every game day, and the day on screen if it falls outside them.
+  const months = [sorted[0] ?? current, sorted.at(-1) ?? current, current].map(monthOf).sort();
+  const firstMonth = months[0];
+  const lastMonth = months[2];
 
   function pick(date: string) {
     setOpen(false);
@@ -60,7 +69,9 @@ export function DayPicker({
         }}
       >
         <PopoverTrigger
-          className="flex h-[var(--ct-control-page)] items-center gap-2 border-x border-rule-strong px-4 font-semibold hover:bg-tint"
+          // A fixed width (the widest date, "Wed, Dec 16", fits) so the arrows never
+          // move as the day changes, and sit in the same place on /games and /schedule.
+          className="flex h-[var(--ct-control-page)] min-w-[9.5em] items-center justify-center gap-2 border-x border-rule-strong px-4 font-semibold hover:bg-tint"
           aria-label={`Pick a game day, showing ${formatDayShort(current)}`}
         >
           <span className="tabular">{formatDayShort(current)}</span>
@@ -149,10 +160,10 @@ export function DayPicker({
             <button
               type="button"
               className="text-primary hover:underline disabled:text-ink-3 disabled:no-underline"
-              disabled={current === latest}
-              onClick={() => pick(latest)}
+              disabled={current === home}
+              onClick={() => pick(home)}
             >
-              Latest
+              {homeLabel}
             </button>
           </div>
         </PopoverContent>
@@ -166,6 +177,42 @@ export function DayPicker({
       >
         →
       </button>
+    </div>
+  );
+}
+
+/**
+ * The title row over a day of games, shared by /games and /schedule so the two
+ * line up: "Latest · Saturday, June 13" with a count under it, the picker on
+ * the right, and a rule beneath. `rule` is light where a table head right below
+ * already draws the strong line.
+ */
+export function DayHeader({
+  title,
+  summary,
+  rule = "strong",
+  children,
+}: {
+  title: string;
+  /** The line under the title ("Finals · 3 games"); omitted while the day loads. */
+  summary?: string | null;
+  rule?: "strong" | "light";
+  /** The DayPicker. */
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-end justify-between gap-3 border-b pb-3",
+        rule === "strong" ? "border-rule-strong" : "border-rule"
+      )}
+    >
+      <div>
+        <h2 className="type-module">{title}</h2>
+        {/* Holds its line while empty, so the rule does not jump as a day loads. */}
+        <p className="mt-0.5 min-h-[1lh] text-xs text-ink-2">{summary}</p>
+      </div>
+      {children}
     </div>
   );
 }

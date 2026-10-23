@@ -119,6 +119,59 @@ def test_list_game_dates(client, session, mapping_row, query_result) -> None:
 
 
 @pytest.mark.unit
+def test_list_schedule_dates(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {"game_date": date(2026, 10, 22), "season": "2026-27", "game_count": 11}
+                ),
+                mapping_row(
+                    {"game_date": date(2026, 10, 24), "season": "2026-27", "game_count": 6}
+                ),
+            ]
+        )
+    ]
+    response = client.get(
+        "/api/v1/schedule/dates", params={"season": "2026-27", "from_date": "2026-10-22"}
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"game_date": "2026-10-22", "season": "2026-27", "game_count": 11},
+            {"game_date": "2026-10-24", "season": "2026-27", "game_count": 6},
+        ],
+        "meta": {"total": 2, "limit": 2, "offset": 0},
+    }
+    _, params = session.calls[-1]
+    assert params == {"season": "2026-27", "from_date": date(2026, 10, 22)}
+
+
+@pytest.mark.unit
+def test_list_schedule_dates_defaults_to_today_and_can_be_empty(
+    client, session, query_result
+) -> None:
+    session.queue = [query_result([])]
+    response = client.get("/api/v1/schedule/dates")
+    assert response.status_code == 200
+    assert response.json() == {"data": [], "meta": {"total": 0, "limit": 0, "offset": 0}}
+    _, params = session.calls[-1]
+    assert params == {"season": None, "from_date": date.today()}
+    assert client.get("/api/v1/schedule/dates?from_date=soon").status_code == 422
+
+
+@pytest.mark.unit
+def test_list_schedule_dates_sql_counts_unplayed_games_oldest_first() -> None:
+    from queries.games import LIST_SCHEDULE_DATES
+
+    sql = str(LIST_SCHEDULE_DATES)
+    assert "FROM gold.fct_games_schedule" in sql
+    assert "fct_games_schedule.game_date >= :from_date" in sql
+    assert "lower(fct_games_schedule.status) NOT IN ('final', '3')" in sql
+    assert "ORDER BY fct_games_schedule.game_date ASC" in sql
+
+
+@pytest.mark.unit
 def test_list_largest_margins(client, session, mapping_row, query_result) -> None:
     from queries.games import LIST_LARGEST_MARGINS
 

@@ -35,24 +35,6 @@ export function quarterAxisTicks(maxPeriod: number | null | undefined) {
   });
 }
 
-export function formatBiggestRunCaption(run: {
-  biggest_run_team_abbreviation?: string | null;
-  biggest_run_winner_points?: number | null;
-  biggest_run_opponent_points?: number | null;
-  biggest_run_label?: string | null;
-}): string | null {
-  if (run.biggest_run_label) {
-    return run.biggest_run_label.startsWith("Biggest run:")
-      ? run.biggest_run_label
-      : `Biggest run: ${run.biggest_run_label}`;
-  }
-  const abbr = run.biggest_run_team_abbreviation;
-  const winner = run.biggest_run_winner_points;
-  const opponent = run.biggest_run_opponent_points;
-  if (!abbr || winner == null || opponent == null) return null;
-  return `Biggest run: ${abbr} ${winner}-${opponent}`;
-}
-
 export function formatMatchupTitle(flow: {
   away_team_name?: string | null;
   home_team_name?: string | null;
@@ -99,8 +81,39 @@ export type BiggestRun = {
   biggest_run_opponent_points: number;
   biggest_run_start_seconds: number;
   biggest_run_end_seconds: number;
+  /** Indices into the events passed in: the run's first and last scoring play. */
+  biggest_run_start_index: number;
+  biggest_run_end_index: number;
   biggest_run_label: string;
 };
+
+type TeamAbbreviations = { homeAbbreviation?: string | null; awayAbbreviation?: string | null };
+
+/** Who led and by how much, from the home-minus-away differential: "DAL +4". */
+export function formatLead(differential: number, teams?: TeamAbbreviations): string {
+  if (differential === 0) return "Tied";
+  const abbr =
+    differential > 0 ? teams?.homeAbbreviation || "Home" : teams?.awayAbbreviation || "Away";
+  return `${abbr} +${Math.abs(differential)}`;
+}
+
+type ClockPoint = {
+  period: number | null;
+  clock: string | null;
+  clock_remaining_seconds?: number | null;
+};
+
+/** "Q1 10:04–6:17", naming the second quarter only when the run crosses one. */
+export function formatRunSpan(from: ClockPoint, to: ClockPoint): string {
+  const fromPeriod = periodLabel(from.period ?? 1);
+  const toPeriod = periodLabel(to.period ?? from.period ?? 1);
+  const fromClock = formatGameClock(from.clock, from.clock_remaining_seconds);
+  const toClock = formatGameClock(to.clock, to.clock_remaining_seconds);
+  const samePeriod = fromPeriod === toPeriod;
+  // Without both clocks a range would dangle, so say only the quarter(s).
+  if (!fromClock || !toClock) return samePeriod ? fromPeriod : `${fromPeriod}–${toPeriod}`;
+  return `${fromPeriod} ${fromClock}–${samePeriod ? toClock : `${toPeriod} ${toClock}`}`;
+}
 
 export function formatGameClock(
   clock?: string | null,
@@ -229,7 +242,7 @@ function formatPlayToken(token: string): string | null {
 
 export function selectBiggestRun(
   events: ScoringPlay[],
-  teams?: { homeAbbreviation?: string | null; awayAbbreviation?: string | null }
+  teams?: TeamAbbreviations
 ): BiggestRun | null {
   if (events.length === 0) return null;
   const homeAbbr = teams?.homeAbbreviation || "Home";
@@ -244,6 +257,8 @@ export function selectBiggestRun(
     teamAbbr: string;
     teamPts: number;
     oppPts: number;
+    startIndex: number;
+    endIndex: number;
   } | null = null;
 
   for (let startIndex = 0; startIndex < events.length; startIndex += 1) {
@@ -273,6 +288,8 @@ export function selectBiggestRun(
         teamAbbr: homeLeads ? homeAbbr : awayAbbr,
         teamPts,
         oppPts,
+        startIndex,
+        endIndex,
       };
       if (isBetterRun(candidate, best)) best = candidate;
     }
@@ -285,7 +302,9 @@ export function selectBiggestRun(
     biggest_run_opponent_points: best.oppPts,
     biggest_run_start_seconds: best.start,
     biggest_run_end_seconds: best.end,
-    biggest_run_label: `${best.teamAbbr} ${best.teamPts}-${best.oppPts}`,
+    biggest_run_start_index: best.startIndex,
+    biggest_run_end_index: best.endIndex,
+    biggest_run_label: `${best.teamAbbr} ${best.teamPts}–${best.oppPts}`,
   };
 }
 

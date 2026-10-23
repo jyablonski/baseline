@@ -34,7 +34,8 @@ export function FeedHeader({ total, sortLabel }: { total: number; sortLabel?: st
       <div className="flex items-baseline gap-[var(--ct-space-3)]">
         <h2 className="type-module">Feed</h2>
         <span className="type-caption">
-          {formatCount(total)} posts{sortLabel ? ` · ${sortLabel}` : ""}
+          {formatCount(total)} {total === 1 ? "post" : "posts"}
+          {sortLabel ? ` · ${sortLabel}` : ""}
         </span>
       </div>
       <span className="type-eyebrow text-right">Score</span>
@@ -113,7 +114,11 @@ export function PostCard({
           ) : null}
         </p>
 
-        <h3 className="type-module mt-2 leading-snug">{post.title}</h3>
+        {/* The headline leads the row: a step above the module size, and the figures
+            beside it a step below the stat size, so they no longer compete. */}
+        <h3 className="type-module mt-2 text-[length:var(--ct-fs-feed-title)] leading-snug">
+          {post.title}
+        </h3>
 
         <p className="type-caption mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
           <span>u/{post.author ?? "author unavailable"}</span>
@@ -154,13 +159,15 @@ export function PostCard({
 
       <p
         className={cn(
-          "type-stat tabular text-right leading-none",
+          "tabular text-right text-[length:var(--ct-fs-feed-stat)] leading-none font-semibold",
           post.score >= HIGH_SCORE && "text-primary"
         )}
       >
         {formatCount(post.score)}
       </p>
-      <p className="type-stat tabular text-right leading-none">{formatCount(post.num_comments)}</p>
+      <p className="tabular text-right text-[length:var(--ct-fs-feed-stat)] leading-none font-semibold">
+        {formatCount(post.num_comments)}
+      </p>
     </article>
   );
 }

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 import pytest
 from ids import (
     GAME_ONE,
@@ -126,6 +128,38 @@ def test_games_and_seasons(integration_client) -> None:
     assert dates[0] == {"game_date": "2024-10-25", "season": "2024-25", "game_count": 1}
     assert (
         integration_client.get("/api/v1/games/dates", params={"season": "2019-20"}).json()["data"]
+        == []
+    )
+
+    # Only games still to play, oldest first: the two Finals in the seed are left out.
+    upcoming = integration_client.get("/api/v1/schedule/dates").json()
+    today = date.today()
+    assert upcoming["data"] == [
+        {
+            "game_date": (today + timedelta(days=14)).isoformat(),
+            "season": "2024-25",
+            "game_count": 1,
+        },
+        {
+            "game_date": (today + timedelta(days=15)).isoformat(),
+            "season": "2024-25",
+            "game_count": 1,
+        },
+    ]
+    assert upcoming["meta"] == {"total": 2, "limit": 2, "offset": 0}
+    later = integration_client.get(
+        "/api/v1/schedule/dates", params={"from_date": (today + timedelta(days=15)).isoformat()}
+    ).json()["data"]
+    assert [row["game_date"] for row in later] == [(today + timedelta(days=15)).isoformat()]
+    # A Final's date never shows up, even when asked for from long before it.
+    since_opening = integration_client.get(
+        "/api/v1/schedule/dates", params={"from_date": "2024-10-01"}
+    ).json()["data"]
+    assert "2024-10-22" not in [row["game_date"] for row in since_opening]
+    assert (
+        integration_client.get("/api/v1/schedule/dates", params={"season": "2019-20"}).json()[
+            "data"
+        ]
         == []
     )
 

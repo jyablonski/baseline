@@ -333,6 +333,15 @@ function publicApi(path) {
   if (path === "/seasons") {
     return [200, { data: [{ season: "2025-26" }], meta: { total: 1, limit: 1, offset: 0 } }];
   }
+  if (path === "/schedule/dates") {
+    // One row per day, oldest first, the way the API counts them.
+    const counts = new Map();
+    for (const game of GAMES) counts.set(game.game_date, (counts.get(game.game_date) ?? 0) + 1);
+    const data = [...counts]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([game_date, game_count]) => ({ game_date, season: "2025-26", game_count }));
+    return [200, { data, meta: { total: data.length, limit: data.length, offset: 0 } }];
+  }
   if (path === "/schedule") {
     return [200, { data: GAMES, meta: { total: GAMES.length, limit: 50, offset: 0 } }];
   }

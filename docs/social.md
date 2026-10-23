@@ -66,6 +66,10 @@ All under `/api/v1/social`, gold-only, no Cube. Every list takes `from_date` / `
 
 `num_comments` is the real Reddit total and `captured_comment_count` is at most 10. **Any UI showing a comment list must label it as a sample.**
 
+## Page
+
+`/social` opens with a strip of four cards: Most discussed team, Most discussed player, Rising, and Most contested. Rising is the player or team whose post count grew most against the window just before, the same length and ending the day before this one starts (`previousWindow`, `risingEntity` in `lib/social.ts`); the page reads that window from `/entities` with `limit=100`, so a name just off its top few still counts what it had. A name missing from it counts from zero, and an empty window before shows no Rising at all, since that is a gap in collection rather than a surge. How much was collected (posts, posters, comments captured against the real total) is in an "About this data" line at the foot of the page, not in the strip.
+
 ## Refresh stamp
 
 `source.scrape_pipeline.daily_refresh_utc` (TIME, nullable) is **hand-maintained** — nothing writes it, and editing the host crontab does not update it. `GET /api/v1/status` rolls it forward to the next occurrence as `next_scrape_at`, or returns null when unset. A non-daily schedule would need a cron expression and a parser instead.

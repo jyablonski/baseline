@@ -134,6 +134,8 @@ describe("turningPointCard", () => {
     biggest_run_opponent_points: 5,
     biggest_run_start_seconds: 2400,
     biggest_run_end_seconds: 2880,
+    biggest_run_start_index: 40,
+    biggest_run_end_index: 52,
     biggest_run_label: "NYK 19-5",
   };
 

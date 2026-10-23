@@ -64,7 +64,7 @@ function renderPlot(props: { season?: string; enabled?: boolean } = {}) {
 
 function plotted(overrides: Partial<PlottedPlayer> = {}): PlottedPlayer {
   const [point] = playerValuePoints([row(40, "Jaren Jackson Jr.", "MEM", 20, 30_000_000)]);
-  return { ...point, labelled: false, dimmed: false, ...overrides };
+  return { ...point, labelled: false, picked: false, dimmed: false, ...overrides };
 }
 
 describe("player value plot", () => {
@@ -87,7 +87,19 @@ describe("player value plot", () => {
     expect(legend("MVP candidate").querySelector("[aria-hidden]")).toHaveStyle({
       background: "#5B3A8C",
     });
-    expect(screen.getByText(/MVP score is a proprietary Baseline metric/)).toBeInTheDocument();
+    // What MVP score is sits behind an info button, not in the caption.
+    expect(screen.queryByText(/proprietary Baseline metric/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "About MVP score" }));
+    const tip = await screen.findByRole("dialog", { name: "MVP score" });
+    expect(tip).toHaveTextContent("A proprietary Baseline metric that combines");
+    expect(tip).toHaveTextContent("The top 10 are the MVP candidates on the plot.");
+    fireEvent.click(within(tip).getByRole("button", { name: "Close" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "MVP score" })).not.toBeInTheDocument()
+    );
+    // No caption under the plot: the legend and the labelled median lines say it.
+    expect(screen.queryByText(/Undervalued and Overpaid mean/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/dashed lines mark/)).not.toBeInTheDocument();
     // A rule closes the plot off from the directory filters below it.
     expect(screen.getByRole("region", { name: "Production vs Salary" })).toHaveClass("border-b");
   });
@@ -199,7 +211,7 @@ describe("player value scatter pieces", () => {
     expect(container.querySelector(".recharts-wrapper, svg, div")).toBeTruthy();
   });
 
-  it("draws a dot that links to the player, named only when labelled", () => {
+  it("draws a dot that links to the player; names come from the chart's label layer", () => {
     const { container, rerender } = render(
       <svg>
         <PlayerDot cx={10} cy={20} payload={plotted()} />
@@ -215,7 +227,7 @@ describe("player value scatter pieces", () => {
         <PlayerDot cx={10} cy={20} payload={plotted({ labelled: true, category: "overpaid" })} />
       </svg>
     );
-    expect(container.querySelector("text")).toHaveTextContent("Jackson Jr.");
+    expect(container.querySelector("text")).toBeNull();
     expect(container.querySelector("circle")).toHaveAttribute("fill", "#9B2C22");
     expect(container.querySelector("circle")).toHaveAttribute("fill-opacity", "1");
 
@@ -232,6 +244,119 @@ describe("player value scatter pieces", () => {
       </svg>
     );
     expect(container.querySelector("circle")).toBeNull();
+  });
+
+  it("rings a picked player, bigger and bolder than a candidate named by default", () => {
+    const { container, rerender } = render(
+      <svg>
+        <PlayerDot cx={10} cy={20} payload={plotted({ labelled: true, category: "mvp" })} />
+      </svg>
+    );
+    // A default candidate label: named, but no ring and no dark outline.
+    expect(screen.queryByTestId("pick-ring")).not.toBeInTheDocument();
+    expect(container.querySelector("circle")).toHaveAttribute("r", "6");
+    expect(container.querySelector("circle")).toHaveAttribute("stroke", "#FBFAF5");
+
+    rerender(
+      <svg>
+        <PlayerDot
+          cx={10}
+          cy={20}
+          payload={plotted({ labelled: true, picked: true, category: "mvp" })}
+        />
+      </svg>
+    );
+    const ring = screen.getByTestId("pick-ring");
+    expect(ring).toHaveAttribute("r", "11");
+    expect(ring).toHaveAttribute("stroke", "#1A1A1A");
+    expect(ring).toHaveAttribute("fill", "none");
+    const dot = container.querySelectorAll("circle")[1];
+    expect(dot).toHaveAttribute("r", "7.5");
+    expect(dot).toHaveAttribute("fill", "#5B3A8C");
+  });
+
+  it("names candidates by default and only the picks once something is picked", () => {
+    const points = playerValuePoints(ROWS);
+    const { rerender } = render(
+      <PlayerValueScatter points={points} teams={new Set()} players={new Set()} />
+    );
+    const layer = () => screen.getByTestId("player-labels");
+    const names = () => [...layer().querySelectorAll("text")].map((text) => text.textContent);
+    expect(names().sort()).toEqual(["Curry", "Jokić"]);
+    for (const text of layer().querySelectorAll("text")) {
+      expect(text).toHaveAttribute("font-weight", "500");
+      expect(text).toHaveAttribute("font-size", "12");
+    }
+    // The name links to the player too, but only the dot is announced and focusable.
+    const nameLink = within(layer()).getByText("Jokić").closest("a");
+    expect(nameLink?.getAttribute("href")).toBe(
+      screen.getByRole("link", { name: "Nikola Jokić" }).getAttribute("href")
+    );
+    expect(nameLink).toHaveAttribute("aria-hidden", "true");
+    expect(nameLink).toHaveAttribute("tabindex", "-1");
+
+    rerender(<PlayerValueScatter points={points} teams={new Set()} players={new Set(["p13"])} />);
+    expect(names()).toEqual(["Player"]);
+    const picked = within(layer()).getByText("Player");
+    expect(picked).toHaveAttribute("font-weight", "700");
+    expect(picked).toHaveAttribute("font-size", "13");
+  });
+
+  it("pulls two candidates' names apart when their dots nearly touch", () => {
+    const twins = playerValuePoints([
+      row(1, "Shai Gilgeous-Alexander", "OKC", 34.2, 38_300_000),
+      row(2, "Tyrese Maxey", "PHI", 34.0, 37_900_000),
+      ...ROWS.slice(2),
+    ]);
+    render(<PlayerValueScatter points={twins} teams={new Set()} players={new Set()} />);
+    const layer = screen.getByTestId("player-labels");
+    const sga = within(layer).getByText("Gilgeous-Alexander");
+    const maxey = within(layer).getByText("Maxey");
+    // The higher rank keeps the spot beside its dot; the other takes another side or line.
+    expect(sga).toHaveAttribute("text-anchor", "start");
+    const sameLine = sga.getAttribute("y") === maxey.getAttribute("y");
+    const sameSide = sga.getAttribute("text-anchor") === maxey.getAttribute("text-anchor");
+    expect(sameLine && sameSide).toBe(false);
+  });
+
+  it("labels both median lines and keeps the grid solid", () => {
+    const points = playerValuePoints(ROWS);
+    const { container } = render(
+      <PlayerValueScatter points={points} teams={new Set()} players={new Set()} />
+    );
+    const texts = [...container.querySelectorAll("svg text")].map((text) => text.textContent);
+    // Salaries 2.5, 12, 20, 48, 55, 59 → median 34; scores 6…38 → median 21.
+    expect(texts).toContain("Median salary $34M");
+    expect(texts).toContain("Median MVP score 21.0");
+    const references = container.querySelectorAll(".recharts-reference-line-line");
+    expect(references).toHaveLength(2);
+    for (const line of references) expect(line).toHaveAttribute("stroke-dasharray", "5 4");
+    // Only the medians are dashed.
+    for (const line of container.querySelectorAll(".recharts-cartesian-grid line")) {
+      expect(line).not.toHaveAttribute("stroke-dasharray");
+    }
+  });
+
+  it("rings only the picks, drawn after every other dot", () => {
+    const points = playerValuePoints(ROWS);
+    const { container, rerender } = render(
+      <PlayerValueScatter points={points} teams={new Set()} players={new Set()} />
+    );
+    // Nobody picked: candidates are named, nobody is ringed.
+    expect(screen.queryAllByTestId("pick-ring")).toHaveLength(0);
+
+    rerender(<PlayerValueScatter points={points} teams={new Set(["DEN"])} players={new Set()} />);
+    expect(screen.getAllByTestId("pick-ring")).toHaveLength(2);
+    const names = [...container.querySelectorAll("a[aria-label]")].map((link) =>
+      link.getAttribute("aria-label")
+    );
+    // Jokić (a candidate) and Max Mistake are DEN's two; they paint last.
+    expect(names.slice(-2).sort()).toEqual(["Max Mistake", "Nikola Jokić"]);
+
+    rerender(<PlayerValueScatter points={points} teams={new Set()} players={new Set(["p13"])} />);
+    expect(screen.getAllByTestId("pick-ring")).toHaveLength(1);
+    const last = [...container.querySelectorAll("a[aria-label]")].at(-1);
+    expect(last).toHaveAttribute("aria-label", "Role Player");
   });
 
   it("shows the player, score, pay, and group in the tooltip", () => {

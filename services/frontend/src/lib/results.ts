@@ -1,6 +1,6 @@
 import { utcDate } from "@/lib/calendar";
 import { stageOf, type Stage } from "@/lib/game-story";
-import type { GameDate, LeagueGame } from "@/lib/types";
+import type { LeagueGame } from "@/lib/types";
 
 // The /games results day. Dates are Eastern calendar dates ("2026-06-13"),
 // newest first, as GET /api/v1/games/dates returns them.
@@ -33,30 +33,6 @@ export function formatDayShort(date: string) {
     day: "numeric",
     timeZone: "UTC",
   });
-}
-
-/** A real calendar date: "2026-02-30" parses, but rolls over to March. */
-function isCalendarDate(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = utcDate(value);
-  // An impossible month is an Invalid Date, whose toISOString throws.
-  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
-}
-
-/**
- * The date on screen and its neighbours with games. `requested` falls back to
- * the newest date when it is missing or not a real date; a requested date with no games is kept,
- * so the page can say so, and steps to the nearest game days around it.
- */
-export function dayNavigation(dates: GameDate[], requested: string | null) {
-  const days = dates.map((item) => item.game_date.slice(0, 10));
-  const latest = days[0] ?? null;
-  const current = requested && isCalendarDate(requested) ? requested : latest;
-  if (!current) return { current: null, latest: null, older: null, newer: null };
-  // Newest first, so older days come after the current one.
-  const older = days.find((day) => day < current) ?? null;
-  const newer = [...days].reverse().find((day) => day > current) ?? null;
-  return { current, latest, older, newer };
 }
 
 /**

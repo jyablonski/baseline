@@ -205,6 +205,8 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         }
         if (url.includes("/social/entities")) {
           const isTeam = url.includes("entity_type=team");
+          // limit=100 is the window before, read for Rising: the Clippers climb from 4.
+          const before = url.includes("limit=100");
           return page(
             empty
               ? []
@@ -214,7 +216,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                     entity_name: isTeam ? "LA Clippers" : "Kawhi Leonard",
                     entity_abbreviation: isTeam ? "LAC" : null,
                     entity_nickname: isTeam ? "Clippers" : null,
-                    post_count: 9,
+                    post_count: before && isTeam ? 4 : 9,
                     comment_count: 63,
                     total_post_score: 41022,
                     top_post_score: 12817,
@@ -709,6 +711,20 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         });
       }
 
+      // Before /schedule, which would swallow it: the days the schedule's picker marks.
+      if (url.includes("/schedule/dates")) {
+        const fromDate = new URL(url, "http://localhost").searchParams.get("from_date");
+        const dates = empty
+          ? []
+          : [
+              { game_date: "2026-10-22", season: "2025-26", game_count: 1 },
+              ...(scheduleSecondDay
+                ? [{ game_date: "2026-10-24", season: "2025-26", game_count: 1 }]
+                : []),
+            ].filter((day) => !fromDate || day.game_date >= fromDate);
+        return json({ data: dates, meta: { total: dates.length, limit: dates.length, offset: 0 } });
+      }
+
       if (url.includes("/schedule")) {
         const fromDate = new URL(url, "http://localhost").searchParams.get("from_date");
         const games = empty
@@ -1186,4 +1202,22 @@ export async function expectPrimaryNav(page: Page) {
 export async function expectNo2010Range(page: Page) {
   await expect(page.getByText(/2010-11/)).toHaveCount(0);
   await expect(page.getByText(/since 2010-11/i)).toHaveCount(0);
+}
+
+/**
+ * Answer every play-by-play request with these events instead of the default
+ * fixture. Call after `mockApi`: init scripts run in order, so this wraps its fetch.
+ */
+export async function mockPlayByPlay(page: Page, events: unknown[]) {
+  await page.addInitScript((rows: unknown[]) => {
+    const inner = window.fetch;
+    window.fetch = async (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (!url.includes("/play-by-play")) return inner(input, init);
+      return new Response(
+        JSON.stringify({ data: rows, meta: { total: rows.length, limit: rows.length, offset: 0 } }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    };
+  }, events);
 }

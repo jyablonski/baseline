@@ -2,16 +2,18 @@
 
 import { Suspense } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
-import { DayPicker } from "@/components/games/day-picker";
+import { DayHeader, DayPicker } from "@/components/day-picker";
 import { ResultTags } from "@/components/games/result-tags";
 import { SeasonNotables } from "@/components/games/season-notables";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamLogo } from "@/components/team-logo";
 import { api, queryErrorMessage } from "@/lib/api";
-import { dayNavigation, daySummary, formatDayTitle, resultSides } from "@/lib/results";
+import { useDayParam } from "@/hooks/use-day-param";
+import { dayNavigation } from "@/lib/calendar";
+import { daySummary, formatDayTitle, resultSides } from "@/lib/results";
 import type { LeagueGame } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -27,26 +29,18 @@ export default function GamesPage() {
 }
 
 function GamesIndex() {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const datesQuery = useQuery({
     queryKey: ["games", "dates"],
     queryFn: () => api.listGameDates(),
   });
   const dates = datesQuery.data?.data ?? [];
-  const { current, latest, older, newer } = dayNavigation(dates, searchParams.get("date"));
+  const { current, home: latest, older, newer } = dayNavigation(dates, searchParams.get("date"));
   // Notables follow the newest season with a finished game, not the schedule's:
   // before opening night that is still last season.
   const season = dates[0]?.season ?? "";
 
-  function showDay(date: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (date === latest) params.delete("date");
-    else params.set("date", date);
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }
+  const showDay = useDayParam(latest);
 
   return (
     <div className="space-y-10">
@@ -74,7 +68,8 @@ function GamesIndex() {
             picker={
               <DayPicker
                 current={current}
-                latest={latest}
+                home={latest}
+                homeLabel="Latest"
                 older={older}
                 newer={newer}
                 gameDays={dates.map((item) => item.game_date.slice(0, 10))}
@@ -110,15 +105,12 @@ function ResultsDay({
 
   return (
     <section aria-label="Results" className="space-y-2">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-rule-strong pb-3">
-        <div>
-          <h2 className="type-module">{date === latest ? `Latest · ${title}` : title}</h2>
-          {games.length > 0 && !gamesQuery.isPlaceholderData ? (
-            <p className="mt-0.5 text-xs text-ink-2">{daySummary(games)}</p>
-          ) : null}
-        </div>
+      <DayHeader
+        title={date === latest ? `Latest · ${title}` : title}
+        summary={games.length > 0 && !gamesQuery.isPlaceholderData ? daySummary(games) : null}
+      >
         {picker}
-      </div>
+      </DayHeader>
       {gamesQuery.isPending ? (
         <LoadingState label="Loading results…" />
       ) : gamesQuery.isError ? (

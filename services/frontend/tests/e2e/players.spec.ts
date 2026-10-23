@@ -135,8 +135,22 @@ test("players page plots production vs salary and highlights a picked team", asy
   await expect(page.getByText(/^Undervalued\s*1$/)).toBeVisible();
   await expect(page.getByText(/^Overpaid\s*1$/)).toBeVisible();
 
+  // Hovering the info button explains MVP score; moving away closes it.
+  const mvpTip = page.getByRole("dialog", { name: "MVP score" });
+  await page.getByRole("button", { name: "About MVP score" }).hover();
+  await expect(mvpTip).toContainText("proprietary Baseline metric");
+  await page.getByRole("heading", { name: "Production vs Salary" }).hover();
+  await page.mouse.move(0, 0);
+  await expect(mvpTip).toHaveCount(0);
+
+  // The dashed lines say what they are, and nobody is ringed until picked.
+  await expect(page.locator("svg text", { hasText: /^Median salary \$/ })).toBeVisible();
+  await expect(page.locator("svg text", { hasText: /^Median MVP score / })).toBeVisible();
+  await expect(page.getByTestId("pick-ring")).toHaveCount(0);
+
   await page.getByLabel("Highlight a team").selectOption("LAL");
   await expect(page.getByRole("list", { name: "Highlighted" })).toContainText("LAL");
+  await expect(page.getByTestId("pick-ring").first()).toBeVisible();
   // Now the picked team is named instead.
   await expect(page.locator("svg text", { hasText: "Wing" })).toBeVisible();
   await expect(page.locator("svg text", { hasText: "Jokic" })).toHaveCount(0);

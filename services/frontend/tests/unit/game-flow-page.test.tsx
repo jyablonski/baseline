@@ -223,10 +223,71 @@ describe("game flow page", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Biggest run: NYK 16-2")).toBeInTheDocument();
+      expect(screen.getByTestId("flow-facts")).toHaveTextContent("Biggest run NYK 16–2");
     });
     expect(screen.queryByText(/79-59/)).not.toBeInTheDocument();
     expect(screen.queryByText(/PT08M36/)).not.toBeInTheDocument();
+  });
+
+  it("leads the flow facts with the biggest run, and leaves it out when nobody scored", async () => {
+    const flow = {
+      game_id: "0042500405",
+      season: "2025-26",
+      game_date: "2026-06-13",
+      home_team_id: 1610612759,
+      away_team_id: 1610612752,
+      home_team_abbreviation: "SAS",
+      away_team_abbreviation: "NYK",
+      has_play_by_play: true,
+      home_lead_pct: 0.2,
+      away_lead_pct: 0.7,
+      max_lead: 14,
+      max_home_lead: 1,
+      max_away_lead: 14,
+      lead_changes: 3,
+      ties: 2,
+    };
+    const event = (action_number: number, score_home: number, score_away: number) => ({
+      game_id: "0042500405",
+      action_number,
+      period: 1,
+      clock: null,
+      elapsed_seconds: action_number * 10,
+      score_home,
+      score_away,
+      score_differential: score_home - score_away,
+    });
+    getGameFlow.mockResolvedValue(flow);
+    getGameBoxScore.mockResolvedValue(EMPTY_PAGE);
+    getGamePlayByPlay.mockResolvedValue({
+      data: [event(1, 0, 3), event(2, 2, 3), event(3, 2, 10)],
+      meta: { total: 3, limit: 3, offset: 0 },
+    });
+
+    const { unmount } = render(
+      <Providers>
+        <GameFlowPage />
+      </Providers>
+    );
+    const facts = await screen.findByTestId("flow-facts");
+    expect(facts).toHaveTextContent(
+      /^Biggest run NYK 10–2\s*NYK led 70%\s*Max lead NYK \+14\s*Lead changes 3\s*Ties 2$/
+    );
+    expect(within(facts).getByText("NYK 10–2")).toHaveClass("font-semibold");
+    unmount();
+
+    getGamePlayByPlay.mockResolvedValue({
+      data: [event(1, 0, 0), event(2, 0, 0)],
+      meta: { total: 2, limit: 2, offset: 0 },
+    });
+    render(
+      <Providers>
+        <GameFlowPage />
+      </Providers>
+    );
+    const quiet = await screen.findByTestId("flow-facts");
+    expect(quiet).not.toHaveTextContent("Biggest run");
+    expect(quiet).toHaveTextContent("Lead changes 3");
   });
 
   it("surfaces the PBP description on a scoring-play tooltip", () => {

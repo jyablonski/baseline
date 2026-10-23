@@ -21,6 +21,7 @@ from queries.games import (
     LIST_PLAY_BY_PLAY,
     LIST_SCHEDULE,
     LIST_SCHEDULE_COUNT,
+    LIST_SCHEDULE_DATES,
     LIST_SEASONS,
     LIST_UPSETS,
 )
@@ -125,6 +126,10 @@ class GamesRepository:
 
     def list_game_dates(self, *, season: str | None) -> list[dict]:
         rows = self.db.execute(LIST_GAME_DATES, {"season": season})
+        return [dict(row._mapping) for row in rows]
+
+    def list_schedule_dates(self, *, season: str | None, from_date: date) -> list[dict]:
+        rows = self.db.execute(LIST_SCHEDULE_DATES, {"season": season, "from_date": from_date})
         return [dict(row._mapping) for row in rows]
 
     def list_upsets(
