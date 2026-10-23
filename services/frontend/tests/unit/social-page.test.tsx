@@ -135,14 +135,16 @@ vi.mock("@/lib/api", () => ({
       ],
       meta: { total: 4, limit: 4, offset: 0 },
     }),
-    listSocialEntities: async (entityType: string) => ({
+    // The deeper (limit 100) read is the window before, for Rising: Kawhi held
+    // level at 9 posts while the Clippers climbed from 4.
+    listSocialEntities: async (entityType: string, params: { limit?: number } = {}) => ({
       data: [
         {
           entity_id: `${entityType}-1`,
           entity_name: entityType === "player" ? "Kawhi Leonard" : "LA Clippers",
           entity_abbreviation: entityType === "team" ? "LAC" : null,
           entity_nickname: entityType === "team" ? "Clippers" : null,
-          post_count: 9,
+          post_count: params.limit === 100 && entityType === "team" ? 4 : 9,
           comment_count: 63,
           total_post_score: 41022,
           top_post_score: 12817,
@@ -194,7 +196,7 @@ vi.mock("@/lib/api", () => ({
 
 import SocialPage from "@/app/social/page";
 import { Providers } from "@/components/providers";
-import { PostCard } from "@/components/social/post-card";
+import { FeedHeader, PostCard } from "@/components/social/post-card";
 
 function renderPage() {
   return render(
@@ -205,11 +207,59 @@ function renderPage() {
 }
 
 describe("social page", () => {
-  it("shows captured comments against the real thread total", async () => {
+  it("leads with basketball in the strip and keeps collection stats in About this data", async () => {
+    const { api } = await import("@/lib/api");
+    const listSocialEntities = vi.spyOn(api, "listSocialEntities");
     renderPage();
-    await waitFor(() => expect(screen.getByText("402")).toBeInTheDocument());
-    expect(screen.getByText("2% of 18,204 posted")).toBeInTheDocument();
-    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2");
+    const strip = (await screen.findByText("Most discussed team")).closest(
+      "[data-slot='kpi-strip']"
+    ) as HTMLElement;
+    expect(
+      [...strip.querySelectorAll("[data-slot='kpi-card']")].map(
+        (card) => card.firstElementChild?.textContent
+      )
+    ).toEqual(["Most discussed team", "Most discussed player", "Rising", "Most contested"]);
+    // Each name links to its page; a team reads by its nickname.
+    expect(await within(strip).findAllByRole("link", { name: "Clippers" })).toHaveLength(2);
+    expect(within(strip).getAllByRole("link", { name: "Clippers" })[0]).toHaveAttribute(
+      "href",
+      "/teams/la-clippers"
+    );
+    expect(within(strip).getByRole("link", { name: "Kawhi Leonard" })).toHaveAttribute(
+      "href",
+      "/players/kawhi-leonard"
+    );
+    // Rising compares with the same-length window just before this one.
+    expect(await within(strip).findByText("+5 posts vs the 24h before (4 → 9)")).toBeVisible();
+    await waitFor(() =>
+      expect(listSocialEntities).toHaveBeenCalledWith("team", {
+        from_date: "2026-09-08",
+        to_date: "2026-09-09",
+        limit: 100,
+      })
+    );
+    // Collection numbers are out of the strip, in a quiet line at the foot.
+    expect(within(strip).queryByText(/posts collected|comments captured/i)).toBeNull();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    const about = screen.getByRole("region", { name: "About this data" });
+    expect(about).toHaveTextContent("41 posts from 33 posters in this range");
+    expect(about).toHaveTextContent("402 of 18,204 comments captured (2%)");
+    expect(about).toHaveTextContent("collected once a day");
+    expect(about).toHaveClass("type-caption");
+  });
+
+  it("sets the feed's figures a step under the headline", async () => {
+    renderPage();
+    const card = await screen.findByRole("article");
+    const headline = within(card).getByRole("heading", { level: 3 });
+    expect(headline.className).toContain("--ct-fs-feed-title");
+    for (const figure of [within(card).getByText("0"), within(card).getByText("132")]) {
+      expect(figure.className).toContain("--ct-fs-feed-stat");
+      expect(figure).not.toHaveClass("type-stat");
+    }
+    expect(screen.getByText("41 posts · score")).toBeInTheDocument();
+    render(<FeedHeader total={1} sortLabel="score" />);
+    expect(screen.getByText("1 post · score")).toBeInTheDocument();
   });
 
   it("leaves the per-post ratio strip off feed cards", async () => {

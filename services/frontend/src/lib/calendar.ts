@@ -1,4 +1,4 @@
-// Month-grid maths for the team calendar. Everything is an Eastern calendar
+// Month-grid maths for the team calendar and the day pickers. Everything is an Eastern calendar
 // date string ("2026-10-22") or month ("2026-10"): game dates are Eastern, and
 // the account time zone only moves the tip time shown in a cell, never the day.
 
@@ -73,4 +73,33 @@ export function formatMonth(month: string) {
     year: "numeric",
     timeZone: "UTC",
   });
+}
+
+/** A real calendar date: "2026-02-30" parses, but rolls over to March. */
+function isCalendarDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = utcDate(value);
+  // An impossible month is an Invalid Date, whose toISOString throws.
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+}
+
+/**
+ * The day on screen and the game days either side of it, for a day picker.
+ * `home` is where the picker starts and its jump-back button goes: the newest
+ * day for results, the soonest for the schedule. `requested` falls back to
+ * `home` when it is missing or not a real date; a requested day with no games
+ * is kept, so the page can say so, and steps to the nearest game days around it.
+ */
+export function dayNavigation(
+  dates: { game_date: string }[],
+  requested: string | null,
+  start: "newest" | "oldest" = "newest"
+) {
+  const days = [...new Set(dates.map((item) => item.game_date.slice(0, 10)))].sort();
+  const home = (start === "newest" ? days.at(-1) : days[0]) ?? null;
+  const current = requested && isCalendarDate(requested) ? requested : home;
+  if (!current) return { current: null, home: null, older: null, newer: null };
+  const older = days.filter((day) => day < current).at(-1) ?? null;
+  const newer = days.find((day) => day > current) ?? null;
+  return { current, home, older, newer };
 }

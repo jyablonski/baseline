@@ -13,6 +13,7 @@ vi.mock("@/lib/api", () => ({
       data: [{ season: "2024-25" }],
       meta: { total: 1, limit: 1, offset: 0 },
     }),
+    listScheduleDates: async () => ({ data: [], meta: { total: 0, limit: 0, offset: 0 } }),
     listSchedule: async () => ({
       data: [],
       meta: { total: 0, limit: 50, offset: 0 },

@@ -1,11 +1,42 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/schedule",
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  useSearchParams: () => new URLSearchParams("season=2026-27"),
-}));
+// The day on screen lives in the URL, so the mock router keeps a real query
+// string that `replace` updates and the page re-reads.
+const nav = vi.hoisted(() => {
+  let search = "season=2026-27";
+  const listeners = new Set<() => void>();
+  return {
+    get: () => search,
+    set: (next: string) => {
+      search = next;
+      for (const listener of listeners) listener();
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    replace: vi.fn(),
+  };
+});
+
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  return {
+    usePathname: () => "/schedule",
+    useRouter: () => ({
+      push: vi.fn(),
+      replace: (url: string) => {
+        nav.replace(url);
+        nav.set(url.split("?")[1] ?? "");
+      },
+    }),
+    useSearchParams: () =>
+      new URLSearchParams(useSyncExternalStore(nav.subscribe, nav.get, nav.get)),
+  };
+});
 
 vi.mock("@/lib/api", () => ({
   api: {
@@ -13,6 +44,13 @@ vi.mock("@/lib/api", () => ({
       data: [{ season: "2026-27" }],
       meta: { total: 1, limit: 1, offset: 0 },
     }),
+    listScheduleDates: async (params: { from_date?: string } = {}) => {
+      const data = [
+        { game_date: "2026-10-22", season: "2026-27", game_count: 2 },
+        { game_date: "2026-10-24", season: "2026-27", game_count: 1 },
+      ].filter((day) => !params.from_date || day.game_date >= params.from_date);
+      return { data, meta: { total: data.length, limit: data.length, offset: 0 } };
+    },
     listSchedule: async (params: { from_date?: string } = {}) => ({
       data: [
         {
@@ -87,6 +125,8 @@ describe("schedule page", () => {
   // two days before the fixtures' slate.
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-20T16:00:00Z") });
+    nav.set("season=2026-27");
+    nav.replace.mockClear();
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -156,33 +196,106 @@ describe("schedule page", () => {
     expect(
       within(help).getByRole("link", { name: "How accurate is the model? →" })
     ).toHaveAttribute("href", "/predictions");
-    for (const column of ["TV", "Moneyline"]) {
+    for (const column of ["TV", "Odds"]) {
       expect(screen.getByRole("button", { name: column })).toBeInTheDocument();
     }
+    expect(screen.queryByRole("button", { name: "Moneyline" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Odds" }));
+    const odds = await screen.findByRole("dialog", { name: "Odds" });
+    expect(odds).toHaveTextContent("The consensus moneyline");
+    expect(odds).toHaveTextContent("consensus point spread for the home team");
     expect(screen.queryByRole("button", { name: "Spread" })).not.toBeInTheDocument();
   });
 
-  it("shows one day of games at a time and pages by game day", async () => {
-    render(
-      <Providers>
-        <SchedulePage />
-      </Providers>
-    );
-    expect(await screen.findByText("Thu, Oct 22, 2026 · 2 games")).toBeInTheDocument();
-    // The later day is fetched but held back until asked for.
+  it("shows one day of games at a time and pages by game day in the URL", async () => {
+    renderPage();
+    // Oct 22 is two days out from the pinned clock: the soonest day, but not today.
+    expect(
+      await screen.findByRole("heading", { name: "Next up · Thursday, October 22" })
+    ).toBeInTheDocument();
+    expect(await screen.findByText("2 games")).toBeInTheDocument();
+    // The later day is held back until asked for.
     expect(screen.queryByText("Kaseya Center")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "← Prev day" })).toBeDisabled();
+    const picker = screen.getByRole("group", { name: "Game day" });
+    expect(within(picker).getByRole("button", { name: "Earlier game day" })).toBeDisabled();
 
-    // Oct 23 has no games, so Next lands on Oct 24.
-    fireEvent.click(screen.getByRole("button", { name: "Next day →" }));
-    expect(await screen.findByText("Sat, Oct 24, 2026 · 1 game")).toBeInTheDocument();
-    expect(screen.getByText("Kaseya Center")).toBeInTheDocument();
+    // Oct 23 has no games, so the arrow lands on Oct 24, kept in the URL with the season.
+    fireEvent.click(within(picker).getByRole("button", { name: "Later game day" }));
+    expect(nav.replace).toHaveBeenLastCalledWith("/schedule?season=2026-27&date=2026-10-24");
+    expect(
+      await screen.findByRole("heading", { name: "Saturday, October 24" })
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Kaseya Center")).toBeInTheDocument();
     expect(screen.queryByText("Chase Center")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Next day →" })).toBeDisabled();
+    expect(screen.getByText("1 game")).toBeInTheDocument();
+    expect(within(picker).getByRole("button", { name: "Later game day" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "← Prev day" }));
-    expect(await screen.findByText("Thu, Oct 22, 2026 · 2 games")).toBeInTheDocument();
+    // Back to the soonest day drops the date from the URL.
+    fireEvent.click(within(picker).getByRole("button", { name: "Earlier game day" }));
+    expect(nav.replace).toHaveBeenLastCalledWith("/schedule?season=2026-27");
+    expect(
+      await screen.findByRole("heading", { name: "Next up · Thursday, October 22" })
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Chase Center")).toBeInTheDocument();
+  });
+
+  it("keeps the last day on screen, dimmed, while the next one loads", async () => {
+    const { api } = await import("@/lib/api");
+    const real = api.listSchedule;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(api, "listSchedule").mockImplementation(async (params = {}) => {
+      if (params.from_date === "2026-10-24") await gate;
+      return real(params);
+    });
+    renderPage();
+    expect(await screen.findByText("Chase Center")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Later game day" }));
+    expect(
+      await screen.findByRole("heading", { name: "Saturday, October 24" })
+    ).toBeInTheDocument();
+    // Oct 24 has not arrived: Oct 22's rows stay, dimmed, and no empty state flashes.
     expect(screen.getByText("Chase Center")).toBeInTheDocument();
+    expect(screen.getByText("Chase Center").closest("[aria-busy]")).toHaveAttribute(
+      "aria-busy",
+      "true"
+    );
+    expect(screen.queryByText("No games are scheduled for this date.")).not.toBeInTheDocument();
+
+    release();
+    expect(await screen.findByText("Kaseya Center")).toBeInTheDocument();
+    expect(screen.queryByText("Chase Center")).not.toBeInTheDocument();
+    expect(screen.getByText("Kaseya Center").closest("[aria-busy]")).toHaveAttribute(
+      "aria-busy",
+      "false"
+    );
+  });
+
+  it("opens on the day in the URL, and says so when that day has no games", async () => {
+    nav.set("season=2026-27&date=2026-10-23");
+    renderPage();
+    expect(await screen.findByText("No games are scheduled for this date.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Friday, October 23" })).toBeInTheDocument();
+    const picker = screen.getByRole("group", { name: "Game day" });
+    expect(within(picker).getByRole("button", { name: "Earlier game day" })).toBeEnabled();
+    expect(within(picker).getByRole("button", { name: "Later game day" })).toBeEnabled();
+  });
+
+  it("calls the soonest day Today once its games are the ones being played", async () => {
+    vi.setSystemTime(new Date("2026-10-22T16:00:00Z"));
+    renderPage();
+    expect(
+      await screen.findByRole("heading", { name: "Today · Thursday, October 22" })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Pick a game day/ }));
+    const calendar = await screen.findByRole("dialog", { name: "October 2026" });
+    expect(within(calendar).getByRole("button", { name: "Today" })).toBeDisabled();
+    expect(within(calendar).getByRole("button", { name: "Fri, Oct 23, no games" })).toBeDisabled();
+    fireEvent.click(within(calendar).getByRole("button", { name: "Sat, Oct 24" }));
+    expect(nav.replace).toHaveBeenLastCalledWith("/schedule?season=2026-27&date=2026-10-24");
   });
 
   it("calls a game live for three hours from tip, by the clock alone", async () => {
@@ -205,8 +318,13 @@ describe("schedule page", () => {
     vi.setSystemTime(new Date("2026-10-23T01:00:00Z"));
     const { api } = await import("@/lib/api");
     const listSchedule = vi.spyOn(api, "listSchedule");
+    const listScheduleDates = vi.spyOn(api, "listScheduleDates");
     renderPage();
     await waitFor(() => {
+      expect(listScheduleDates).toHaveBeenCalledWith({
+        season: "2026-27",
+        from_date: "2026-10-22",
+      });
       expect(listSchedule).toHaveBeenCalledWith(
         expect.objectContaining({ from_date: "2026-10-22" })
       );

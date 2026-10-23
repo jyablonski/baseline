@@ -115,6 +115,9 @@
   --ct-ls-page: -0.02em;
   --ct-fs-hero: 30px;
   --ct-fs-stat: 26px;
+  /* Social feed: figures a step under --ct-fs-stat so the headline leads. */
+  --ct-fs-feed-stat: 21px;
+  --ct-fs-feed-title: 18px;
   --ct-fs-wordmark: 20px;
   --ct-ls-wordmark: -0.01em;
   --ct-fs-module: 17px;

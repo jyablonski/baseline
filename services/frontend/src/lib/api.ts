@@ -287,7 +287,10 @@ export const api = {
   listSocialPostComments: async (id: string) =>
     asPaginated<SocialComment>(await fetchApi(`/api/v1/social/posts/${id}/comments`)),
 
-  listSocialEntities: async (entityType: "player" | "team", params: SocialWindowParams = {}) =>
+  listSocialEntities: async (
+    entityType: "player" | "team",
+    params: SocialWindowParams & { limit?: number } = {}
+  ) =>
     asPaginated<SocialEntity>(
       await fetchApi(`/api/v1/social/entities${buildQuery({ entity_type: entityType, ...params })}`)
     ),
@@ -437,6 +440,14 @@ export const api = {
   listGameDates: async (params: { season?: string } = {}) =>
     asPaginated<GameDate>(
       await fetchApi(`/api/v1/games/dates${buildQuery({ season: params.season })}`)
+    ),
+
+  /** Every date with a game still to play from `from_date` (API default: today), oldest first. */
+  listScheduleDates: async (params: { season?: string; from_date?: string } = {}) =>
+    asPaginated<GameDate>(
+      await fetchApi(
+        `/api/v1/schedule/dates${buildQuery({ season: params.season, from_date: params.from_date })}`
+      )
     ),
 
   listSchedule: async (params: ListScheduleParams = {}) =>

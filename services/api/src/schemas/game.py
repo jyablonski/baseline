@@ -113,7 +113,7 @@ class GameResult(BaseModel):
 
 
 class GameDate(BaseModel):
-    """A date with Final games, for the results date picker."""
+    """A date with games, for a date picker: Final games on /games, games still to play on /schedule."""
 
     game_date: date
     season: str

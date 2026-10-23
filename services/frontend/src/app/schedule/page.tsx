@@ -3,10 +3,11 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { PickCell } from "@/components/account/pick-cell";
 import { ColumnHelp } from "@/components/column-help";
+import { DayHeader, DayPicker } from "@/components/day-picker";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TEAM_LOGO_SIZE, TeamAbbrLink } from "@/components/team-logo";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -15,14 +16,18 @@ import { useProfile } from "@/hooks/use-profile";
 import { useSeason } from "@/hooks/use-season";
 import { useAccount, useFeatures } from "@/lib/account";
 import { api, queryErrorMessage } from "@/lib/api";
-import { formatMoneyline, formatProbability, formatScheduleDate, formatSpread } from "@/lib/format";
+import { useDayParam } from "@/hooks/use-day-param";
+import { dayNavigation } from "@/lib/calendar";
+import { formatMoneyline, formatProbability, formatSpread } from "@/lib/format";
 import { teamHref, withSeason } from "@/lib/nav";
+import { formatDayTitle } from "@/lib/results";
 import { formatGameTime, gamePhase, liveWindowStartDate } from "@/lib/timezones";
 import type { ScheduledGame, UserPick } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-// One request covers the day on screen and reaches the next one: a full slate
-// is 15 games, so the first row dated later is always inside this window.
+// One request covers the day on screen, starting from it: a full slate is 15
+// games, so 50 always holds the whole day. The days either side come from
+// GET /api/v1/schedule/dates.
 const FETCH_LIMIT = 50;
 
 // Abbreviations are not all one width in a proportional face ("PHI" against
@@ -42,17 +47,28 @@ export default function SchedulePage() {
 function ScheduleBody() {
   const { season, isLoading: seasonIsLoading } = useSeason();
   const now = useMinuteClock();
-  // The days paged through so far, oldest first; empty means the first day with
-  // a game from today onward (or one still live from last night). Prev pops back through the same days, so off days
-  // are skipped in both directions.
-  const [days, setDays] = useState<string[]>([]);
-  const day = days.at(-1);
   // The API's own default is the server's UTC date, which drops an evening's
   // games from 8 PM Eastern, while they are still live.
   const firstDay = liveWindowStartDate(now);
+  const searchParams = useSearchParams();
+
+  const datesQuery = useQuery({
+    queryKey: ["schedule", "dates", season, firstDay],
+    queryFn: () => api.listScheduleDates({ season: season || undefined, from_date: firstDay }),
+    enabled: !seasonIsLoading,
+  });
+  const gameDays = (datesQuery.data?.data ?? []).map((item) => item.game_date.slice(0, 10));
+  const {
+    current: day,
+    home,
+    older,
+    newer,
+  } = dayNavigation(datesQuery.data?.data ?? [], searchParams.get("date"), "oldest");
+  // "Today" only when the soonest day is the one still being played or about to be.
+  const homeLabel = home === firstDay ? "Today" : "Next up";
 
   const scheduleQuery = useQuery({
-    queryKey: ["schedule", season, day ?? firstDay],
+    queryKey: ["schedule", season, day],
     queryFn: () =>
       api.listSchedule({
         season: season || undefined,
@@ -60,7 +76,10 @@ function ScheduleBody() {
         from_date: day ?? firstDay,
         limit: FETCH_LIMIT,
       }),
-    enabled: !seasonIsLoading,
+    enabled: !seasonIsLoading && day != null,
+    // Hold the last day on screen while the next loads, so the table does not
+    // collapse to a spinner and back.
+    placeholderData: keepPreviousData,
   });
 
   const picks = usePicks();
@@ -68,7 +87,7 @@ function ScheduleBody() {
   const { account, isLoading: accountIsLoading } = useAccount();
   const features = useFeatures();
   const pathname = usePathname();
-  const search = useSearchParams().toString();
+  const search = searchParams.toString();
   // A visitor with no session still gets the pick buttons, so the feature is
   // visible; choosing a side explains picks and offers sign-in back to this page.
   const signedOut = features.picks && !accountIsLoading && !account;
@@ -77,41 +96,49 @@ function ScheduleBody() {
   // simply is not there, which reads as "picks are broken" with no reason given.
   const pickError = picks.save.error ?? picks.remove.error ?? picks.error;
 
+  // The request runs from the day on screen, so keep only that day's rows. While
+  // the next day loads the data is still the last day's, so keep that day's rows
+  // (dimmed) rather than filtering them against the new day into an empty state.
   const fetched = scheduleQuery.data?.data ?? [];
-  const shownDay = fetched[0]?.game_date.slice(0, 10);
+  const shownDay = scheduleQuery.isPlaceholderData ? fetched[0]?.game_date.slice(0, 10) : day;
   const rows = fetched.filter((game) => game.game_date.slice(0, 10) === shownDay);
-  const nextDay = fetched[rows.length]?.game_date.slice(0, 10);
+
+  const showDay = useDayParam(home);
 
   return (
-    <div className="space-y-6">
+    // The same gap as /games, so the day header sits at the same height on both.
+    <div className="space-y-10">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="type-page">Schedule</h1>
-          <p className="mt-1 text-sm text-ink-2">
-            {season ? `${season} schedule` : "Upcoming schedule"} from today onward. Finished games
-            are under{" "}
-            <Link href="/games" className="underline underline-offset-2">
-              Games
-            </Link>
-            .
+          {/* One line, like the /games intro, so both day views start at the same height. */}
+          <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
+            <span>
+              {season ? `${season} schedule` : "Upcoming schedule"} from today onward. Finished
+              games are under{" "}
+              <Link href="/games" className="underline underline-offset-2">
+                Games
+              </Link>
+              .
+            </span>
+            {features.picks && (signedOut || picks.sheet) ? (
+              <span className="flex flex-wrap gap-x-4" data-testid="pick-intro">
+                {picks.sheet ? (
+                  <Link href="/picks" className="underline underline-offset-2">
+                    Your picks
+                  </Link>
+                ) : null}
+                <Popover>
+                  <PopoverTrigger className="underline underline-offset-2 hover:text-foreground">
+                    How picks work
+                  </PopoverTrigger>
+                  <PopoverContent title="How picks work">
+                    <HowPicksWork signInHref={signedOut ? signInHref : undefined} />
+                  </PopoverContent>
+                </Popover>
+              </span>
+            ) : null}
           </p>
-          {features.picks && (signedOut || picks.sheet) ? (
-            <p className="mt-1 flex flex-wrap gap-x-4 text-sm text-ink-2" data-testid="pick-intro">
-              {picks.sheet ? (
-                <Link href="/picks" className="underline underline-offset-2">
-                  Your picks
-                </Link>
-              ) : null}
-              <Popover>
-                <PopoverTrigger className="underline underline-offset-2 hover:text-foreground">
-                  How picks work
-                </PopoverTrigger>
-                <PopoverContent title="How picks work">
-                  <HowPicksWork signInHref={signedOut ? signInHref : undefined} />
-                </PopoverContent>
-              </Popover>
-            </p>
-          ) : null}
           {pickError ? (
             <p className="mt-1 text-sm text-destructive" role="alert">
               {queryErrorMessage(pickError)}
@@ -120,101 +147,136 @@ function ScheduleBody() {
         </div>
       </div>
 
-      {scheduleQuery.isLoading ? (
+      {seasonIsLoading || datesQuery.isPending ? (
         <LoadingState label="Loading upcoming games…" />
-      ) : scheduleQuery.isError ? (
-        <ErrorState message={queryErrorMessage(scheduleQuery.error)} />
-      ) : rows.length === 0 ? (
+      ) : datesQuery.isError ? (
+        <ErrorState message={queryErrorMessage(datesQuery.error)} />
+      ) : !day || !home ? (
         <EmptyState
           title="No upcoming games"
           message={`No scheduled games for ${season || "this season"} yet.`}
         />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Date / time</th>
-                <th>Matchup</th>
-                <ColumnHelp label="TV" title="TV">
-                  <p>National TV and streaming broadcasts only. Local broadcasts are not listed.</p>
-                </ColumnHelp>
-                <ColumnHelp label="Win %" title="Win %">
-                  <p>
-                    Baseline&apos;s pregame model estimate of each team&apos;s chance to win, shown
-                    away / home.
-                  </p>
-                  <Link
-                    href="/predictions"
-                    className="mt-2 inline-block text-primary underline-offset-2 hover:underline"
-                  >
-                    How accurate is the model? →
-                  </Link>
-                </ColumnHelp>
-                <ColumnHelp label="Moneyline" title="Moneyline">
-                  <p>
-                    Consensus price to win, shown away / home. A minus is the favorite: −150 means
-                    staking $150 wins $100. A plus is the underdog: +130 means staking $100 wins
-                    $130.
-                  </p>
-                  <p className="mt-2">
-                    Underneath is the consensus point spread for the home team: −3.5 means the home
-                    team is favored by 3.5 points.
-                  </p>
-                </ColumnHelp>
-                <th>Status</th>
-                <th>Arena</th>
-                {picks.sheet || signedOut ? (
-                  <ColumnHelp label="Your pick" title="How picks work" align="end">
-                    <HowPicksWork signInHref={signedOut ? signInHref : undefined} />
-                  </ColumnHelp>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((game) => (
-                <ScheduleGame
-                  key={game.game_id}
-                  game={game}
-                  season={season}
-                  picks={picks}
-                  timezone={timezone}
-                  now={now}
-                  signInHref={signedOut ? signInHref : undefined}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <section aria-label="Games" className="space-y-2">
+          {/* Light: the table's head right below carries the strong rule, and two
+              heavy lines thirty pixels apart read as a double border. */}
+          <DayHeader
+            title={day === home ? `${homeLabel} · ${formatDayTitle(day)}` : formatDayTitle(day)}
+            summary={
+              rows.length > 0 && !scheduleQuery.isPlaceholderData
+                ? `${rows.length} ${rows.length === 1 ? "game" : "games"}`
+                : null
+            }
+            rule="light"
+          >
+            <DayPicker
+              current={day}
+              home={home}
+              homeLabel={homeLabel}
+              older={older}
+              newer={newer}
+              gameDays={gameDays}
+              onPick={showDay}
+            />
+          </DayHeader>
+          {scheduleQuery.isPending ? (
+            <LoadingState label="Loading upcoming games…" />
+          ) : scheduleQuery.isError ? (
+            <ErrorState message={queryErrorMessage(scheduleQuery.error)} />
+          ) : rows.length === 0 ? (
+            <EmptyState message="No games are scheduled for this date." />
+          ) : (
+            <ScheduleTable
+              rows={rows}
+              season={season}
+              picks={picks}
+              timezone={timezone}
+              now={now}
+              signInHref={signedOut ? signInHref : undefined}
+              busy={scheduleQuery.isPlaceholderData}
+            />
+          )}
+        </section>
       )}
+    </div>
+  );
+}
 
-      {rows.length > 0 || days.length > 0 ? (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-muted-foreground">
-            {rows.length > 0
-              ? `${formatScheduleDate(shownDay)} · ${rows.length} ${rows.length === 1 ? "game" : "games"}`
-              : ""}
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={days.length === 0}
-              onClick={() => setDays((current) => current.slice(0, -1))}
-              className="btn-ghost"
-            >
-              ← Prev day
-            </button>
-            <button
-              type="button"
-              disabled={!nextDay}
-              onClick={() => nextDay && setDays((current) => [...current, nextDay])}
-              className="btn-ghost"
-            >
-              Next day →
-            </button>
-          </div>
-        </div>
-      ) : null}
+function ScheduleTable({
+  rows,
+  season,
+  picks,
+  timezone,
+  now,
+  signInHref,
+  busy,
+}: {
+  rows: ScheduledGame[];
+  season: string;
+  picks: ReturnType<typeof usePicks>;
+  timezone: string | null;
+  now: Date;
+  /** Set for a visitor with no session: the pick column explains picks instead. */
+  signInHref?: string;
+  /** The previous day still on screen while the picked one loads. */
+  busy: boolean;
+}) {
+  return (
+    <div className={cn("overflow-x-auto", busy && "opacity-60")} aria-busy={busy}>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Date / time</th>
+            <th>Matchup</th>
+            <ColumnHelp label="TV" title="TV">
+              <p>National TV and streaming broadcasts only. Local broadcasts are not listed.</p>
+            </ColumnHelp>
+            <ColumnHelp label="Win %" title="Win %">
+              <p>
+                Baseline&apos;s pregame model estimate of each team&apos;s chance to win, shown away
+                / home.
+              </p>
+              <Link
+                href="/predictions"
+                className="mt-2 inline-block text-primary underline-offset-2 hover:underline"
+              >
+                How accurate is the model? →
+              </Link>
+            </ColumnHelp>
+            <ColumnHelp label="Odds" title="Odds">
+              <p>
+                The consensus moneyline, the price to win, shown away / home. A minus is the
+                favorite: −150 means staking $150 wins $100. A plus is the underdog: +130 means
+                staking $100 wins $130.
+              </p>
+              <p className="mt-2">
+                Underneath is the consensus point spread for the home team: −3.5 means the home team
+                is favored by 3.5 points.
+              </p>
+            </ColumnHelp>
+            <th>Status</th>
+            <th>Arena</th>
+            {picks.sheet || signInHref ? (
+              <ColumnHelp label="Your pick" title="How picks work" align="end">
+                <HowPicksWork signInHref={signInHref} />
+              </ColumnHelp>
+            ) : null}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((game) => (
+            <ScheduleGame
+              key={game.game_id}
+              game={game}
+              season={season}
+              picks={picks}
+              timezone={timezone}
+              now={now}
+              signInHref={signInHref}
+            />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

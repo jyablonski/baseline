@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { dayNavigation } from "@/lib/calendar";
 import {
-  dayNavigation,
   daySummary,
   formatDayShort,
   formatDayTitle,
@@ -44,7 +44,7 @@ describe("dayNavigation", () => {
   it("defaults to the newest day and finds its neighbours", () => {
     expect(dayNavigation(DATES, null)).toEqual({
       current: "2026-06-13",
-      latest: "2026-06-13",
+      home: "2026-06-13",
       older: "2026-06-10",
       newer: null,
     });
@@ -62,6 +62,27 @@ describe("dayNavigation", () => {
     });
   });
 
+  it("starts from the soonest day for the schedule, in whatever order the dates come", () => {
+    const upcoming = ["2026-10-24", "2026-10-22", "2026-10-27", "2026-10-22"].map((game_date) => ({
+      game_date,
+    }));
+    expect(dayNavigation(upcoming, null, "oldest")).toEqual({
+      current: "2026-10-22",
+      home: "2026-10-22",
+      older: null,
+      newer: "2026-10-24",
+    });
+    expect(dayNavigation(upcoming, "2026-10-24", "oldest")).toMatchObject({
+      home: "2026-10-22",
+      older: "2026-10-22",
+      newer: "2026-10-27",
+    });
+    // Timestamps are cut to their day.
+    expect(dayNavigation([{ game_date: "2026-10-22T00:00:00" }], null, "oldest").current).toBe(
+      "2026-10-22"
+    );
+  });
+
   it("ignores a malformed date and handles no games at all", () => {
     expect(dayNavigation(DATES, "june").current).toBe("2026-06-13");
     // Shaped like a date but not one: never sent to the API.
@@ -69,7 +90,7 @@ describe("dayNavigation", () => {
     expect(dayNavigation(DATES, "2026-02-30").current).toBe("2026-06-13");
     expect(dayNavigation([], null)).toEqual({
       current: null,
-      latest: null,
+      home: null,
       older: null,
       newer: null,
     });

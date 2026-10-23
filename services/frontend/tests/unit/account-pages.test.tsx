@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The signed-in surfaces: header links, the schedule's pick column, and the
@@ -60,6 +60,10 @@ vi.mock("@/lib/api", () => ({
     getStatus: async () => ({ last_scraped_at: "2026-09-04T04:12:00Z" }),
     listSeasons: async () => ({
       data: [{ season: "2026-27" }],
+      meta: { total: 1, limit: 1, offset: 0 },
+    }),
+    listScheduleDates: async () => ({
+      data: [{ game_date: game.game_date, season: "2026-27", game_count: 1 }],
       meta: { total: 1, limit: 1, offset: 0 },
     }),
     listSchedule: async () => ({ data: [game], meta: { total: 1, limit: 50, offset: 0 } }),
@@ -281,6 +285,16 @@ describe("header", () => {
 });
 
 describe("schedule picks", () => {
+  // The fixture game tips at 7:30 PM Eastern on Oct 22 and locks from then, so
+  // the clock is pinned two days before it; unpinned, these fail on the evening
+  // of the fixture date.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-20T16:00:00Z") });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows an anonymous visitor the pick buttons, which lead to sign-in", async () => {
     state.account = null;
     page(<SchedulePage />);

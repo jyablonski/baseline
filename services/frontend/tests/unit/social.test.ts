@@ -10,8 +10,10 @@ import {
   rangeToDates,
   relativeAge,
   totalFacetCount,
+  previousWindow,
+  risingEntity,
 } from "@/lib/social";
-import type { SocialPost } from "@/lib/types";
+import type { SocialEntity, SocialPost } from "@/lib/types";
 
 describe("social helpers", () => {
   it("accepts only the ranges the control row offers", () => {
@@ -75,5 +77,76 @@ describe("social helpers", () => {
     expect(postSourceLabel(post)).toBe("Self post");
     expect(postSourceLabel({ source: "streamable.com" } as SocialPost)).toBe("streamable.com");
     expect(postSourceLabel({ source: null } as SocialPost)).toBe("No link");
+  });
+});
+
+describe("previousWindow", () => {
+  it("is the same length, ending the day before the window starts", () => {
+    expect(previousWindow({ from_date: "2026-09-10", to_date: "2026-09-11" })).toEqual({
+      from_date: "2026-09-08",
+      to_date: "2026-09-09",
+    });
+    expect(previousWindow({ from_date: "2026-09-04", to_date: "2026-09-11" })).toEqual({
+      from_date: "2026-08-27",
+      to_date: "2026-09-03",
+    });
+    // Across a month and a year end.
+    expect(previousWindow({ from_date: "2026-01-01", to_date: "2026-01-02" })).toEqual({
+      from_date: "2025-12-30",
+      to_date: "2025-12-31",
+    });
+  });
+});
+
+describe("risingEntity", () => {
+  const entity = (entity_id: string, post_count: number): SocialEntity => ({
+    entity_id,
+    entity_name: entity_id,
+    entity_abbreviation: null,
+    post_count,
+    comment_count: 0,
+    total_post_score: 0,
+    top_post_score: null,
+    primary_color: null,
+    alternate_color: null,
+  });
+
+  it("picks the biggest gain across players and teams, and says which it is", () => {
+    const rising = risingEntity(
+      [
+        { kind: "player", entities: [entity("brown", 12), entity("tatum", 5)] },
+        { kind: "team", entities: [entity("celtics", 20)] },
+      ],
+      [entity("brown", 10), entity("tatum", 1), entity("celtics", 19)]
+    );
+    expect(rising).toMatchObject({ kind: "player", gain: 4, previous: 1 });
+    expect(rising?.entity.entity_id).toBe("tatum");
+  });
+
+  it("counts a name missing from the window before as a rise from zero", () => {
+    const rising = risingEntity(
+      [{ kind: "team", entities: [entity("knicks", 3)] }],
+      [entity("celtics", 8)]
+    );
+    expect(rising).toMatchObject({ gain: 3, previous: 0, kind: "team" });
+  });
+
+  it("breaks a tied gain on the bigger count now", () => {
+    const rising = risingEntity(
+      [{ kind: "player", entities: [entity("small", 3), entity("big", 9)] }],
+      [entity("small", 1), entity("big", 7)]
+    );
+    expect(rising?.entity.entity_id).toBe("big");
+  });
+
+  it("is null when nothing grew, or when there is nothing to compare with", () => {
+    expect(
+      risingEntity([{ kind: "player", entities: [entity("a", 5)] }], [entity("a", 5)])
+    ).toBeNull();
+    expect(
+      risingEntity([{ kind: "player", entities: [entity("a", 5)] }], [entity("a", 9)])
+    ).toBeNull();
+    // An empty window before is a gap in collection, not a surge.
+    expect(risingEntity([{ kind: "player", entities: [entity("a", 5)] }], [])).toBeNull();
   });
 });

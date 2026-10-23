@@ -1,58 +1,88 @@
 "use client";
 
+import Link from "next/link";
+
 import { KpiCard, KpiStrip, KpiTitle } from "@/components/ui/kpi-card";
+import { playerHref, teamHref } from "@/lib/nav";
 import {
   SOCIAL_RANGES,
   SOCIAL_SORTS,
   CONTENT_TYPE_LABELS,
   facetCount,
   formatCount,
+  relativeAge,
   totalFacetCount,
+  type RisingEntity,
   type SocialRangeKey,
 } from "@/lib/social";
 import type { SocialEntity, SocialFacet, SocialSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+type Contested = { title: string; permalink: string; score: number; num_comments: number };
+
+/**
+ * What r/nba is on about in the range, in basketball terms. How much was
+ * collected is in `AboutSocialData` at the foot of the page, not up here.
+ */
 export function SummaryStrip({
-  summary,
+  range,
+  topTeam,
   topPlayer,
+  rising,
+  compared,
   mostContested,
+  contestedCount,
 }: {
-  summary: SocialSummary | undefined;
+  range: SocialRangeKey;
+  topTeam: SocialEntity | undefined;
   topPlayer: SocialEntity | undefined;
-  mostContested:
-    { title: string; permalink: string; score: number; num_comments: number } | undefined;
+  rising: RisingEntity | null;
+  /** Whether the window before had any mentions to measure a rise against. */
+  compared: boolean;
+  mostContested: Contested | undefined;
+  contestedCount: number;
 }) {
-  const captured = summary?.captured_comment_count ?? 0;
-  const reported = summary?.reported_comment_count ?? 0;
-  const capturedShare = reported > 0 ? captured / reported : 0;
+  const rangeLabel = SOCIAL_RANGES.find((item) => item.key === range)?.label ?? range;
   return (
     <KpiStrip>
       <KpiCard
-        label="Posts collected"
-        value={formatCount(summary?.post_count ?? 0)}
-        note={`from ${formatCount(summary?.author_count ?? 0)} distinct posters`}
-      />
-      {/* The gap between these two numbers is the whole honesty of the page. */}
-      <KpiCard
-        label="Comments captured"
-        value={formatCount(captured)}
-        progress={capturedShare}
-        note={`${Math.round(capturedShare * 100)}% of ${formatCount(reported)} posted`}
-      />
-      <KpiCard
-        label="Most discussed"
+        label="Most discussed team"
         value={
-          topPlayer ? (
-            <KpiTitle>{topPlayer.entity_name}</KpiTitle>
-          ) : (
-            <KpiTitle className="text-ink-3">—</KpiTitle>
-          )
+          <EntityTitle
+            name={topTeam ? (topTeam.entity_nickname ?? topTeam.entity_name) : null}
+            href={topTeam ? teamHref(topTeam.entity_name) : null}
+          />
+        }
+        note={topTeam ? mentionNote(topTeam) : "no team mentions in range"}
+      />
+      <KpiCard
+        label="Most discussed player"
+        value={
+          <EntityTitle
+            name={topPlayer?.entity_name ?? null}
+            href={topPlayer ? playerHref(topPlayer.entity_name) : null}
+          />
+        }
+        note={topPlayer ? mentionNote(topPlayer) : "no full-name matches in range"}
+      />
+      <KpiCard
+        label="Rising"
+        value={
+          <EntityTitle
+            name={rising ? (rising.entity.entity_nickname ?? rising.entity.entity_name) : null}
+            href={
+              rising
+                ? (rising.kind === "team" ? teamHref : playerHref)(rising.entity.entity_name)
+                : null
+            }
+          />
         }
         note={
-          topPlayer
-            ? `${formatCount(topPlayer.post_count)} posts · ${formatCount(topPlayer.comment_count)} captured comments`
-            : "no full-name matches in range"
+          rising
+            ? `+${formatCount(rising.gain)} posts vs the ${rangeLabel} before (${formatCount(rising.previous)} → ${formatCount(rising.entity.post_count)})`
+            : compared
+              ? `no player or team gained on the ${rangeLabel} before`
+              : `nothing collected the ${rangeLabel} before to compare with`
         }
       />
       <KpiCard
@@ -81,11 +111,51 @@ export function SummaryStrip({
               </a>
             </>
           ) : (
-            `${summary?.contested_post_count ?? 0} contested posts in range`
+            `${formatCount(contestedCount)} contested posts in range`
           )
         }
       />
     </KpiStrip>
+  );
+}
+
+function EntityTitle({ name, href }: { name: string | null; href: string | null }) {
+  if (!name || !href) return <KpiTitle className="text-ink-3">—</KpiTitle>;
+  return (
+    <KpiTitle>
+      <Link href={href} className="hover:text-primary hover:underline">
+        {name}
+      </Link>
+    </KpiTitle>
+  );
+}
+
+function mentionNote(entity: SocialEntity) {
+  return `${formatCount(entity.post_count)} ${entity.post_count === 1 ? "post" : "posts"} · ${formatCount(entity.comment_count)} captured comments`;
+}
+
+/**
+ * How much of r/nba the page is built from. The capture share matters: comments
+ * are each thread's top ones, so a reader should know how much of a thread that is.
+ */
+export function AboutSocialData({ summary }: { summary: SocialSummary | undefined }) {
+  if (!summary) return null;
+  const captured = summary.captured_comment_count;
+  const reported = summary.reported_comment_count;
+  const share = reported > 0 ? Math.round((captured / reported) * 100) : 0;
+  return (
+    <section
+      aria-label="About this data"
+      className="type-caption border-t border-rule pt-[var(--ct-space-3)]"
+      data-testid="social-about"
+    >
+      <span className="font-semibold text-ink-2">About this data</span>
+      {" · "}
+      {formatCount(summary.post_count)} posts from {formatCount(summary.author_count)} posters in
+      this range · {formatCount(captured)} of {formatCount(reported)} comments captured ({share}
+      %), each thread&apos;s highest-scoring · collected once a day
+      {summary.last_scraped_at ? `, last ${relativeAge(summary.last_scraped_at)}` : ""}
+    </section>
   );
 }
 

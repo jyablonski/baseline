@@ -135,6 +135,27 @@ LIST_GAME_DATES = text(
     """
 )
 
+# Every date with a game still to be played from :from_date on, for the
+# schedule's date picker. "Scheduled" means not Final, the same rule
+# SCHEDULE_FILTERS applies for status=Scheduled.
+LIST_SCHEDULE_DATES = text(
+    """
+    SELECT
+        fct_games_schedule.game_date,
+        fct_games_schedule.season,
+        count(*) AS game_count
+    FROM gold.fct_games_schedule
+    WHERE
+        fct_games_schedule.game_date >= :from_date
+        AND (CAST(:season AS text) IS NULL OR fct_games_schedule.season = :season)
+        AND lower(fct_games_schedule.status) NOT IN ('final', '3')
+    GROUP BY
+        fct_games_schedule.game_date,
+        fct_games_schedule.season
+    ORDER BY fct_games_schedule.game_date ASC
+    """
+)
+
 GAME_EXISTS = text(
     """
     SELECT 1

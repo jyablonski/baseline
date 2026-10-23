@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from dependencies import get_games_repository
 from repositories.games import GamesRepository
-from schemas import PaginatedResponse, PaginationMeta, ScheduledGame
+from schemas import GameDate, PaginatedResponse, PaginationMeta, ScheduledGame
 
 router = APIRouter()
 
@@ -39,4 +39,19 @@ def list_schedule(
     return PaginatedResponse(
         data=data,
         meta=PaginationMeta(total=total, limit=limit, offset=offset),
+    )
+
+
+@router.get("/dates", response_model=PaginatedResponse[GameDate])
+def list_schedule_dates(
+    season: Annotated[str | None, Query()] = None,
+    from_date: Annotated[date | None, Query()] = None,
+    repo: GamesRepository = Depends(get_games_repository),
+) -> PaginatedResponse[GameDate]:
+    """Every date with a game still to play from from_date (default today), oldest first. Unpaginated."""
+    rows = repo.list_schedule_dates(season=season, from_date=from_date or date.today())
+    data = [GameDate.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=len(data), offset=0),
     )

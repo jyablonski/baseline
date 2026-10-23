@@ -49,7 +49,15 @@ describe("social page with nothing collected", () => {
     expect(await screen.findByText(/no team mentions in this range/i)).toBeInTheDocument();
     expect(screen.queryByText(/no full-name matches in this range/i)).not.toBeInTheDocument();
     expect(await screen.findByText(/no user flair collected/i)).toBeInTheDocument();
-    // The summary strip still renders, with honest zeroes.
-    expect(screen.getByText("0% of 0 posted")).toBeInTheDocument();
+    // The summary strip still renders, with dashes and plain reasons.
+    expect(screen.getByText("no team mentions in range")).toBeInTheDocument();
+    expect(screen.getByText("no full-name matches in range")).toBeInTheDocument();
+    expect(
+      screen.getByText("nothing collected the 24h before to compare with")
+    ).toBeInTheDocument();
+    expect(screen.getByText("0 contested posts in range")).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "About this data" })).toHaveTextContent(
+      "0 posts from 0 posters in this range · 0 of 0 comments captured (0%)"
+    );
   });
 });

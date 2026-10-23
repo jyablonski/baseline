@@ -130,7 +130,8 @@ describe("charts", () => {
         }}
       />
     );
-    expect(screen.getByText("Biggest run: NYK 16-2")).toBeInTheDocument();
+    expect(screen.getByText("NYK scores")).toBeInTheDocument();
+    expect(screen.getByText("SAS scores")).toBeInTheDocument();
     render(
       <GameFlowTooltip
         active
@@ -281,6 +282,48 @@ describe("charts", () => {
     expect(screen.getByText("Net").closest("tr")).toHaveTextContent("23rd");
     expect(screen.queryByText(/Phoenix Suns: 112.6 scored/)).not.toBeInTheDocument();
     render(<GameFlowTooltip active payload={[]} />);
+    const runPlay = (score_away: number, score_home: number, description: string) => ({
+      elapsed_seconds: 30 + score_away,
+      score_differential: score_home - score_away,
+      score_home,
+      score_away,
+      period: 1,
+      clock: "PT11M00.00S",
+      clock_remaining_seconds: null,
+      scoring_side: "away",
+      player_name: null,
+      action_type: null,
+      sub_type: null,
+      description,
+      away_abbreviation: "NYK",
+      home_abbreviation: "SAS",
+      in_run: true,
+    });
+    const first = runPlay(3, 0, "J. Brunson 3PT Jump Shot");
+    const second = runPlay(6, 0, "O. Anunoby 3PT Jump Shot");
+    render(
+      <GameFlowTooltip
+        active
+        payload={[{ payload: { ...second } }]}
+        run={{
+          title: "NYK 6–0 run",
+          detail: "Q1 12:00–11:00 · 6-pt swing",
+          color: "#006BB6",
+          rising: false,
+          anchor: { ...first, score_away: 0, score_differential: 0, in_run: false },
+          last: second,
+          plays: [first, second],
+        }}
+      />
+    );
+    const runPlays = screen.getByTestId("run-plays");
+    expect(runPlays).toHaveTextContent("NYK 6–0 run");
+    expect(within(runPlays).getByText(/J\. Brunson 3PT Jump Shot/)).toHaveStyle({
+      fontWeight: "400",
+    });
+    expect(within(runPlays).getByText(/O\. Anunoby 3PT Jump Shot/)).toHaveStyle({
+      fontWeight: "600",
+    });
     render(
       <GameFlowChart
         events={[

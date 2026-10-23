@@ -21,7 +21,7 @@ import { useProfile } from "@/hooks/use-profile";
 import { useSeasonMeetings } from "@/hooks/use-season-meetings";
 import { api, queryErrorMessage } from "@/lib/api";
 import { formatNumber, formatProbability } from "@/lib/format";
-import { selectBiggestRun } from "@/lib/game-flow";
+import { type BiggestRun, selectBiggestRun } from "@/lib/game-flow";
 import {
   homeWon,
   losingCard,
@@ -166,7 +166,7 @@ function GameRecap({
       <section className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule-strong pb-2">
           <h2 className="type-module">Game flow</h2>
-          {flow && hasFlow ? <FlowFacts flow={flow} /> : null}
+          {flow && hasFlow ? <FlowFacts flow={flow} run={run} /> : null}
         </div>
         {flowQuery.isLoading || pbpQuery.isLoading ? (
           <LoadingState label="Loading PBP…" />
@@ -180,7 +180,7 @@ function GameRecap({
             message="There's no scoring timeline for this game."
           />
         ) : (
-          <GameFlowChart events={events} flow={flow} />
+          <GameFlowChart events={events} flow={flow} run={run} />
         )}
       </section>
 
@@ -474,8 +474,8 @@ function WinnerMeter({ value }: { value: number | null }) {
   );
 }
 
-/** The flow in four numbers beside the heading: who led, by most, and how often it swung. */
-function FlowFacts({ flow }: { flow: GameFlow }) {
+/** The flow in a few numbers beside the heading: its biggest run, who led, by most, and how often it swung. */
+function FlowFacts({ flow, run }: { flow: GameFlow; run: BiggestRun | null }) {
   const home = flow.home_team_abbreviation ?? "Home";
   const away = flow.away_team_abbreviation ?? "Away";
   const homeShare = flow.home_lead_pct ?? 0;
@@ -496,6 +496,7 @@ function FlowFacts({ flow }: { flow: GameFlow }) {
   );
   return (
     <p className="flex flex-wrap gap-x-5 text-sm text-ink-2" data-testid="flow-facts">
+      {run ? fact("Biggest run", run.biggest_run_label) : null}
       {fact(`${leader} led`, `${share}%`)}
       {flow.max_lead != null
         ? fact("Max lead", `${maxLeadTeam ? `${maxLeadTeam} ` : ""}+${flow.max_lead}`)

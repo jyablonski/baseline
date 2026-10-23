@@ -10,8 +10,17 @@ test("social reaches from the nav and labels its sampling honestly", async ({ pa
   await expect(page).toHaveURL(/\/social/);
   await expect(page.getByRole("heading", { name: "Social", level: 1 })).toBeVisible();
 
+  // The strip reads as basketball; how much was collected sits at the foot.
+  const strip = page.locator("[data-slot='kpi-strip']");
+  await expect(strip).toContainText("Most discussed team");
+  await expect(strip).toContainText("Most discussed player");
+  await expect(strip).toContainText("Rising");
+  await expect(strip).toContainText("+5 posts vs the 24h before (4 → 9)");
+  await expect(strip).not.toContainText("Posts collected");
   // The gap between captured and posted comments has to stay on screen.
-  await expect(page.getByText("2% of 18,204 posted")).toBeVisible();
+  await expect(page.getByRole("region", { name: "About this data" })).toContainText(
+    "402 of 18,204 comments captured (2%)"
+  );
   // Comments stay collapsed until asked for.
   await expect(page.getByRole("button", { name: "Hide comments" })).toHaveCount(0);
   await page.getByRole("button", { name: "Top comments (1)" }).click();
@@ -71,18 +80,26 @@ test("the active filter chip is legible, not paper-on-paper", async ({ page }) =
   await expect(page.getByRole("button", { name: /^All/ })).toContainText("All");
 });
 
-test("social summary cards carry the capture meter and the contested thread link", async ({
-  page,
-}) => {
+test("social summary cards link who is talked about and the contested thread", async ({ page }) => {
   await mockApi(page);
   await page.goto("/social");
-  await expect(page.getByText("from 33 distinct posters")).toBeVisible();
-  await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2");
-  await expect(page.getByText("9 posts · 63 captured comments")).toBeVisible();
-  await expect(page.getByText("132 comments on a score of 0")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open ↗" })).toHaveAttribute(
+  const strip = page.locator("[data-slot='kpi-strip']");
+  // Team, player and Rising each link to their page.
+  await expect(strip.getByRole("link", { name: "Kawhi Leonard" })).toHaveAttribute(
+    "href",
+    "/players/kawhi-leonard"
+  );
+  await expect(strip.getByRole("link", { name: "Clippers" })).toHaveCount(2);
+  await expect(strip.getByText("9 posts · 63 captured comments")).toHaveCount(2);
+  await expect(strip.getByText("132 comments on a score of 0")).toBeVisible();
+  await expect(strip.getByRole("link", { name: "Open ↗" })).toHaveAttribute(
     "href",
     "https://www.reddit.com/r/nba/comments/zero1/"
+  );
+  // The capture meter is gone; its numbers live in About this data.
+  await expect(page.getByRole("progressbar")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "About this data" })).toContainText(
+    "41 posts from 33 posters in this range"
   );
 });
 

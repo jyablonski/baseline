@@ -4,10 +4,12 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { PlayerValueScatter } from "@/components/charts/player-value-scatter";
+import { InfoTip } from "@/components/column-help";
 import { ErrorState, LoadingState } from "@/components/query-state";
 import { api, queryErrorMessage } from "@/lib/api";
 import {
   foldName,
+  MVP_CANDIDATE_RANK,
   playerValuePoints,
   VALUE_CATEGORIES,
   type PlayerValuePoint,
@@ -56,9 +58,20 @@ export function PlayerValuePlot({ season, enabled }: { season: string; enabled: 
     // The rule underneath separates the plot from the directory's own filters.
     <section aria-labelledby="player-value-heading" className="border-b border-rule pb-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="player-value-heading" className="type-module">
-          Production vs Salary
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 id="player-value-heading" className="type-module">
+            Production vs Salary
+          </h2>
+          <InfoTip label="About MVP score" title="MVP score">
+            <p>
+              A proprietary Baseline metric that combines a player&apos;s aggregated box-score
+              production across the season with his team&apos;s results and his availability.
+            </p>
+            <p>
+              Higher is better. The top {MVP_CANDIDATE_RANK} are the MVP candidates on the plot.
+            </p>
+          </InfoTip>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* One highlight at a time: picking a team or a player replaces
               whatever was picked before, so the plot never mixes selections. */}
@@ -141,10 +154,6 @@ export function PlayerValuePlot({ season, enabled }: { season: string; enabled: 
         ))}
         <span className="type-caption ml-auto">Hover a dot for the player · click to open</span>
       </div>
-      <p className="type-caption mt-2 max-w-3xl">
-        MVP score is a proprietary Baseline metric that combines a player&apos;s aggregated
-        box-score production across the season with his team&apos;s results and his availability.
-      </p>
     </section>
   );
 }

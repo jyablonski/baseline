@@ -1,4 +1,4 @@
-import type { SocialFacet, SocialFlair, SocialPost } from "@/lib/types";
+import type { SocialEntity, SocialFacet, SocialFlair, SocialPost } from "@/lib/types";
 
 export const SOCIAL_RANGES = [
   { key: "24h", label: "24h", days: 1 },
@@ -48,6 +48,61 @@ export function rangeToDates(range: SocialRangeKey, anchor = new Date()) {
   const from = new Date(to);
   from.setUTCDate(from.getUTCDate() - days);
   return { from_date: isoDay(from), to_date: isoDay(to) };
+}
+
+/**
+ * The window just before `window`, the same number of days long, ending the
+ * day before it starts. Both bounds are inclusive, as the API reads them.
+ */
+export function previousWindow(window: { from_date: string; to_date: string }) {
+  const from = new Date(`${window.from_date}T00:00:00Z`);
+  const to = new Date(`${window.to_date}T00:00:00Z`);
+  const span = Math.round((to.getTime() - from.getTime()) / 86_400_000);
+  const previousTo = new Date(from);
+  previousTo.setUTCDate(previousTo.getUTCDate() - 1);
+  const previousFrom = new Date(previousTo);
+  previousFrom.setUTCDate(previousFrom.getUTCDate() - span);
+  return { from_date: isoDay(previousFrom), to_date: isoDay(previousTo) };
+}
+
+export type SocialEntityKind = "player" | "team";
+
+export type RisingEntity = {
+  entity: SocialEntity;
+  kind: SocialEntityKind;
+  /** Posts naming it in this window, minus the window before. */
+  gain: number;
+  previous: number;
+};
+
+/**
+ * The player or team whose post count grew most against the window before:
+ * the biggest gain, then the bigger count now. Null when nothing grew, or when
+ * there is nothing to compare against (no mentions at all the window before,
+ * which is a gap in collection, not a surge).
+ */
+export function risingEntity(
+  current: { kind: SocialEntityKind; entities: SocialEntity[] }[],
+  previous: SocialEntity[]
+): RisingEntity | null {
+  if (previous.length === 0) return null;
+  const before = new Map(previous.map((entity) => [entity.entity_id, entity.post_count]));
+  let best: RisingEntity | null = null;
+  for (const { kind, entities } of current) {
+    for (const entity of entities) {
+      const was = before.get(entity.entity_id) ?? 0;
+      const gain = entity.post_count - was;
+      if (gain <= 0) continue;
+      if (
+        best == null ||
+        gain > best.gain ||
+        (gain === best.gain && entity.post_count > best.entity.post_count)
+      ) {
+        best = { entity, kind, gain, previous: was };
+      }
+    }
+  }
+  return best;
 }
 
 function isoDay(date: Date) {
