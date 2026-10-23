@@ -163,6 +163,8 @@ test("game page carries a box score with shooting splits under the chart", async
 });
 
 test("game page previews an upcoming game from its schedule row", async ({ page }) => {
+  // /schedule asks from today's Eastern date, so pin before the fixtures' Oct 22 slate.
+  await page.clock.setFixedTime(new Date("2026-10-20T16:00:00Z"));
   await mockApi(page);
   await page.goto("/schedule");
   await page.locator('a[href="/games/0022500999"]').click();
@@ -199,6 +201,8 @@ test("game page recaps a final with the model's call and no regular-season headl
 });
 
 test("schedule flags a notable absence and the game page lists the report", async ({ page }) => {
+  // /schedule asks from today's Eastern date, so pin before the fixtures' Oct 22 slate.
+  await page.clock.setFixedTime(new Date("2026-10-20T16:00:00Z"));
   await mockApi(page);
   await page.goto("/schedule");
   await expect(page.getByTestId("notable-out")).toHaveText("GSW: Stephen Curry out");
