@@ -9,6 +9,9 @@ models:
       season) is derived from fct_team_game_results. Derived ranks break ties with
       the NBA criteria the data can answer; the model header lists what is not
       modeled. Read by int_playoff_seeds and fct_standings.
+    config:
+      meta:
+        grain: One row per team per Regular Season.
     columns:
       - name: team_id
         description: Baseline team UUID.

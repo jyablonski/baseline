@@ -3,6 +3,9 @@ version: 2
 models:
   - name: fct_player_game_logs
     description: Fact table of per-player per-game stats with dimension attributes.
+    config:
+      meta:
+        grain: One row per player per game played.
     columns:
       - name: player_id
         description: Baseline player UUID.

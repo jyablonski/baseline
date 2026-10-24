@@ -12,6 +12,9 @@ models:
       winner, -ln(winner_market_wp)). Pick'em games (exactly 0.5) have no
       favorite and are never upsets. Empty until Final games with lines exist:
       odds history starts accruing in 2026-27, with no historical backfill.
+    config:
+      meta:
+        grain: One row per Final game with a captured pregame moneyline.
     columns:
       - name: game_id
         description: Baseline game UUID.

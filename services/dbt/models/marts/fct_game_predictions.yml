@@ -5,6 +5,9 @@ models:
     description: >
       Thin gold copy of the latest champion pregame home win probability per
       game. Pregame only; not live WP.
+    config:
+      meta:
+        grain: One row per game with a champion pregame prediction.
     columns:
       - name: game_id
         description: Baseline game UUID.

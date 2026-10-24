@@ -3,6 +3,9 @@ version: 2
 models:
   - name: stg_player_contracts
     description: Remaining player-season salaries from Basketball-Reference, already resolved to canonical UUIDs.
+    config:
+      meta:
+        grain: One row per player per team per contract season.
     columns:
       - name: player_id
         description: Baseline player UUID.

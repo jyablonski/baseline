@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from ids import (
@@ -17,6 +17,7 @@ from ids import (
     TEAM_GSW,
     TEAM_LAC,
 )
+from sqlalchemy import text
 
 
 @pytest.mark.integration
@@ -105,7 +106,7 @@ def test_teams_and_record(integration_client) -> None:
 
 
 @pytest.mark.integration
-def test_games_and_seasons(integration_client) -> None:
+def test_games_and_seasons(integration_client, postgres_engine) -> None:
     games = integration_client.get("/api/v1/games", params={"season": "2024-25"})
     assert games.status_code == 200
     assert games.json()["meta"]["total"] == 3
@@ -133,7 +134,10 @@ def test_games_and_seasons(integration_client) -> None:
 
     # Only games still to play, oldest first: the two Finals in the seed are left out.
     upcoming = integration_client.get("/api/v1/schedule/dates").json()
-    today = date.today()
+    # The seed dates these from Postgres's CURRENT_DATE (UTC in the container),
+    # so read today there: a local date.today() is a day off in the evening west of UTC.
+    with postgres_engine.begin() as conn:
+        today = conn.execute(text("SELECT CURRENT_DATE")).scalar_one()
     assert upcoming["data"] == [
         {
             "game_date": (today + timedelta(days=14)).isoformat(),
@@ -499,8 +503,6 @@ def test_prediction_scorecard(integration_client) -> None:
 
 @pytest.mark.integration
 def test_status_and_coverage(integration_client, postgres_engine) -> None:
-    from sqlalchemy import text
-
     response = integration_client.get("/api/v1/status")
     assert response.status_code == 200
     body = response.json()["data"]
@@ -709,8 +711,6 @@ def test_admin_health_against_real_schema(integration_client, postgres_engine) -
     DISTINCT ON, the runs-since-success window, and a ten-table UNION ALL of
     watermarks are the kind of SQL that passes review and fails on Postgres.
     """
-    from sqlalchemy import text
-
     from config import Settings, get_settings
 
     token = "integration-admin-token"
@@ -878,8 +878,6 @@ def test_admin_jobs_queue_allows_one_pending_job(integration_client, postgres_en
     A read-then-write check would let two rapid clicks both pass; the partial
     unique index makes the second insert fail regardless of timing.
     """
-    from sqlalchemy import text
-
     from config import Settings, get_settings
 
     token = "integration-admin-token"
@@ -937,8 +935,6 @@ def test_admin_jobs_queue_allows_one_pending_job(integration_client, postgres_en
 
 @pytest.mark.integration
 def test_admin_pipeline_switches_leave_the_other_alone(integration_client, postgres_engine) -> None:
-    from sqlalchemy import text
-
     from config import Settings, get_settings
 
     token = "integration-admin-token"
@@ -993,8 +989,6 @@ def test_admin_pipeline_switches_leave_the_other_alone(integration_client, postg
 @pytest.mark.integration
 def test_admin_job_claim_is_atomic(postgres_engine) -> None:
     """FOR UPDATE SKIP LOCKED: two runners must never claim the same row."""
-    from sqlalchemy import text
-
     claim = text(
         """
         UPDATE source.admin_jobs

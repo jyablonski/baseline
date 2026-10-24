@@ -18,6 +18,27 @@ dbt project `nba_analytics` (profile `nba`): `source` → staging / intermediate
   - `structure.subquery` (ST05) with `forbid_subquery_in = both` — no subqueries in `from` / `join` (use CTEs)
 - Lint from this directory: `uv run sqlfluff lint models tests`
 
+## Grain (required)
+
+Every model declares what one row means, twice, and the two must agree:
+
+- **`config.meta.grain`**: one plain-English sentence starting with `One row per`, in business terms rather than column names, including the filter that decides which rows exist (`One row per Final game, home and away on the same row.` vs `One row per game, scheduled or Final.`). Don't repeat the key columns here; the test below owns them.
+- **A uniqueness test** on exactly those keys: `unique` on a single key column, or `dbt_expectations.expect_compound_columns_to_be_unique` at model level.
+
+```yaml
+- name: fct_player_game_logs
+  description: …
+  config:
+    meta:
+      grain: One row per player per game played.
+  data_tests:
+    - dbt_expectations.expect_compound_columns_to_be_unique:
+        arguments:
+          column_list: ["player_id", "game_id"]
+```
+
+dbt-score enforces both (`dbt_score_rules/baseline.py`): `has_grain_meta` is CRITICAL, so a missing or malformed grain fails `make dbt-score`, pre-commit and CI; `has_grain_test` flags a model with no uniqueness test. When a change alters what a row is, update the sentence and the test together.
+
 ## Python / tooling
 
 - Pin: **Python 3.13** (`requires-python = ">=3.13,<3.14"`)

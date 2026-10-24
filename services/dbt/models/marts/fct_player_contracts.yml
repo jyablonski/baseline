@@ -2,7 +2,10 @@ version: 2
 
 models:
   - name: fct_player_contracts
-    description: Player-season remaining contract salary with canonical UUID references.
+    description: Remaining contract salary per player, team, and season, with canonical UUID references.
+    config:
+      meta:
+        grain: One row per player per team per contract season.
     columns:
       - name: player_id
         description: Baseline player UUID.

@@ -7,6 +7,9 @@ models:
       team_id via abbreviation (BRK/CHO/PHO mapped at ingest). This is a
       reported salary sum compared to official CBA tax/apron seeds, not a
       luxury-tax bill (no repeater tax).
+    config:
+      meta:
+        grain: One row per team per season.
     # dbt model versions. Plain ref('fct_team_payroll') resolves to latest_version,
     # so v2 is a prerelease until latest_version moves; ref('fct_team_payroll', v=2)
     # opts in early. Columns below are the v1 shape; each version can include/exclude.

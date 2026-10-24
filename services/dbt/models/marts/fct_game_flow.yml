@@ -12,6 +12,9 @@ models:
       team ever held (0 when the winner never trailed), with the period and elapsed second
       it peaked, plus the winner's margin at halftime and entering the fourth, and
       overtime period counts.
+    config:
+      meta:
+        grain: One row per Final game with scoring play-by-play.
     columns:
       - name: game_id
         description: Baseline game UUID.

@@ -3,6 +3,9 @@ version: 2
 models:
   - name: int_player_injuries_matched
     description: Injuries after provider-key resolution at ingest.
+    config:
+      meta:
+        grain: One row per player per team on the current injury report.
     columns:
       - name: player_id
         description: Baseline player UUID.

@@ -17,6 +17,9 @@ models:
       resolve through their current code, so a ":was-5: Washington Bullets" flair
       is a Wizards fan, while `sea` (Supersonics) has no current franchise and
       stays `other`.
+    config:
+      meta:
+        grain: One row per distinct raw flair string.
     columns:
       - name: author_flair
         description: "Raw flair string as Reddit returns it, e.g. ':lal-1: Lakers'. The grain."

@@ -6,6 +6,9 @@ models:
       Per-player per-season averages from loaded game logs (PPG / RPG / APG).
       Grain is player_id x season. games_played is the qualifier column; this
       mart does not apply a league-minimum filter.
+    config:
+      meta:
+        grain: One row per player per season.
     columns:
       - name: player_id
         description: Baseline player UUID.

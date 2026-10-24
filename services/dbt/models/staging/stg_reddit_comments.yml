@@ -6,6 +6,9 @@ models:
       PRAW comment ingest, lightly cleaned. Unique on reddit_id.
       Associated to the parent submission via post_reddit_id.
       Queryable via gold / Cube.
+    config:
+      meta:
+        grain: One row per Reddit comment.
     columns:
       - name: reddit_id
         description: Reddit base36 id (no t1_/t3_ prefix).

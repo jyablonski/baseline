@@ -6,6 +6,9 @@ models:
       ESPN scoreboard events with their national broadcasters. Grain is
       espn_event_id. game_id is null when the event matched no scheduled game,
       and national_tv is null for a game carried only on local networks.
+    config:
+      meta:
+        grain: One row per ESPN scoreboard event.
     columns:
       - name: espn_event_id
         description: ESPN event id.

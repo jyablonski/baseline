@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { Providers } from "@/components/providers";
+import { SITE_URL } from "@/lib/site";
 
 import "@/app/globals.css";
 
@@ -27,6 +28,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Baseline",
     // Page first, brand last: tabs truncate from the right and screen readers

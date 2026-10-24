@@ -14,6 +14,9 @@ models:
       day never features one game twice. Season highs and streaks are as of the
       game; MVP rank and percentiles use the season as it stands now. Thresholds
       and weights are the highlight_* vars in dbt_project.yml.
+    config:
+      meta:
+        grain: One row per highlight candidate (game x highlight type x subject x stat).
     columns:
       - name: highlight_id
         description: md5 of game_id, highlight_type, subject, and stat_name.

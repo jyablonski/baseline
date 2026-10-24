@@ -3,6 +3,9 @@ version: 2
 models:
   - name: stg_players
     description: Cleaned player biographical data from the NBA API.
+    config:
+      meta:
+        grain: One row per player.
     columns:
       - name: player_id
         description: Unique NBA player identifier.

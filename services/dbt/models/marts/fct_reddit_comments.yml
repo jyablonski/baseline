@@ -6,6 +6,9 @@ models:
       Thin gold copy of PRAW comments. Unique on reddit_id.
       post_reddit_id associates the comment to fct_reddit_posts.
       Queryable via Cube / MCP.
+    config:
+      meta:
+        grain: One row per Reddit comment.
     columns:
       - name: reddit_id
         description: Reddit base36 id (no t1_/t3_ prefix).

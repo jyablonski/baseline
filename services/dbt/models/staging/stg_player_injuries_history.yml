@@ -3,6 +3,9 @@ version: 2
 models:
   - name: stg_player_injuries_history
     description: Append-only daily Basketball-Reference injury snapshots, one row per player, team, and scrape date.
+    config:
+      meta:
+        grain: One row per player per team per daily injury snapshot.
     columns:
       - name: player_id
         description: Baseline player UUID.

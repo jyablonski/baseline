@@ -7,6 +7,9 @@ models:
       line of every game that has since tipped. Grain is odds_event_id x
       bookmaker x market. home_market_wp is de-vigged home implied probability
       and is null when a side is missing.
+    config:
+      meta:
+        grain: One row per odds event per bookmaker per market.
     columns:
       - name: odds_event_id
         description: The Odds API event id.

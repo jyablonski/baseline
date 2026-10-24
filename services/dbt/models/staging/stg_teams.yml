@@ -3,6 +3,9 @@ version: 2
 models:
   - name: stg_teams
     description: Cleaned team reference data with standardized team_name.
+    config:
+      meta:
+        grain: One row per team.
     columns:
       - name: team_id
         description: Unique NBA team identifier.

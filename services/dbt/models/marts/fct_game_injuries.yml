@@ -10,6 +10,9 @@ models:
       injury_upcoming_days ahead. Games before the snapshots began have no rows.
       This is the morning report, not the official inactive list: played says
       whether a listed player logged minutes once the game is Final.
+    config:
+      meta:
+        grain: One row per game per player on either team's injury report.
     columns:
       - name: game_id
         description: Baseline game UUID.

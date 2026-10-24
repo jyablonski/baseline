@@ -3,6 +3,9 @@ version: 2
 models:
   - name: stg_player_game_logs
     description: Player game logs with parsed home/away location and opponent abbreviation.
+    config:
+      meta:
+        grain: One row per player per game played.
     columns:
       - name: player_id
         description: Baseline player UUID.

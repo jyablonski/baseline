@@ -152,11 +152,14 @@ def test_list_schedule_dates_defaults_to_today_and_can_be_empty(
     client, session, query_result
 ) -> None:
     session.queue = [query_result([])]
+    # Bracket the request so a run straddling midnight still matches.
+    before = date.today()
     response = client.get("/api/v1/schedule/dates")
     assert response.status_code == 200
     assert response.json() == {"data": [], "meta": {"total": 0, "limit": 0, "offset": 0}}
     _, params = session.calls[-1]
-    assert params == {"season": None, "from_date": date.today()}
+    assert params["season"] is None
+    assert params["from_date"] in {before, date.today()}
     assert client.get("/api/v1/schedule/dates?from_date=soon").status_code == 422
 
 

@@ -11,6 +11,9 @@ models:
       the assister / stealer / blocker / fouled / subbed-out player; the latter
       is only populated for games ingested after that fix, so it is null for
       rows loaded earlier until they are re-scraped with --refresh.
+    config:
+      meta:
+        grain: One row per play-by-play action.
     columns:
       - name: game_id
         description: Baseline game UUID.

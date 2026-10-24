@@ -5,6 +5,9 @@ models:
     description: >
       PRAW submission ingest, lightly cleaned. Unique on reddit_id.
       Queryable via gold / Cube.
+    config:
+      meta:
+        grain: One row per Reddit post.
     columns:
       - name: reddit_id
         description: Reddit base36 id (no t1_/t3_ prefix).
