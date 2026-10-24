@@ -7,6 +7,9 @@ models:
       pregame line of each game already tipped (see fct_game_upsets). Filter on
       commence_time for the upcoming slate. Grain is odds_event_id x bookmaker x market. Market snapshot, not a book.
       game_id is null when the event could not be matched to source.games.
+    config:
+      meta:
+        grain: One row per odds event per bookmaker per market.
     columns:
       - name: odds_event_id
         description: The Odds API event id.

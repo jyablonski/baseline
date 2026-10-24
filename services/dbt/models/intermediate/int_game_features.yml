@@ -6,6 +6,9 @@ models:
       Regular Season pregame features. Every feature is built from completed
       games strictly earlier than the scheduled game's date; scheduled games
       are retained with null cold-start features.
+    config:
+      meta:
+        grain: One row per Regular Season game, scheduled or Final.
     columns:
       - name: game_id
         description: Baseline game UUID.

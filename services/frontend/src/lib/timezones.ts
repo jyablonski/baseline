@@ -154,7 +154,8 @@ export function formatDailyRefresh(timezone: string | null | undefined, now = ne
   return `${time} ${zone}`;
 }
 
-function formatInstant(
+/** An instant as { date, time, zone } in the account's time zone; Eastern reads as "ET". */
+export function formatInstant(
   instant: Date,
   timezone: string | null | undefined,
   weekday: "short" | "long" = "short"

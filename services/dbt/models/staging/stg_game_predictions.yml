@@ -6,6 +6,9 @@ models:
       Pregame home win probabilities written by services/ml. Grain is
       game_id x model_version: each run overwrites the row in place.
       market_wp is null when odds did not match that game.
+    config:
+      meta:
+        grain: One row per game per model version.
     columns:
       - name: game_id
         description: Baseline game UUID.

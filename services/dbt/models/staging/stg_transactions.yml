@@ -3,6 +3,9 @@ version: 2
 models:
   - name: stg_transactions
     description: Basketball-Reference transactions log, one row per dated entry.
+    config:
+      meta:
+        grain: One row per dated transaction entry.
     columns:
       - name: transaction_key
         description: sha256(transaction_date|description). The grain.
@@ -23,6 +26,9 @@ models:
       Teams and players named by a transaction, resolved from their
       Basketball-Reference href slugs. Draft picks are prose, not links, and
       are deliberately absent.
+    config:
+      meta:
+        grain: One row per transaction per participant (team or player) per direction.
     columns:
       - name: transaction_key
         description: sha256(transaction_date|description). Joins participants to their transaction.

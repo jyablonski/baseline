@@ -5,6 +5,9 @@ models:
     description: >
       All source.games rows including Scheduled / upcoming (nullable scores).
       Final-only results stay on stg_games / fct_team_game_results.
+    config:
+      meta:
+        grain: One row per game, scheduled or Final.
     columns:
       - name: game_id
         description: Unique NBA game identifier (Final or upcoming).

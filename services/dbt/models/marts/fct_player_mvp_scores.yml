@@ -9,6 +9,9 @@ models:
       scaled by win/loss) times an availability multiplier that starts
       penalizing past a grace share of team games missed and caps out. Knobs
       are the mvp_* vars in dbt_project.yml.
+    config:
+      meta:
+        grain: One row per player per season per season type (Regular Season and Playoffs).
     columns:
       - name: player_id
         description: Baseline player UUID.

@@ -3,6 +3,9 @@ version: 2
 models:
   - name: fct_team_game_results
     description: One row per final game with home/away team context and winner location.
+    config:
+      meta:
+        grain: One row per Final game, home and away on the same row.
     columns:
       - name: game_id
         description: Unique NBA game identifier.

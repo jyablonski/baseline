@@ -5,6 +5,9 @@ models:
     description: >
       Thin gold copy of PRAW submissions. Unique on reddit_id.
       Queryable via Cube / MCP.
+    config:
+      meta:
+        grain: One row per Reddit post.
     columns:
       - name: reddit_id
         description: Reddit base36 id (no t1_/t3_ prefix).

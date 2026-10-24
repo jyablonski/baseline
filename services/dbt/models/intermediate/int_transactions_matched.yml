@@ -6,6 +6,9 @@ models:
       Transaction participants joined to canonical teams and players. The
       scraper resolves ids from href slugs; this model only records whether
       that link landed, via match_method.
+    config:
+      meta:
+        grain: One row per transaction per participant (team or player) per direction.
     columns:
       - name: transaction_key
         description: sha256(transaction_date|description). Joins participants to their transaction.

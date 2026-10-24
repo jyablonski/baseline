@@ -10,6 +10,9 @@ models:
       leader's games_back, or a whole season it has not scraped) is derived in
       int_standings_records from fct_team_game_results, once, for the API, Cube,
       and MCP alike. This mart adds the playoff seed.
+    config:
+      meta:
+        grain: One row per team per season per season type.
     columns:
       - name: playoff_seed
         description: >

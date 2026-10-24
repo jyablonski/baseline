@@ -20,6 +20,21 @@ def has_grain_test(model: Model) -> RuleViolation | None:
     )
 
 
+# CRITICAL zeroes the model's score, so fail_any_item_under fails CI on a single miss.
+@rule(severity=Severity.CRITICAL)
+def has_grain_meta(model: Model) -> RuleViolation | None:
+    """A model should say in plain English what one row is, in config.meta.grain."""
+    # dbt 1.10+ moves meta under config; accept either spelling.
+    grain = model.config.get("meta", {}).get("grain") or model.meta.get("grain")
+    if not isinstance(grain, str) or not grain.strip():
+        return RuleViolation(
+            message="No config.meta.grain: add e.g. 'One row per player per game played.'"
+        )
+    if not grain.startswith("One row per "):
+        return RuleViolation(message=f"meta.grain should start with 'One row per ': {grain!r}.")
+    return None
+
+
 @rule
 def id_columns_have_not_null(model: Model) -> RuleViolation | None:
     """Every declared *_id column should have a not_null test, unless meta nullable: true says why not."""

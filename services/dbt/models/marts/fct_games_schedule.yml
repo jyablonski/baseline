@@ -5,6 +5,9 @@ models:
     description: >
       Thin games-with-status mart (Final and upcoming). Do not use this as
       a completed-game fact; fct_team_game_results stays Final-only.
+    config:
+      meta:
+        grain: One row per game, scheduled or Final.
     columns:
       - name: game_id
         description: Baseline game UUID.

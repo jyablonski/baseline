@@ -8,6 +8,9 @@ models:
       are locked on record; the three play-in games decide 7-10. Emitted only
       once all three of a conference's play-in games are final, so a conference
       mid-play-in yields no rows rather than a half-built bracket.
+    config:
+      meta:
+        grain: One row per team per season, once its conference's play-in is final.
     columns:
       - name: team_id
         description: Baseline team UUID.

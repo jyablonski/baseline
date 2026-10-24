@@ -6,6 +6,9 @@ models:
       Post titles + self text and comment bodies as one normalized, space-padded
       text grain for entity matching. Removed and deleted comment bodies are
       dropped — "[removed]" carries no entities. Grain is document_reddit_id.
+    config:
+      meta:
+        grain: "One row per document: a post (title + self text) or a comment."
     columns:
       - name: document_reddit_id
         description: Reddit id of the post or comment this text came from. The grain.

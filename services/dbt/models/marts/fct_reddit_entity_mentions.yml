@@ -11,6 +11,9 @@ models:
       only "Jokic", "Kawhi" or "Wemby" is not counted, because dim_teams and
       dim_players cannot disambiguate a surname shared with a retired player they do
       not contain.
+    config:
+      meta:
+        grain: One row per entity (player or team) per document (post or comment).
     data_tests:
       - dbt_expectations.expect_compound_columns_to_be_unique:
           arguments:

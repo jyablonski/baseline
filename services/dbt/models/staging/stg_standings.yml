@@ -3,6 +3,9 @@ version: 2
 models:
   - name: stg_standings
     description: Regular Season standings from source.standings, lightly cleaned.
+    config:
+      meta:
+        grain: One row per team per season per season type.
     columns:
       - name: team_id
         description: Baseline team UUID.

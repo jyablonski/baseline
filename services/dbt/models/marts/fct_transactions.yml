@@ -6,6 +6,9 @@ models:
       Basketball-Reference transactions log, one row per dated entry. Grain is
       transaction_key = sha256(transaction_date|description); a reworded entry
       lands as a new row rather than an update.
+    config:
+      meta:
+        grain: One row per dated transaction entry.
     columns:
       - name: transaction_key
         description: sha256(transaction_date|description). The grain.
@@ -30,6 +33,9 @@ models:
       Teams and players named by each transaction, linked to dim_teams and
       dim_players. A team appears twice in a trade it both sends to and
       receives from, once per direction.
+    config:
+      meta:
+        grain: One row per transaction per participant (team or player) per direction.
     columns:
       - name: transaction_key
         description: sha256(transaction_date|description). Joins participants to their transaction.

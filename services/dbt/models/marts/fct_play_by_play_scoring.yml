@@ -6,6 +6,9 @@ models:
       Gold scoring-play series for the game-flow chart. One row per
       score change (game_id x action_number). Differential is home minus away.
       Not live win probability.
+    config:
+      meta:
+        grain: One row per score change.
     columns:
       - name: game_id
         description: Baseline game UUID.

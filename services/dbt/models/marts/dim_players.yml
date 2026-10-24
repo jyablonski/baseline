@@ -3,6 +3,9 @@ version: 2
 models:
   - name: dim_players
     description: Player dimension with career aggregates from game logs.
+    config:
+      meta:
+        grain: One row per player.
     columns:
       - name: player_id
         description: Unique NBA player identifier.

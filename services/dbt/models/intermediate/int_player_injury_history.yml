@@ -3,6 +3,9 @@ version: 2
 models:
   - name: int_player_injury_history
     description: Daily injury snapshots with status and body part parsed from the note, the same way as the current snapshot.
+    config:
+      meta:
+        grain: One row per player per team per daily injury snapshot.
     columns:
       - name: player_id
         description: Baseline player UUID.

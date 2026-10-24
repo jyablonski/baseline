@@ -5,23 +5,12 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { ColumnHelp } from "@/components/column-help";
+import { BaselineRows } from "@/components/predictions/baseline-rows";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { api, queryErrorMessage } from "@/lib/api";
 import { formatNumber, formatProbability } from "@/lib/format";
+import { modelLabel } from "@/lib/predictions";
 import type { ScorecardRow } from "@/lib/types";
-
-const MODEL_LABELS: Record<string, string> = {
-  elo: "Elo",
-  logit: "Logistic regression",
-};
-
-// Two versions of one model can grade side by side (elo-v0 / elo-v1), so the
-// name alone is ambiguous. "elo-v1" -> "Elo v1".
-function modelLabel(row: ScorecardRow): string {
-  const name = MODEL_LABELS[row.model_name] ?? row.model_name;
-  const version = row.model_version.split("-").at(-1);
-  return version && version !== row.model_version ? `${name} ${version}` : name;
-}
 
 export default function PredictionsPage() {
   return (
@@ -133,22 +122,7 @@ function SeasonScorecard({ season, rows }: { season: string; rows: ScorecardRow[
                 <td className="tabular">{formatNumber(row.calibration_error, 3)}</td>
               </tr>
             ))}
-            <tr>
-              <td className="text-muted-foreground">Sportsbook market</td>
-              <td className="tabular">{formatNumber(baseline.market_n)}</td>
-              <td className="tabular">{formatNumber(baseline.market_logloss, 3)}</td>
-              <td className="tabular">{formatNumber(baseline.market_brier, 3)}</td>
-              <td className="tabular">—</td>
-              <td className="tabular">—</td>
-            </tr>
-            <tr>
-              <td className="text-muted-foreground">Always pick the home team</td>
-              <td className="tabular">{formatNumber(baseline.n)}</td>
-              <td className="tabular">—</td>
-              <td className="tabular">—</td>
-              <td className="tabular">{formatProbability(baseline.home_always_accuracy)}</td>
-              <td className="tabular">—</td>
-            </tr>
+            <BaselineRows baseline={baseline} />
           </tbody>
         </table>
       </div>

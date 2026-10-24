@@ -7,6 +7,9 @@ models:
       or before the scheduled game date is scored only against Final games;
       schedule data has date, not tip-time, precision. All model versions
       remain visible here even when fct_game_predictions surfaces the champion only.
+    config:
+      meta:
+        grain: One row per season per model (name + version).
     columns:
       - name: season
         description: NBA season label, e.g. 2025-26.

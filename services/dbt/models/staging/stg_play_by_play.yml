@@ -6,6 +6,9 @@ models:
       Lightly cleaned Basketball-Reference actions. Grain is game_id x action_number x
       action_id (V3 repeats actionNumber for steal/block pairs).
       Season-scoped ingest; not a full-history backfill.
+    config:
+      meta:
+        grain: One row per play-by-play action.
     columns:
       - name: game_id
         description: Baseline game UUID.

@@ -3,6 +3,9 @@ version: 2
 models:
   - name: int_player_contracts_matched
     description: Contracts after provider-key resolution at ingest.
+    config:
+      meta:
+        grain: One row per player per team per contract season.
     columns:
       - name: player_id
         description: Baseline player UUID.

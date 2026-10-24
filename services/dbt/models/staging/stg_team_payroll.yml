@@ -3,6 +3,9 @@ version: 2
 models:
   - name: stg_team_payroll
     description: Team-season payroll totals from Basketball-Reference, resolved to canonical UUIDs.
+    config:
+      meta:
+        grain: One row per team per season.
     columns:
       - name: team_id
         description: Baseline team UUID.

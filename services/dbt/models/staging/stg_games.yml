@@ -3,6 +3,9 @@ version: 2
 models:
   - name: stg_games
     description: Final games with winning_team_id and score_margin.
+    config:
+      meta:
+        grain: One row per Final game.
     columns:
       - name: game_id
         description: Unique NBA game identifier.
