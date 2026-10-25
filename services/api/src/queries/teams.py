@@ -288,11 +288,10 @@ LIST_TEAM_SEASON_GAMES = text(
                 WHEN fct_games_schedule.home_team_id = :team_id THEN fct_games_schedule.away_score
                 ELSE fct_games_schedule.home_score
             END AS opponent_score,
-            coalesce(
-                fct_games_schedule.game_date
-                - lag(fct_games_schedule.game_date) OVER (ORDER BY fct_games_schedule.game_date) = 1,
-                FALSE
-            ) AS is_back_to_back
+            CASE
+                WHEN fct_games_schedule.home_team_id = :team_id THEN fct_games_schedule.home_is_back_to_back
+                ELSE fct_games_schedule.away_is_back_to_back
+            END AS is_back_to_back
         FROM gold.fct_games_schedule
         INNER JOIN target_seasons
             ON target_seasons.season = fct_games_schedule.season

@@ -842,3 +842,104 @@ def test_daily_games_are_finals_without_logs(db_session_factory, monkeypatch) ->
     games = games_module.scrape_todays_games(date(2026, 10, 21))
 
     assert [game["game_id"] for game in games] == [missed_day, last_night]
+
+
+@pytest.mark.integration
+def test_catch_up_gaps_and_missing_play_by_play(db_session_factory) -> None:
+    """Last night's half-loaded games are gaps; a fully loaded one is not.
+
+    Its own season so games other tests leave behind cannot leak in.
+    """
+    from pipeline import find_game_gaps
+
+    from scrapers.play_by_play import games_missing_play_by_play
+
+    now = datetime.now(UTC)
+    night = date(2027, 11, 4)
+    complete = UUID("00000000-0000-4000-8000-000000000421")
+    box_score_only = UUID("00000000-0000-4000-8000-000000000422")
+    not_final = UUID("00000000-0000-4000-8000-000000000423")
+    night_before = UUID("00000000-0000-4000-8000-000000000424")
+
+    def game(game_id: UUID, game_date: date, status: str) -> dict:
+        return {
+            "game_id": game_id,
+            "season": "2027-28",
+            "season_type": "Regular Season",
+            "game_date": game_date,
+            "home_team_id": TEAM_HOME,
+            "away_team_id": TEAM_AWAY,
+            "status": status,
+            "scraped_at": now,
+        }
+
+    def log(game_id: UUID) -> dict:
+        return {
+            "player_id": PLAYER_ONE,
+            "game_id": game_id,
+            "team_id": TEAM_HOME,
+            "game_date": night,
+            "season": "2027-28",
+            "matchup": "TST vs. AWY",
+            "scraped_at": now,
+        }
+
+    with get_session() as session:
+        upsert_rows(session, Team, _teams(now), ["team_id"])
+        upsert_rows(
+            session,
+            Player,
+            [
+                {
+                    "player_id": PLAYER_ONE,
+                    "first_name": "Test",
+                    "last_name": "Player",
+                    "full_name": "Test Player",
+                    "is_active": True,
+                    "team_id": TEAM_HOME,
+                    "scraped_at": now,
+                }
+            ],
+            ["player_id"],
+        )
+        upsert_rows(
+            session,
+            Game,
+            [
+                game(complete, night, "Final"),
+                game(box_score_only, night, "Final"),
+                game(not_final, night, "Scheduled"),
+                game(night_before, date(2027, 11, 3), "Final"),
+            ],
+            ["game_id"],
+        )
+        upsert_rows(
+            session, PlayerGameLog, [log(complete), log(box_score_only)], ["player_id", "game_id"]
+        )
+        upsert_rows(
+            session,
+            PlayByPlay,
+            [
+                {
+                    "game_id": complete,
+                    "season": "2027-28",
+                    "action_number": 1,
+                    "action_id": 1,
+                    "period": 1,
+                    "clock": "PT12M00.00S",
+                    "description": "Jump ball",
+                    "scraped_at": now,
+                }
+            ],
+            ["game_id", "action_number", "action_id"],
+        )
+
+    with get_session() as session:
+        gaps = {gap.game_id: gap for gap in find_game_gaps(session, night)}
+    assert set(gaps) == {str(box_score_only), str(not_final)}
+    assert gaps[str(box_score_only)].describe() == "AWY @ TST: no play-by-play"
+    assert gaps[str(not_final)].describe() == "AWY @ TST: no final score on the schedule"
+
+    # The box-score-only game is offered for play-by-play even though the
+    # daily box-score selection no longer sees it.
+    assert games_missing_play_by_play(date(2027, 11, 5)) == [str(night_before), str(box_score_only)]

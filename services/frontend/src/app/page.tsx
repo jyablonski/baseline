@@ -22,7 +22,7 @@ import {
 import { teamHref, withSeason } from "@/lib/nav";
 import { formatDayTitle, gameOdds, rankSlate } from "@/lib/results";
 import { CONTENT_TYPE_LABELS, formatCount, rangeToDates } from "@/lib/social";
-import { conferenceStandings, standingsSeed } from "@/lib/team-form";
+import { conferenceStandings, standingsSeed, streakSentence } from "@/lib/team-form";
 import { cn } from "@/lib/utils";
 import { formatGameTime, formatScrapedAt } from "@/lib/timezones";
 import type { LeagueGame, ScheduledGame, StandingRow } from "@/lib/types";
@@ -104,7 +104,7 @@ function HomeDesk() {
             <div className="mb-2 flex items-end justify-between gap-3">
               <h2 className="type-module">Standings</h2>
               <Link href={withSeason("/teams", season)} className="text-sm text-primary">
-                Full standings →
+                Teams →
               </Link>
             </div>
             {standingsQuery.isLoading ? (
@@ -133,7 +133,6 @@ function HomeDesk() {
               isLoading={seasonIsLoading || scheduleQuery.isLoading}
               error={scheduleQuery.isError ? scheduleQuery.error : null}
               standings={standings}
-              results={results}
             />
           </section>
           <section className="border-t border-rule py-[var(--ct-space-4)]">
@@ -143,7 +142,7 @@ function HomeDesk() {
       </div>
 
       <p className="type-caption tabular border-t border-rule pt-[var(--ct-space-3)]">
-        Scraped {formatScrapedAt(statusQuery.data?.last_scraped_at, timezone)}
+        Data as of {formatScrapedAt(statusQuery.data?.last_scraped_at, timezone)}
       </p>
     </div>
   );
@@ -178,7 +177,7 @@ function ResultsStrip({
           ) : null}
         </div>
         <Link href="/games" className="text-sm text-primary">
-          All results →
+          Games →
         </Link>
       </div>
       {isLoading ? (
@@ -203,7 +202,7 @@ function ResultsStrip({
         <p className="mt-3 text-sm">
           {/* Pinned to the night, so it still lands there once a newer slate is in. */}
           <Link href={`/games?date=${day}`} className="text-primary">
-            See all {games.length} games →
+            All {games.length} games →
           </Link>
         </p>
       ) : null}
@@ -276,14 +275,12 @@ function UpcomingList({
   isLoading,
   error,
   standings,
-  results,
 }: {
   games: ScheduledGame[];
   season: string;
   isLoading: boolean;
   error: unknown;
   standings: StandingRow[];
-  results: LeagueGame[];
 }) {
   const { timezone } = useProfile();
   const date = games[0]?.game_date;
@@ -297,13 +294,19 @@ function UpcomingList({
   const title = date && date.slice(0, 10) === isoDateET() ? "Games today" : "Next up";
   return (
     <>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h2 className="type-module">{title}</h2>
-        {date ? (
-          <p className="type-caption">
-            {formatSlateDate(date)} · {zone}
-          </p>
-        ) : null}
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <h2 className="type-module">{title}</h2>
+          {date ? (
+            <p className="type-caption">
+              {formatSlateDate(date)} · {games.length} {games.length === 1 ? "game" : "games"} ·{" "}
+              {zone}
+            </p>
+          ) : null}
+        </div>
+        <Link href={withSeason("/schedule", season)} className="text-sm text-primary">
+          Schedule →
+        </Link>
       </div>
       {isLoading ? (
         <LoadingState label="Loading upcoming games…" />
@@ -350,16 +353,11 @@ function UpcomingList({
                   {game.national_tv}
                 </span>
               ) : null}
-              <UpcomingNote note={upcomingNote(game, standings, results)} />
+              <UpcomingNote note={streakNote(game, standings)} />
             </li>
           ))}
         </ul>
       )}
-      <p className="mt-3 text-sm">
-        <Link href={withSeason("/schedule", season)} className="text-primary">
-          {games.length > shown.length ? `All ${games.length} games →` : "Full schedule →"}
-        </Link>
-      </p>
     </>
   );
 }
@@ -520,26 +518,20 @@ function sameDay<T extends { game_date: string }>(rows: T[]): T[] {
   return rows.filter((row) => row.game_date.slice(0, 10) === first);
 }
 
-// One short reason to care about a game, from data already on the page: a team
-// on the second night of a back-to-back, else the longer notable streak.
-function upcomingNote(game: ScheduledGame, standings: StandingRow[], results: LeagueGame[]) {
+// One short reason to care about a game: the longer notable streak of the two
+// teams. Back-to-backs are left to the schedule and game page.
+function streakNote(game: ScheduledGame, standings: StandingRow[]) {
   const sides = [
     { id: game.away_team_id, abbreviation: game.away_team_abbreviation },
     { id: game.home_team_id, abbreviation: game.home_team_abbreviation },
   ];
-  if (results[0]?.game_date.slice(0, 10) === isoDayBefore(game.game_date)) {
-    const tired = sides.filter((side) =>
-      results.some((result) => result.home_team_id === side.id || result.away_team_id === side.id)
-    );
-    if (tired.length === 2) return "Both on a back-to-back";
-    if (tired.length === 1) return `${tired[0].abbreviation} on a back-to-back`;
-  }
   const streaks = sides
-    .map((side) => {
-      const streak = standings.find((row) => row.team_id === side.id)?.streak ?? "";
-      return { label: `${side.abbreviation} ${streak}`, length: Number(streak.slice(1)) || 0 };
+    .flatMap((side) => {
+      const parsed = streakSentence(standings.find((row) => row.team_id === side.id)?.streak);
+      return parsed && parsed.length >= NOTABLE_STREAK
+        ? [{ label: `${side.abbreviation} ${parsed.sentence}`, length: parsed.length }]
+        : [];
     })
-    .filter((streak) => streak.length >= NOTABLE_STREAK)
     .sort((left, right) => right.length - left.length);
   return streaks[0]?.label ?? null;
 }

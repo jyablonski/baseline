@@ -494,6 +494,21 @@ export type ScheduledGame = {
   arena_state?: string | null;
   // National TV and streaming networks ("ESPN, ABC"); null for a local-only game.
   national_tv?: string | null;
+  /**
+   * Second night of a back-to-back: the team played the day before. The
+   * last_night fields describe that game and are null unless the flag is set;
+   * its scores stay null until it is Final.
+   */
+  home_is_back_to_back?: boolean;
+  home_last_night_opponent_abbreviation?: string | null;
+  home_last_night_was_home?: boolean | null;
+  home_last_night_score?: number | null;
+  home_last_night_opponent_score?: number | null;
+  away_is_back_to_back?: boolean;
+  away_last_night_opponent_abbreviation?: string | null;
+  away_last_night_was_home?: boolean | null;
+  away_last_night_score?: number | null;
+  away_last_night_opponent_score?: number | null;
   prediction_model_version?: string | null;
   home_win_probability?: number | null;
   away_win_probability?: number | null;

@@ -360,6 +360,7 @@ const NBA_ACTION_LABELS: Record<string, string> = {
   skipped_mode_none: "Nothing to scrape",
   noop: "Nothing to scrape",
   dbt: "dbt only",
+  "catch-up": "Catch-up",
 };
 
 /**

@@ -23,7 +23,7 @@ describe("about page", () => {
     expect(about.textContent).not.toMatch(/not a general chatbot/);
     expect(about.textContent).not.toMatch(/until a dedicated screen exists/);
     expect(screen.queryByRole("heading", { name: "Last scraped" })).not.toBeInTheDocument();
-    expect(screen.queryByText(/Scraped /)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Data as of /)).not.toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "Sources" })).toBeInTheDocument();
     const sources = screen.getByRole("heading", { name: "Sources" }).closest("section");

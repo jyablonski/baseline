@@ -189,7 +189,17 @@ CREATE TABLE IF NOT EXISTS gold.fct_games_schedule (
     away_team_abbreviation  VARCHAR(5),
     away_team_name          VARCHAR(100),
     away_score              INTEGER,
-    national_tv             VARCHAR(200)
+    national_tv             VARCHAR(200),
+    home_is_back_to_back    BOOLEAN NOT NULL DEFAULT FALSE,
+    home_last_night_opponent_abbreviation VARCHAR(5),
+    home_last_night_was_home BOOLEAN,
+    home_last_night_score   INTEGER,
+    home_last_night_opponent_score INTEGER,
+    away_is_back_to_back    BOOLEAN NOT NULL DEFAULT FALSE,
+    away_last_night_opponent_abbreviation VARCHAR(5),
+    away_last_night_was_home BOOLEAN,
+    away_last_night_score   INTEGER,
+    away_last_night_opponent_score INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS gold.fct_daily_highlights (

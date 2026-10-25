@@ -750,6 +750,12 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                 home_spread: -3.5,
                 home_notable_out: ["Stephen Curry"],
                 away_notable_out: [],
+                // LAL lost at SAC the night before: the B2B badge's popover.
+                away_is_back_to_back: true,
+                away_last_night_opponent_abbreviation: "SAC",
+                away_last_night_was_home: false,
+                away_last_night_score: 108,
+                away_last_night_opponent_score: 115,
               },
               ...(scheduleSecondDay
                 ? [

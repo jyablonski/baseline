@@ -122,6 +122,18 @@ INSERT INTO gold.fct_games_schedule (
      'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'LAC', 'LA Clippers', 118,
      '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', 'Golden State Warriors', 115, NULL);
 
+-- The rematch the next night puts both teams on a back-to-back. Last night is
+-- not Final yet, so its scores are still null.
+UPDATE gold.fct_games_schedule
+SET
+    home_is_back_to_back = TRUE,
+    home_last_night_opponent_abbreviation = 'GSW',
+    home_last_night_was_home = FALSE,
+    away_is_back_to_back = TRUE,
+    away_last_night_opponent_abbreviation = 'LAC',
+    away_last_night_was_home = TRUE
+WHERE game_id = '00000000-0000-4000-8000-000000000205';
+
 -- 10/22 has a lead highlight and a runner-up for the same game; 10/23 is the
 -- newest day, so it is what an undated request returns.
 INSERT INTO gold.fct_daily_highlights (

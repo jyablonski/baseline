@@ -88,6 +88,10 @@ vi.mock("@/lib/api", () => ({
           home_team_name: "Boston Celtics",
           away_team_name: "New York Knicks",
           arena: "TD Garden",
+          // Played at home last night; that game is not Final yet, so no score.
+          away_is_back_to_back: true,
+          away_last_night_opponent_abbreviation: "PHI",
+          away_last_night_was_home: true,
         },
         {
           game_id: "0022600102",
@@ -157,10 +161,29 @@ describe("schedule page", () => {
     expect(screen.getAllByTestId("notable-out").map((chip) => chip.textContent)).toEqual([
       "GSW: Stephen Curry out",
     ]);
-    // Two games that day, each dated cell linking to its own game page.
+    // NYK played last night: a badge beside its link, not inside it, and one legend.
+    const badge = screen.getByRole("button", { name: "NYK played last night: vs PHI" });
+    expect(badge.closest("a")).toBeNull();
+    expect(screen.getAllByRole("button", { name: /played last night/ })).toHaveLength(1);
+    expect(screen.getByText("Played last night")).toBeInTheDocument();
+    // Every away slot makes room for a badge, so the "@" lines up down the table.
+    for (const away of ["LAL", "NYK"]) {
+      const slot = screen.getByRole("link", { name: away }).parentElement as HTMLElement;
+      expect(slot.style.width).toContain("2.25rem");
+    }
+    // Two games that day, each time cell linking to its own game page. The day
+    // header names the date, so the rows do not repeat it.
     expect(
-      screen.getAllByRole("link", { name: /Thu, Oct 22, 2026/ }).map((a) => a.getAttribute("href"))
-    ).toEqual(["/games/0022600100", "/games/0022600101"]);
+      screen.getAllByTitle("Game preview").map((a) => [a.textContent, a.getAttribute("href")])
+    ).toEqual([
+      ["7:30 PM ET", "/games/0022600100"],
+      ["TBD", "/games/0022600101"],
+    ]);
+    expect(screen.queryByText("Thu, Oct 22, 2026")).not.toBeInTheDocument();
+    // The legend rides on the day's summary line.
+    expect(screen.getByText("Played last night").closest("p")).toHaveTextContent(
+      "2 games · B2BPlayed last night"
+    );
   });
 
   it("shows model win % and consensus odds, and dashes games without them", async () => {
@@ -228,6 +251,8 @@ describe("schedule page", () => {
     expect(await screen.findByText("Kaseya Center")).toBeInTheDocument();
     expect(screen.queryByText("Chase Center")).not.toBeInTheDocument();
     expect(screen.getByText("1 game")).toBeInTheDocument();
+    // Nobody on a back-to-back that day: no badge, no legend.
+    expect(screen.queryByText("Played last night")).not.toBeInTheDocument();
     expect(within(picker).getByRole("button", { name: "Later game day" })).toBeDisabled();
 
     // Back to the soonest day drops the date from the URL.

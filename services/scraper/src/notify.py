@@ -3,6 +3,8 @@
 One POST per sync (pipeline / scrape-daily / scrape-all), never per step.
 refresh-daily.sh adds one more per failed dbt or ml stage; a scrape failure
 stops the refresh before either runs, so the two never stack.
+The hourly catch-up is quieter still: nothing per attempt, one post only when
+its window closes with games still missing.
 Unset or empty ``SLACK_WEBHOOK_URL`` skips HTTP and never fails the scrape.
 
 ``SyncAlert`` also collects a per-step outcome for every source it wraps, so
@@ -116,8 +118,8 @@ def _resolve_webhook_url(webhook_url: str | None) -> str | None:
     return stripped or None
 
 
-def format_sync_failure_text(sync_name: str, failures: Sequence[StepFailure]) -> str:
-    lines = [f"NBA scrape failed: {sync_name} ({len(failures)} step(s))"]
+def _failure_lines(failures: Sequence[StepFailure]) -> list[str]:
+    lines: list[str] = []
     shown = failures[:_MAX_FAILURES_IN_MESSAGE]
     for item in shown:
         where = f"{item.step} ({item.season})" if item.season else item.step
@@ -126,6 +128,26 @@ def format_sync_failure_text(sync_name: str, failures: Sequence[StepFailure]) ->
     extra = len(failures) - len(shown)
     if extra:
         lines.append(f"- ...and {extra} more")
+    return lines
+
+
+def format_sync_failure_text(sync_name: str, failures: Sequence[StepFailure]) -> str:
+    lines = [f"NBA scrape failed: {sync_name} ({len(failures)} step(s))"]
+    return "\n".join([*lines, *_failure_lines(failures)])
+
+
+def format_catch_up_text(
+    game_date: str, gaps: Sequence[str], failures: Sequence[StepFailure]
+) -> str:
+    """The one post the hourly catch-up makes: its window closed with games still missing."""
+    lines = [
+        f"NBA catch-up gave up on {game_date}: {len(gaps)} game(s) still missing data "
+        "after the last hourly retry"
+    ]
+    lines.extend(f"- {gap}" for gap in gaps)
+    if failures:
+        lines.append("Errors on the last attempt:")
+        lines.extend(_failure_lines(failures))
     return "\n".join(lines)
 
 

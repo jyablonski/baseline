@@ -263,6 +263,7 @@ def test_scrape_daily_success_sends_no_post(monkeypatch: pytest.MonkeyPatch) -> 
         "notify.settings", SimpleNamespace(slack_webhook_url="https://hooks.slack.test/x")
     )
     monkeypatch.setattr("main.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("main.games_missing_play_by_play", lambda: [])
     monkeypatch.setattr("main.scrape_standings", lambda season: 30)
     monkeypatch.setattr("main.scrape_transactions", lambda season: (9, 20))
     monkeypatch.setattr("main.scrape_injuries", lambda: 0)
@@ -276,6 +277,29 @@ def test_scrape_daily_success_sends_no_post(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.unit
+def test_scrape_daily_retries_play_by_play_for_games_that_already_have_box_scores(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BRef can post the box score before play-by-play; the next run must still fetch it."""
+    monkeypatch.setattr("main.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("main.games_missing_play_by_play", lambda: ["g1", "g2"])
+    pbp_calls: list[object] = []
+    monkeypatch.setattr(
+        "main.scrape_play_by_play", lambda **kwargs: pbp_calls.append(kwargs) or 900
+    )
+    monkeypatch.setattr("main.scrape_standings", lambda season: 30)
+    monkeypatch.setattr("main.scrape_injuries", lambda: 0)
+    monkeypatch.setattr("main.scrape_odds", lambda: 0)
+    monkeypatch.setattr("main.scrape_broadcasts", lambda: 0)
+    monkeypatch.setattr("main.scrape_contracts", lambda: (8, 2))
+    monkeypatch.setattr("main.stamp_cli_success", lambda: None)
+    result = CliRunner().invoke(cli, ["scrape-daily"])
+    assert result.exit_code == 0
+    assert pbp_calls == [{"game_ids": ["g1", "g2"]}]
+    assert "Play-by-play: 900 events for 2 game(s)" in result.output
+
+
+@pytest.mark.unit
 def test_scrape_daily_survives_a_broadcasts_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     posted: list[object] = []
     monkeypatch.setattr("notify.requests.post", lambda *args, **kwargs: posted.append(1))
@@ -283,6 +307,7 @@ def test_scrape_daily_survives_a_broadcasts_failure(monkeypatch: pytest.MonkeyPa
         "notify.settings", SimpleNamespace(slack_webhook_url="https://hooks.slack.test/x")
     )
     monkeypatch.setattr("main.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("main.games_missing_play_by_play", lambda: [])
     monkeypatch.setattr("main.scrape_standings", lambda season: 30)
     monkeypatch.setattr("main.scrape_injuries", lambda: 0)
     monkeypatch.setattr("main.scrape_odds", lambda: 0)
@@ -314,6 +339,7 @@ def test_scrape_daily_webhook_500_still_exits_nonzero(monkeypatch: pytest.Monkey
         "main.scrape_todays_games",
         lambda: (_ for _ in ()).throw(RuntimeError("nba timeout")),
     )
+    monkeypatch.setattr("main.games_missing_play_by_play", lambda: [])
     monkeypatch.setattr(
         "main.scrape_standings",
         lambda season: (_ for _ in ()).throw(RuntimeError("standings 503")),
@@ -518,3 +544,58 @@ def test_pipeline_run_once_records_who_triggered_it(monkeypatch: pytest.MonkeyPa
 
     assert seen == [(False, "manual"), (True, "manual"), (False, "scheduled")]
     assert runner.invoke(cli, ["pipeline", "run-once", "--triggered-by", "cron"]).exit_code == 2
+
+
+@pytest.mark.unit
+def test_pipeline_catch_up_prints_what_the_script_parses(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[bool] = []
+
+    def fake_catch_up(*, final: bool) -> dict[str, object]:
+        seen.append(final)
+        if final:
+            return {
+                "run_id": 4,
+                "status": "success",
+                "changed": True,
+                "remaining": 1,
+                "detail": "x",
+            }
+        return {
+            "run_id": None,
+            "status": "complete",
+            "changed": False,
+            "remaining": 0,
+            "detail": "y",
+        }
+
+    monkeypatch.setattr("main.run_catch_up", fake_catch_up)
+    runner = CliRunner()
+
+    quiet = runner.invoke(cli, ["pipeline", "catch-up"])
+    assert quiet.exit_code == 0, quiet.output
+    assert "run_id=\n" in quiet.output
+    assert "changed=0" in quiet.output
+
+    final = runner.invoke(cli, ["pipeline", "catch-up", "--final"])
+    assert final.exit_code == 0, final.output
+    assert "run_id=4" in final.output
+    assert "changed=1" in final.output
+    assert "remaining=1" in final.output
+    assert seen == [False, True]
+
+
+@pytest.mark.unit
+def test_format_catch_up_text_lists_games_and_last_errors() -> None:
+    from notify import format_catch_up_text
+
+    text = format_catch_up_text(
+        "2026-10-23",
+        ["AWY @ TST: no final score on the schedule"],
+        [StepFailure.from_exception("play_by_play", RuntimeError("HTTP 429"))],
+    )
+    lines = text.splitlines()
+    assert lines[0].startswith("NBA catch-up gave up on 2026-10-23: 1 game(s)")
+    assert "- AWY @ TST: no final score on the schedule" in lines
+    assert "Errors on the last attempt:" in lines
+    assert lines[-1] == "- play_by_play: RuntimeError: HTTP 429"
+    assert "Errors" not in format_catch_up_text("2026-10-23", ["g"], [])

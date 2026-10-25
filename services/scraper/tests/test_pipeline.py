@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from datetime import date
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -10,19 +10,23 @@ from pipeline import (
     DAILY_REDDIT_LIMIT,
     DAILY_REDDIT_SUBREDDIT,
     DAILY_REDDIT_TIME_FILTER,
+    GameGap,
     PipelineConfig,
+    catch_up_game_date,
     compose_run_action,
     decide_action,
     execute_contracts,
     execute_reddit,
     execute_scrape,
     execute_transactions,
+    find_game_gaps,
     finish_run,
     in_season_window,
     load_config,
     mark_scrape_success,
     record_dbt_only_run,
     record_source_runs,
+    run_catch_up,
     run_pipeline_scrape,
     set_enabled,
     should_run_contracts,
@@ -36,6 +40,7 @@ from queries import (
     INSERT_DBT_ONLY_RUN,
     INSERT_PIPELINE_RUN,
     INSERT_SOURCE_RUN,
+    SELECT_CATCH_UP_GAPS,
     SELECT_PIPELINE_CONFIG,
     UPDATE_PIPELINE_ENABLED,
     UPDATE_PIPELINE_RUN,
@@ -252,6 +257,7 @@ def test_execute_contracts_reports_combined_rows(monkeypatch: pytest.MonkeyPatch
 @pytest.mark.unit
 def test_execute_scrape(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("pipeline.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("pipeline.games_missing_play_by_play", lambda: [])
     monkeypatch.setattr("pipeline.scrape_standings", lambda season: 30)
     monkeypatch.setattr("pipeline.scrape_injuries", lambda: 4)
     monkeypatch.setattr("pipeline.scrape_odds", lambda: 0)
@@ -274,13 +280,30 @@ def test_execute_scrape(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "pipeline.scrape_todays_games", lambda: [{"game_id": "1"}, {"game_id": "2"}]
     )
+    monkeypatch.setattr("pipeline.games_missing_play_by_play", lambda: ["1", "2"])
     monkeypatch.setattr("pipeline.scrape_logs_for_games", lambda games: 10)
     count, detail = execute_scrape("daily", _config())
     assert count == 51
-    assert "2 game" in detail
+    assert "logs for 2 game" in detail
     assert "standings: 30" in detail
-    assert "pbp: 7" in detail
+    assert "pbp: 7 for 2 game(s)" in detail
     assert pbp_calls == [{"game_ids": ["1", "2"]}]
+
+    # Box scores already in, play-by-play still missing: only play-by-play runs.
+    pbp_calls.clear()
+    monkeypatch.setattr("pipeline.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("pipeline.games_missing_play_by_play", lambda: ["3"])
+    monkeypatch.setattr(
+        "pipeline.scrape_logs_for_games",
+        lambda games: (_ for _ in ()).throw(AssertionError("no box scores pending")),
+    )
+    alert = SyncAlert("pipeline")
+    count, detail = execute_scrape("daily", _config(), alert=alert)
+    assert pbp_calls == [{"game_ids": ["3"]}]
+    assert "logs for 0 game(s)" in detail
+    by_step = {step.step: step for step in alert.steps}
+    assert by_step["player_game_logs"].status == "skipped"
+    assert by_step["play_by_play"].status == "success"
 
     monkeypatch.setattr("pipeline.scrape_games", lambda season: 82)
     monkeypatch.setattr("pipeline.scrape_player_game_logs", lambda season, active_only=False: 5)
@@ -339,6 +362,7 @@ def test_a_broadcasts_failure_does_not_fail_the_daily_scrape(
 ) -> None:
     """ESPN is an optional extra: its outage must not stop the run before dbt."""
     monkeypatch.setattr("pipeline.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("pipeline.games_missing_play_by_play", lambda: [])
     monkeypatch.setattr("pipeline.scrape_standings", lambda season: 30)
     monkeypatch.setattr("pipeline.scrape_injuries", lambda: 12)
     monkeypatch.setattr("pipeline.scrape_odds", lambda: 0)
@@ -373,6 +397,7 @@ def test_daily_records_skipped_sources_rather_than_omitting_them(
     monkeypatch.setattr("pipeline.missing_odds_env_names", lambda: ["ODDS_API_KEY"])
     monkeypatch.setattr("pipeline.scrape_broadcasts", lambda: 9)
     monkeypatch.setattr("pipeline.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("pipeline.games_missing_play_by_play", lambda: [])
     monkeypatch.setattr("pipeline.scrape_standings", lambda season: 30)
     monkeypatch.setattr("pipeline.scrape_injuries", lambda: 12)
 
@@ -385,7 +410,10 @@ def test_daily_records_skipped_sources_rather_than_omitting_them(
     # Present-but-skipped, not missing entirely.
     assert by_step["player_game_logs"].status == "skipped"
     assert by_step["play_by_play"].status == "skipped"
-    assert "No completed games without box scores" in (by_step["play_by_play"].error_detail or "")
+    assert "No completed games without box scores" in (
+        by_step["player_game_logs"].error_detail or ""
+    )
+    assert "No completed games without play-by-play" in (by_step["play_by_play"].error_detail or "")
     assert "contracts" not in by_step
     assert by_step["todays_games"].rows == 0
     assert by_step["broadcasts"].rows == 9
@@ -1015,3 +1043,183 @@ def test_update_run_ml_exit(monkeypatch: pytest.MonkeyPatch) -> None:
         UPDATE_PIPELINE_RUN_ML_EXIT,
         {"run_id": 3, "ml_exit": 1, "detail": "ml score finished with exit 1"},
     )
+
+
+def _gap(game_id: str = "g1", **overrides) -> GameGap:
+    fields = dict(
+        game_id=game_id,
+        away_team="AWY",
+        home_team="TST",
+        is_final=False,
+        has_box_score=False,
+        has_play_by_play=False,
+    )
+    fields.update(overrides)
+    return GameGap(**fields)
+
+
+@pytest.mark.unit
+def test_game_gap_describes_what_is_missing() -> None:
+    assert _gap().describe() == "AWY @ TST: no final score on the schedule"
+    assert _gap(is_final=True).describe() == "AWY @ TST: no box score and no play-by-play"
+    assert (
+        _gap(is_final=True, has_box_score=True, home_team=None).describe()
+        == "AWY @ ?: no play-by-play"
+    )
+
+
+@pytest.mark.unit
+def test_catch_up_game_date_is_last_night_in_eastern_time() -> None:
+    # 02:00 UTC on the 24th is still the evening of the 23rd in New York.
+    assert catch_up_game_date(datetime(2026, 10, 24, 2, 0, tzinfo=UTC)) == date(2026, 10, 22)
+    assert catch_up_game_date(datetime(2026, 10, 24, 13, 0, tzinfo=UTC)) == date(2026, 10, 23)
+
+
+@pytest.mark.unit
+def test_find_game_gaps_maps_rows() -> None:
+    session = MagicMock()
+    session.execute.return_value.mappings.return_value = [
+        {
+            "game_id": "g1",
+            "away_team": "AWY",
+            "home_team": "TST",
+            "is_final": True,
+            "has_box_score": True,
+            "has_play_by_play": False,
+        }
+    ]
+    gaps = find_game_gaps(session, date(2026, 10, 23))
+    assert gaps == [_gap(is_final=True, has_box_score=True)]
+    session.execute.assert_called_once_with(SELECT_CATCH_UP_GAPS, {"game_date": date(2026, 10, 23)})
+
+
+class _CatchUpHarness:
+    """Patches run_catch_up's collaborators and records what it did."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, *, config=None, gaps=()) -> None:
+        self.gap_results = list(gaps)
+        self.finished: list[dict] = []
+        self.marked: list[bool] = []
+        self.posted: list[str] = []
+        self.started: list[dict] = []
+        monkeypatch.setattr("pipeline.get_session", lambda: _session(MagicMock()))
+        monkeypatch.setattr(
+            "pipeline.load_config", lambda session: config or _config(season_end=None)
+        )
+        monkeypatch.setattr("pipeline.find_game_gaps", lambda session, day: self.gap_results.pop(0))
+        monkeypatch.setattr(
+            "pipeline.start_run", lambda session, **kwargs: self.started.append(kwargs) or 41
+        )
+        monkeypatch.setattr(
+            "pipeline.finish_run", lambda session, run_id, **kw: self.finished.append(kw)
+        )
+        monkeypatch.setattr(
+            "pipeline.mark_scrape_success", lambda session: self.marked.append(True)
+        )
+        monkeypatch.setattr("pipeline.post_webhook_text", lambda text: self.posted.append(text))
+        monkeypatch.setattr("pipeline.scrape_todays_games", lambda: [{"game_id": "g1"}])
+        monkeypatch.setattr("pipeline.games_missing_play_by_play", lambda: ["g1"])
+        monkeypatch.setattr("pipeline.scrape_logs_for_games", lambda games: 24)
+        monkeypatch.setattr("pipeline.scrape_play_by_play", lambda **kwargs: 450)
+
+
+@pytest.mark.unit
+def test_catch_up_does_nothing_when_the_pipeline_is_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    harness = _CatchUpHarness(monkeypatch, config=_config(enabled=False))
+    result = run_catch_up(final=True)
+    assert result["status"] == "skipped"
+    assert result["run_id"] is None
+    assert harness.started == []
+    assert harness.posted == []
+
+
+@pytest.mark.unit
+def test_catch_up_opens_no_run_when_last_night_is_complete(monkeypatch: pytest.MonkeyPatch) -> None:
+    harness = _CatchUpHarness(monkeypatch, gaps=[[]])
+    result = run_catch_up(final=True)
+    assert result["status"] == "complete"
+    assert result["changed"] is False
+    assert harness.started == []
+    assert harness.posted == []
+
+
+@pytest.mark.unit
+def test_catch_up_loads_late_games_and_reports_a_change(monkeypatch: pytest.MonkeyPatch) -> None:
+    harness = _CatchUpHarness(monkeypatch, gaps=[[_gap()], []])
+    result = run_catch_up(final=True)
+    assert result == {
+        "run_id": 41,
+        "status": "success",
+        "changed": True,
+        "remaining": 0,
+        "detail": result["detail"],
+    }
+    assert "1 game(s) missing data before, 0 after" in result["detail"]
+    assert "24 player log rows; pbp: 450" in result["detail"]
+    assert harness.started == [{"triggered_by": "catch-up", "scrape_action": "catch-up"}]
+    assert harness.marked == [True]
+    assert harness.finished[0]["status"] == "success"
+    # Everything landed, so even the final attempt stays quiet.
+    assert harness.posted == []
+
+
+@pytest.mark.unit
+def test_catch_up_still_waiting_is_silent_until_the_final_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    still_missing = [_gap()]
+    harness = _CatchUpHarness(monkeypatch, gaps=[still_missing, still_missing])
+    monkeypatch.setattr("pipeline.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("pipeline.games_missing_play_by_play", lambda: [])
+    result = run_catch_up()
+    assert result["changed"] is False
+    assert result["remaining"] == 1
+    assert harness.marked == []
+    assert harness.posted == []
+
+    harness.gap_results = [still_missing, still_missing]
+    run_catch_up(final=True)
+    assert len(harness.posted) == 1
+    assert "AWY @ TST: no final score on the schedule" in harness.posted[0]
+
+
+@pytest.mark.unit
+def test_catch_up_records_a_failed_step_without_alerting(monkeypatch: pytest.MonkeyPatch) -> None:
+    box_scores_only = [_gap(is_final=True, has_box_score=True)]
+    harness = _CatchUpHarness(monkeypatch, gaps=[[_gap(is_final=True)], box_scores_only])
+    monkeypatch.setattr(
+        "pipeline.scrape_play_by_play",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("HTTP 429")),
+    )
+    result = run_catch_up()
+    assert result["status"] == "failed"
+    # Box scores landed, so dbt should still build them.
+    assert result["changed"] is True
+    assert "Failed: play_by_play." in result["detail"]
+    assert harness.finished[0]["scrape_exit"] == 1
+    # A failed run does not count as a successful scrape for freshness.
+    assert harness.marked == []
+    assert harness.posted == []
+
+
+@pytest.mark.unit
+def test_catch_up_builds_when_only_an_older_game_landed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Last night is still waiting, but an older game's play-by-play arrived."""
+    still_missing = [_gap()]
+    _CatchUpHarness(monkeypatch, gaps=[still_missing, still_missing])
+    monkeypatch.setattr("pipeline.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("pipeline.games_missing_play_by_play", lambda: ["older"])
+    result = run_catch_up()
+    assert result["remaining"] == 1
+    assert result["changed"] is True
+
+
+@pytest.mark.unit
+def test_catch_up_closes_its_run_row_when_it_crashes(monkeypatch: pytest.MonkeyPatch) -> None:
+    harness = _CatchUpHarness(monkeypatch, gaps=[[_gap()]])
+    # The re-check after scraping finds the database gone.
+    with pytest.raises(IndexError):
+        run_catch_up()
+    assert harness.finished[0]["status"] == "failed"
+    assert harness.finished[0]["scrape_exit"] == 1
+    assert "failed" in harness.finished[0]["detail"]

@@ -12,6 +12,7 @@ from pipeline import (
     load_config,
     mark_scrape_success,
     record_dbt_only_run,
+    run_catch_up,
     run_pipeline_scrape,
     set_enabled,
     update_run_dbt_exit,
@@ -26,7 +27,12 @@ from scrapers.contracts import scrape_contracts
 from scrapers.games import scrape_games, scrape_todays_games
 from scrapers.injuries import scrape_injuries
 from scrapers.odds import scrape_odds
-from scrapers.play_by_play import NoFinalGamesError, repair_encoded_text, scrape_play_by_play
+from scrapers.play_by_play import (
+    NoFinalGamesError,
+    games_missing_play_by_play,
+    repair_encoded_text,
+    scrape_play_by_play,
+)
 from scrapers.player_game_logs import scrape_logs_for_games, scrape_player_game_logs
 from scrapers.players import scrape_players
 from scrapers.reddit import DEFAULT_COMMENTS_PER_POST, scrape_reddit
@@ -298,12 +304,15 @@ def scrape_daily_cmd() -> None:
         count = alert.try_run("player_game_logs", lambda: scrape_logs_for_games(games))
         if count is not None:
             click.echo(f"Upserted {count} player game logs for those games.")
-        game_ids = [str(game["game_id"]) for game in games if game.get("game_id")]
-        n_pbp = alert.try_run("play_by_play", lambda: scrape_play_by_play(game_ids=game_ids))
-        if n_pbp is not None:
-            click.echo(f"Play-by-play: {n_pbp}")
     elif games is not None:
         click.echo("No completed games without box scores.")
+    # Separate from the box-score list: BRef can post a box score before its
+    # play-by-play, and such a game would otherwise never be retried.
+    pbp_game_ids = alert.try_run("todays_games", games_missing_play_by_play)
+    if pbp_game_ids:
+        n_pbp = alert.try_run("play_by_play", lambda: scrape_play_by_play(game_ids=pbp_game_ids))
+        if n_pbp is not None:
+            click.echo(f"Play-by-play: {n_pbp} events for {len(pbp_game_ids)} game(s)")
     n_standings = alert.try_run(
         "standings",
         lambda: scrape_standings(current_season()),
@@ -433,6 +442,25 @@ def pipeline_run_once_cmd(force: bool, triggered_by: str) -> None:
     click.echo(f"detail={result['detail']}")
     if int(result["scrape_exit"]) != 0:
         raise SystemExit(int(result["scrape_exit"]))
+
+
+@pipeline_group.command("catch-up")
+@click.option(
+    "--final",
+    is_flag=True,
+    help="Last attempt of the day: post one Slack alert if last night's games are still missing data.",
+)
+def pipeline_catch_up_cmd(final: bool) -> None:
+    """Re-scrape last night's games still missing a score, box score, or play-by-play.
+
+    Does not run dbt. ``changed=1`` tells scripts/catch-up.sh there is something new to build.
+    """
+    result = run_catch_up(final=final)
+    click.echo(f"run_id={result['run_id'] if result['run_id'] is not None else ''}")
+    click.echo(f"status={result['status']}")
+    click.echo(f"changed={1 if result['changed'] else 0}")
+    click.echo(f"remaining={result['remaining'] if result['remaining'] is not None else ''}")
+    click.echo(f"detail={result['detail']}")
 
 
 _NOTIFY_OPTION = click.option(

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
+import { B2BBadge, B2BLegend } from "@/components/games/b2b-badge";
 import { PickCell } from "@/components/account/pick-cell";
 import { ColumnHelp } from "@/components/column-help";
 import { DayHeader, DayPicker } from "@/components/day-picker";
@@ -21,7 +22,7 @@ import { dayNavigation } from "@/lib/calendar";
 import { formatMoneyline, formatProbability, formatSpread } from "@/lib/format";
 import { teamHref, withSeason } from "@/lib/nav";
 import { formatDayTitle } from "@/lib/results";
-import { formatGameTime, gamePhase, liveWindowStartDate } from "@/lib/timezones";
+import { formatGameTime, gamePhase, liveWindowStartDate, otherLocalDate } from "@/lib/timezones";
 import type { ScheduledGame, UserPick } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +36,11 @@ const FETCH_LIMIT = 50;
 // at the same place on every row. Logo, TeamAbbrLink's gap-1.5, then room
 // for the widest one.
 const AWAY_TEAM_SLOT = { width: `calc(${TEAM_LOGO_SIZE}px + 0.375rem + 4.25ch)` };
+// The same plus a B2B badge and its gap, for every row once any away team on
+// the day has one, so the "@" still lines up.
+const AWAY_TEAM_SLOT_B2B = {
+  width: `calc(${TEAM_LOGO_SIZE}px + 0.375rem + 4.25ch + 0.25rem + 2.25rem)`,
+};
 
 export default function SchedulePage() {
   return (
@@ -163,9 +169,18 @@ function ScheduleBody() {
           <DayHeader
             title={day === home ? `${homeLabel} · ${formatDayTitle(day)}` : formatDayTitle(day)}
             summary={
-              rows.length > 0 && !scheduleQuery.isPlaceholderData
-                ? `${rows.length} ${rows.length === 1 ? "game" : "games"}`
-                : null
+              rows.length > 0 && !scheduleQuery.isPlaceholderData ? (
+                <>
+                  <span>{`${rows.length} ${rows.length === 1 ? "game" : "games"}`}</span>
+                  {rows.some((game) => game.home_is_back_to_back || game.away_is_back_to_back) ? (
+                    <>
+                      {" · "}
+                      {/* Held to the line height, so the summary (and the picker beside it) sit where they do on /games. */}
+                      <B2BLegend className="h-[1lh] align-top" />
+                    </>
+                  ) : null}
+                </>
+              ) : null
             }
             rule="light"
           >
@@ -221,12 +236,15 @@ function ScheduleTable({
   /** The previous day still on screen while the picked one loads. */
   busy: boolean;
 }) {
+  const awaySlot = rows.some((game) => game.away_is_back_to_back)
+    ? AWAY_TEAM_SLOT_B2B
+    : AWAY_TEAM_SLOT;
   return (
     <div className={cn("overflow-x-auto", busy && "opacity-60")} aria-busy={busy}>
       <table className="data-table">
         <thead>
           <tr>
-            <th>Date / time</th>
+            <th>Time</th>
             <th>Matchup</th>
             <ColumnHelp label="TV" title="TV">
               <p>National TV and streaming broadcasts only. Local broadcasts are not listed.</p>
@@ -273,6 +291,7 @@ function ScheduleTable({
               timezone={timezone}
               now={now}
               signInHref={signInHref}
+              awaySlot={awaySlot}
             />
           ))}
         </tbody>
@@ -333,6 +352,7 @@ function ScheduleGame({
   timezone,
   now,
   signInHref,
+  awaySlot,
 }: {
   game: ScheduledGame;
   season: string;
@@ -341,11 +361,12 @@ function ScheduleGame({
   now: Date;
   /** Set for a visitor with no session: a pick button explains picks instead of saving. */
   signInHref?: string;
+  awaySlot: React.CSSProperties;
 }) {
   // The API refuses a pick from tip-off on, so the cell locks on the same clock.
   const phase = gamePhase(game.game_date, game.start_time_et, now);
   const locked = phase !== "upcoming";
-  const row = { game, season, timezone, phase };
+  const row = { game, season, timezone, phase, awaySlot };
   if (signInHref) {
     return (
       <ScheduleRow {...row}>
@@ -413,17 +434,21 @@ function ScheduleRow({
   season,
   timezone,
   phase,
+  awaySlot,
   children,
 }: {
   game: ScheduledGame;
   season: string;
   timezone: string | null;
   phase: ReturnType<typeof gamePhase>;
+  /** Fixed width for the away team (and its badge) so the "@" aligns down the table. */
+  awaySlot: React.CSSProperties;
   children?: React.ReactNode;
 }) {
   // Pregame numbers stay readable once the game is on, but step back.
   const pregame = phase === "upcoming" ? undefined : "text-ink-3";
   const tip = formatGameTime(game.game_date, game.start_time_et, timezone);
+  const localDate = otherLocalDate(tip.date, game.game_date);
   const away = game.away_team_abbreviation ?? "Away";
   const home = game.home_team_abbreviation ?? "Home";
   const arena = game.arena || game.arena_city || "—";
@@ -431,16 +456,19 @@ function ScheduleRow({
     <tr>
       <td className="tabular whitespace-nowrap">
         <Link href={`/games/${game.game_id}`} className="group block" title="Game preview">
-          <span className="block group-hover:text-primary group-hover:underline">{tip.date}</span>
-          <span className="block text-xs text-muted-foreground">
+          <span className="block group-hover:text-primary group-hover:underline">
             {tip.zone ? `${tip.time} ${tip.zone}` : tip.time}
           </span>
+          {/* The day header already names the date; only a tip on another local day says so. */}
+          {localDate ? (
+            <span className="block text-xs text-muted-foreground">{localDate}</span>
+          ) : null}
         </Link>
       </td>
       <td>
-        <span className="inline-flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
           {/* Semibold here too: the slot's ch is measured in the weight the abbreviation is set in. */}
-          <span className="inline-flex font-semibold" style={AWAY_TEAM_SLOT}>
+          <span className="inline-flex items-center gap-1 font-semibold" style={awaySlot}>
             {game.away_team_id ? (
               <TeamAbbrLink
                 teamId={game.away_team_id}
@@ -450,6 +478,7 @@ function ScheduleRow({
             ) : (
               away
             )}
+            <B2BBadge game={game} side="away" />
           </span>
           <span className="text-muted-foreground">@</span>
           {game.home_team_id ? (
@@ -461,6 +490,7 @@ function ScheduleRow({
           ) : (
             <span className="font-semibold">{home}</span>
           )}
+          <B2BBadge game={game} side="home" />
         </span>
         <NotableOut abbreviation={away} names={game.away_notable_out} />
         <NotableOut abbreviation={home} names={game.home_notable_out} />

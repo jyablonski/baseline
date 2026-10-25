@@ -26,6 +26,19 @@ class ScheduledGame(BaseModel):
     # National TV and streaming networks from ESPN ("ESPN, ABC"); null for a
     # local-only game or one ESPN has not listed yet.
     national_tv: str | None = None
+    # Second night of a back-to-back: the team played the day before (Eastern
+    # game date). The last_night fields describe that game and are null unless
+    # the flag is set; its scores stay null until it is Final.
+    home_is_back_to_back: bool = False
+    home_last_night_opponent_abbreviation: str | None = None
+    home_last_night_was_home: bool | None = None
+    home_last_night_score: int | None = None
+    home_last_night_opponent_score: int | None = None
+    away_is_back_to_back: bool = False
+    away_last_night_opponent_abbreviation: str | None = None
+    away_last_night_was_home: bool | None = None
+    away_last_night_score: int | None = None
+    away_last_night_opponent_score: int | None = None
     # Champion pregame model estimate; null until the ML job has scored the game.
     prediction_model_version: str | None = None
     home_win_probability: float | None = None

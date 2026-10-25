@@ -6,7 +6,7 @@ import logging
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -245,6 +245,29 @@ def _final_games_for_season(season: str) -> list[GameReference]:
         return _snapshot_games(session, games)
 
 
+def games_missing_play_by_play(today: date | None = None) -> list[str]:
+    """Final games of the current season with no play-by-play events yet.
+
+    Keyed on missing events rather than missing box scores: BRef can publish
+    the box score before the play-by-play page, and a game that already has
+    logs would otherwise never be offered for play-by-play again.
+    """
+    target = today or date.today()
+    has_events = select(PlayByPlay.game_id).where(PlayByPlay.game_id == Game.game_id).exists()
+    with get_session() as session:
+        rows = session.scalars(
+            select(Game.game_id)
+            .where(
+                Game.season == current_season(target),
+                Game.status == "Final",
+                Game.game_date <= target,
+                ~has_events,
+            )
+            .order_by(Game.game_date, Game.game_id)
+        ).all()
+    return [str(game_id) for game_id in rows]
+
+
 def scrape_play_by_play(
     season: str | None = None,
     *,
@@ -446,6 +469,7 @@ def repair_encoded_text() -> tuple[int, int]:
 __all__ = [
     "GameReference",
     "NoFinalGamesError",
+    "games_missing_play_by_play",
     "map_play_by_play_action",
     "parse_play_by_play_html",
     "play_by_play_url",

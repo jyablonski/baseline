@@ -1,5 +1,6 @@
 """SQL constants for the scraper ops pipeline."""
 
+from queries.catch_up import SELECT_CATCH_UP_GAPS
 from queries.pipeline_runs import (
     INSERT_DBT_ONLY_RUN,
     INSERT_PIPELINE_RUN,
@@ -30,6 +31,7 @@ __all__ = [
     "INSERT_DBT_ONLY_RUN",
     "INSERT_PIPELINE_RUN",
     "INSERT_SOURCE_RUN",
+    "SELECT_CATCH_UP_GAPS",
     "SELECT_PIPELINE_CONFIG",
     "SELECT_SOURCE_RUNS_FOR_RUN",
     "SELECT_UNHEALTHY_SOURCE_STREAKS",

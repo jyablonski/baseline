@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { B2BBadge } from "@/components/games/b2b-badge";
 import { InjuryReportRow } from "@/components/games/game-injuries";
 import { TeamLogo } from "@/components/team-logo";
 import { formatProbability, formatRecord, formatSeasonType } from "@/lib/format";
@@ -112,7 +113,12 @@ export function GameHeader({
         className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-6"
         data-testid="game-scoreline"
       >
-        <TeamSide side={away} season={game.season} suffix={suffix} />
+        <TeamSide
+          side={away}
+          season={game.season}
+          suffix={suffix}
+          badge={final ? null : <B2BBadge game={game} side="away" />}
+        />
         <div className="flex items-center justify-center gap-3 sm:gap-5">
           {final ? (
             <>
@@ -129,7 +135,13 @@ export function GameHeader({
             </div>
           )}
         </div>
-        <TeamSide side={home} season={game.season} suffix={suffix} mirrored />
+        <TeamSide
+          side={home}
+          season={game.season}
+          suffix={suffix}
+          badge={final ? null : <B2BBadge game={game} side="home" />}
+          mirrored
+        />
       </div>
 
       {tipped && !final ? (
@@ -156,11 +168,14 @@ function TeamSide({
   side,
   season,
   suffix,
+  badge,
   mirrored = false,
 }: {
   side: Side;
   season: string;
   suffix: string;
+  /** Beside the record, before tip-off: "played last night" is wrong once the game is over. */
+  badge: React.ReactNode;
   /** The home side reads logo then name, so both logos sit beside the score. */
   mirrored?: boolean;
 }) {
@@ -180,9 +195,17 @@ function TeamSide({
           <span className="hidden sm:inline">{side.name}</span>
           <span className="sm:hidden">{side.abbreviation}</span>
         </Link>
-        <span className="block text-sm text-ink-2 tabular">
-          {formatRecord(side.wins, side.losses)}
-          {suffix}
+        <span
+          className={cn(
+            "flex items-center gap-1.5 text-sm text-ink-2 tabular",
+            !mirrored && "justify-end"
+          )}
+        >
+          <span>
+            {formatRecord(side.wins, side.losses)}
+            {suffix}
+          </span>
+          {badge}
         </span>
       </div>
     </div>

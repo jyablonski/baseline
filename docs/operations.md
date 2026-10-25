@@ -43,6 +43,18 @@ Training is deliberately not on this path. `make ml-train` fits the logit artifa
 
 `refresh-daily.sh` runs Alembic, the gated scrape, `dbt build`, Elo, then the gold predictions copy. It waits for an existing healthy Postgres rather than starting one, because recreating Tilt's container would not re-run `init.sql`. `dbt build` interleaves each model's tests with the model, so a failing test skips that model's descendants instead of publishing them and failing at the end.
 
+### Catch-up for late BRef data
+
+BRef sometimes posts last night's scores, box scores, or play-by-play after the 12:00 UTC refresh. A late score leaves the game `Scheduled`, so the refresh finds nothing to load and still succeeds. `make prod-catch-up` (`scripts/catch-up.sh`, hourly 13:00–21:00 UTC) closes that gap the same day instead of waiting for tomorrow's refresh:
+
+1. One `psql` query: is the pipeline on (same gate as the daily: `enabled`, `season_active`, season window, `scrape_mode` daily), and is any game dated yesterday in Eastern time not Final, or Final without a box score or play-by-play? If not, it exits 0 straight away, without starting a container or making an HTTP request.
+2. `pipeline catch-up` refreshes the schedule and scrapes only the missing box scores and play-by-play. It skips standings, injuries, odds, broadcasts, contracts, transactions, and Reddit, so the hourly retries spend no Odds API quota or Reddit requests. The run is recorded on `/admin` as `catch-up`. It writes no `scrape_source_runs` rows, so hourly retries cannot trip the degraded-source streak.
+3. If anything new landed, it runs the full `dbt build` and then the ml stage (`scripts/lib/ml-stage.sh`, shared with the refresh). `score` skips games that have already tipped off, so a rescore during game time never overwrites a graded pregame prediction.
+
+The daily refresh picks box scores and play-by-play separately, so a game whose box score arrived without play-by-play still gets its play-by-play on a later run.
+
+Postponed games are not handled yet: a postponed game keeps its date and never gets a score, so it reads as pending all day and shows up in the end-of-window alert. The TODO is in `services/scraper/src/queries/catch_up.py`, to be resolved once a postponement on BRef shows how it appears on the schedule page.
+
 ## Optional keys
 
 | Variable              | Unset                              | Set                                                   |
@@ -59,6 +71,7 @@ Each stage posts to Slack at most once, and a failed stage stops the ones after 
 - **Scrape failed** — one post listing the failed steps. The refresh stops there, so dbt and ml never run and cannot add a second post.
 - **dbt failed** — one post naming the first failed model or test, and ml does not run. The exit code lands on the run's `pipeline_runs.dbt_exit` and the failed nodes on `dbt_failed_nodes` (first 25, parsed from dbt's output by `scripts/dbt-build.sh`, which `make dbt` / `prod-dbt` also use).
 - **ml failed** — one post naming which half broke, `ml score` or the gold predictions copy. The exit code lands on `pipeline_runs.ml_exit`.
+- **Catch-up gave up** — silent on every hourly attempt. The last one (`FINAL_HOUR_UTC`, default 21, matching the cron) posts once if last night's games are still missing data, listing each game and what it lacks. A dbt or ml failure in a catch-up run alerts as it does in the refresh.
 - **Scrape succeeded but a source is degraded** — one post when any source attempted this run has been unhealthy `SOURCE_ALERT_STREAK` runs in a row. When the scrape also failed, these lines ride along in its failure post instead.
 
 **Unhealthy** means failed, or succeeded with zero rows from a source that always has some (`standings`, `injuries`, `odds`, `player_game_logs`, `play_by_play`, `contracts`, `reddit`), recorded as `expectation = 'below'` in `source.scrape_source_runs`. One empty night is usually "not published yet"; a streak is a parser that stopped matching, which is why only the streak alerts. Skipped runs (off-days, the off-season, a missing key) neither extend nor break a streak, and a source that was not attempted this run never alerts on old history. The same streak is the **Streak** column on `/admin`.
@@ -67,10 +80,11 @@ A successful refresh is otherwise silent. The freshness check below covers the o
 
 ## Scheduling
 
-Five cron entries on the VM. None of this starts with `make up`.
+Six cron entries on the VM. None of this starts with `make up`.
 
 ```cron
 0 12  * * * cd /opt/nba && flock -n /tmp/nba-refresh.lock make prod-refresh TRIGGER=scheduled >> /opt/nba/logs/refresh-daily.log 2>&1
+0 13-21 * * * cd /opt/nba && flock -n /tmp/nba-refresh.lock make prod-catch-up >> /opt/nba/logs/catch-up.log 2>&1
 30 12 * * * cd /opt/nba && make prod-check-freshness >> /opt/nba/logs/freshness.log 2>&1
 *     * * * * cd /opt/nba && make prod-admin-jobs >> /opt/nba/logs/admin-jobs.log 2>&1
 0 17  * * * cd /opt/nba && make prod-db-backup >> /opt/nba/logs/backup.log 2>&1

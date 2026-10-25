@@ -82,6 +82,7 @@ DECLARE
   upset_check text;
   national_tv_check text;
   highlight_check text;
+  back_to_back_check text;
   flow_check text;
   lead_time_check text;
   injury_status_check text;
@@ -187,6 +188,23 @@ BEGIN
   SELECT count(*) INTO schedule_count FROM gold.fct_games_schedule;
   IF schedule_count < 4 THEN
     RAISE EXCEPTION 'expected >= 4 schedule rows, got %', schedule_count;
+  END IF;
+
+  -- LAC played at GSW on 10/22 (lost 110-120), then at CHI on 10/23. Only that
+  -- side of that game is a back-to-back; the Cup final two months on is not.
+  SELECT string_agg(
+           game_date || ' ' ||
+           CASE WHEN home_is_back_to_back THEN 'home' ELSE 'away' END || ' ' ||
+           coalesce(away_last_night_opponent_abbreviation, home_last_night_opponent_abbreviation) || ' ' ||
+           coalesce(away_last_night_was_home, home_last_night_was_home) || ' ' ||
+           coalesce(away_last_night_score, home_last_night_score) || '-' ||
+           coalesce(away_last_night_opponent_score, home_last_night_opponent_score),
+           ' | ' ORDER BY game_date)
+  INTO back_to_back_check
+  FROM gold.fct_games_schedule
+  WHERE home_is_back_to_back OR away_is_back_to_back;
+  IF back_to_back_check IS DISTINCT FROM '2024-10-23 away GSW false 110-120' THEN
+    RAISE EXCEPTION 'unexpected back-to-backs: %', back_to_back_check;
   END IF;
 
   SELECT count(*) INTO scheduled_count

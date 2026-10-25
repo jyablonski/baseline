@@ -8,8 +8,8 @@ test("header shows Baseline tabs, watermark, and no sidebar", async ({ page }) =
   await expect(page).toHaveTitle("Baseline");
   await expect(page.getByRole("link", { name: "Baseline" })).toBeVisible();
   // On the home page itself, not in the header that every page shares.
-  await expect(page.getByRole("main").getByText(/Scraped /)).toBeVisible();
-  await expect(page.getByRole("banner").getByText(/Scraped /)).toHaveCount(0);
+  await expect(page.getByRole("main").getByText(/Data as of /)).toBeVisible();
+  await expect(page.getByRole("banner").getByText(/Data as of /)).toHaveCount(0);
   await expect(page.getByText("Court Vision")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Sidebar" })).toHaveCount(0);
   await expectPrimaryNav(page);

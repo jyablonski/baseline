@@ -16,8 +16,8 @@ test("home desk shows the latest slate, next games, standings, and r/nba", async
   await expect(page.getByText("Stephen Curry 38, LeBron James 35")).toBeVisible();
   await expect(page.getByTitle("National TV: ESPN")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Next up" })).toBeVisible();
-  await expect(page.getByText("Thu 22 Oct · ET")).toBeVisible();
-  await expect(page.getByText("GSW W5")).toBeVisible();
+  await expect(page.getByText("Thu 22 Oct · 1 game · ET")).toBeVisible();
+  await expect(page.getByText("GSW has won 5 straight")).toBeVisible();
   await expect(page.getByRole("heading", { name: "On r/nba" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Most overrated players?" })).toBeVisible();
   await expect(page.getByText("Season leaders")).toHaveCount(0);
@@ -37,13 +37,20 @@ test("home empty warehouse shows empty copy for every module", async ({ page }) 
 test("home modules link out to their full views", async ({ page }) => {
   await mockApi(page);
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "All results →" })).toHaveAttribute("href", "/games");
-  await expect(page.getByRole("link", { name: "Full schedule →" })).toHaveAttribute(
+  // Every module heads with a link named like the nav, so exact: the nav has "Games" too.
+  await expect(page.getByRole("link", { name: "Games →", exact: true })).toHaveAttribute(
+    "href",
+    "/games"
+  );
+  await expect(page.getByRole("link", { name: "Schedule →", exact: true })).toHaveAttribute(
     "href",
     /^\/schedule/
   );
-  await expect(page.getByRole("link", { name: "Social →" })).toHaveAttribute("href", "/social");
-  await page.getByRole("link", { name: "Full standings →" }).click();
+  await expect(page.getByRole("link", { name: "Social →", exact: true })).toHaveAttribute(
+    "href",
+    "/social"
+  );
+  await page.getByRole("link", { name: "Teams →", exact: true }).click();
   await expect(page).toHaveURL(/\/teams/);
   await expect(page.getByRole("heading", { name: "Teams", level: 1 })).toBeVisible();
   await expect(page.getByText("Eastern Conference")).toBeVisible();
@@ -54,7 +61,10 @@ test("home standings cover both conferences with form columns", async ({ page })
   await mockApi(page);
   await page.goto("/");
 
-  const standings = page.locator("section").filter({ hasText: "Full standings" }).first();
+  const standings = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Standings" }) })
+    .first();
   await expect(standings.getByText("East", { exact: true })).toBeVisible();
   await expect(standings.getByText("West", { exact: true })).toBeVisible();
   for (const name of ["W–L", "GB", "L10", "Strk"]) {

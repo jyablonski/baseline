@@ -48,7 +48,7 @@ test("About no longer carries the scraped watermark", async ({ page }) => {
   await mockApi(page);
   await page.goto("/about");
   await expect(page.getByRole("heading", { name: "Last scraped" })).toHaveCount(0);
-  await expect(page.getByRole("article").getByText(/Scraped /)).toHaveCount(0);
+  await expect(page.getByRole("article").getByText(/Data as of /)).toHaveCount(0);
 });
 
 test("About credits the developer and names the running build", async ({ page }) => {
