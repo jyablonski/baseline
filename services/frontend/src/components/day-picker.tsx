@@ -194,8 +194,8 @@ export function DayHeader({
   children,
 }: {
   title: string;
-  /** The line under the title ("Finals · 3 games"); omitted while the day loads. */
-  summary?: string | null;
+  /** The line under the title ("Finals · 3 games"), maybe with a legend; omitted while the day loads. */
+  summary?: React.ReactNode;
   rule?: "strong" | "light";
   /** The DayPicker. */
   children: React.ReactNode;

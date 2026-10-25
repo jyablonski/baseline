@@ -135,10 +135,10 @@ describe("home desk", () => {
     vi.useRealTimers();
   });
 
-  it("carries the scrape stamp, which is no longer in the header", async () => {
+  it("carries the data stamp, which is no longer in the header", async () => {
     renderHome();
     expect(
-      await screen.findByText("Scraped Wednesday, Oct 7, 2026 · 10:27 PM ET")
+      await screen.findByText("Data as of Wednesday, Oct 7, 2026 · 10:27 PM ET")
     ).toBeInTheDocument();
   });
 
@@ -160,7 +160,7 @@ describe("home desk", () => {
     expect(cards).toHaveLength(6);
     expect(cards[0]).toHaveAccessibleName("A7 97, H7 107: game flow");
     // The rest of the night is one click away, pinned to that date.
-    expect(screen.getByRole("link", { name: "See all 8 games →" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "All 8 games →" })).toHaveAttribute(
       "href",
       "/games?date=2026-01-12"
     );
@@ -170,7 +170,8 @@ describe("home desk", () => {
     expect(within(card).getByText("100").parentElement).toHaveClass("font-semibold");
     expect(within(card).getByText("90").parentElement).toHaveClass("text-ink-2");
     expect(screen.queryByText("H99")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "All results →" })).toHaveAttribute("href", "/games");
+    // Every module heads with a link to its page, named like the nav.
+    expect(screen.getByRole("link", { name: "Games →" })).toHaveAttribute("href", "/games");
   });
 
   it("notes each game's lead highlight and the market's favourite, never the model's", async () => {
@@ -240,7 +241,13 @@ describe("home desk", () => {
           away_team_abbreviation: "NYK",
           national_tv: "ESPN, ABC",
         }),
-        scheduled(1),
+        scheduled(1, {
+          away_is_back_to_back: true,
+          away_last_night_opponent_abbreviation: "ORL",
+          away_last_night_was_home: false,
+          away_last_night_score: 108,
+          away_last_night_opponent_score: 115,
+        }),
         scheduled(2, { home_team_id: "east-BOS", home_team_abbreviation: "BOS" }),
         ...Array.from({ length: 5 }, (_, index) => scheduled(index + 3)),
         scheduled(50, { game_date: "2026-01-14" }),
@@ -254,7 +261,7 @@ describe("home desk", () => {
     const team = await slate.findByRole("link", { name: "NYK" });
     expect(team).toHaveAttribute("href", "/teams/nyk?season=2025-26");
     expect(team.querySelector("[aria-hidden]")).toHaveStyle({ width: "24px", height: "24px" });
-    expect(await screen.findByText("Tue 13 Jan · ET")).toBeInTheDocument();
+    expect(await screen.findByText("Tue 13 Jan · 8 games · ET")).toBeInTheDocument();
     // From today on the East coast, not the API server's UTC date.
     expect(listSchedule).toHaveBeenCalledWith({
       season: "2025-26",
@@ -267,11 +274,16 @@ describe("home desk", () => {
     expect(screen.getAllByTitle(/^National TV:/)).toHaveLength(1);
     expect(screen.getByTitle("National TV: ESPN, ABC")).toHaveTextContent("ESPN, ABC");
     // A streak of three or more is worth a note; BOS on an L1 is not.
-    expect(await screen.findByText("NYK W5")).toBeInTheDocument();
-    expect(screen.getByText("NA1 on a back-to-back")).toBeInTheDocument();
-    expect(screen.queryByText(/BOS L1/)).not.toBeInTheDocument();
+    expect(await screen.findByText("NYK has won 5 straight")).toBeInTheDocument();
+    expect(screen.queryByText(/BOS has lost/)).not.toBeInTheDocument();
+    // Back-to-backs stay on the schedule and game page: no badge, legend or note here.
+    expect(screen.queryByRole("button", { name: /played last night/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Played last night")).not.toBeInTheDocument();
+    expect(screen.queryByText(/back-to-back/)).not.toBeInTheDocument();
     expect(screen.queryByText("NH50")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "All 8 games →" })).toHaveAttribute(
+    // One way to the full slate: the header link, not a second count link under the list.
+    expect(screen.queryByRole("link", { name: /^All \d+ games/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Schedule →" })).toHaveAttribute(
       "href",
       "/schedule?season=2025-26"
     );
@@ -281,9 +293,9 @@ describe("home desk", () => {
     listSchedule.mockResolvedValue(page([scheduled(0, { game_date: "2026-01-15" })]));
     renderHome();
 
-    expect(await screen.findByText("Thu 15 Jan · ET")).toBeInTheDocument();
+    expect(await screen.findByText("Thu 15 Jan · 1 game · ET")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Next up" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Full schedule →" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Schedule →" })).toBeInTheDocument();
   });
 
   it("shows every team in each conference with games back, last ten, and streak", async () => {
@@ -304,7 +316,7 @@ describe("home desk", () => {
     // The play-in line sits under the sixth seed.
     expect(screen.getByText("MIL").closest("tr")).toHaveClass("border-b-rule-strong");
     expect(screen.getByText("OKC").closest("tr")).not.toHaveClass("border-b-rule-strong");
-    expect(screen.getByRole("link", { name: "Full standings →" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Teams →" })).toHaveAttribute(
       "href",
       "/teams?season=2025-26"
     );

@@ -395,6 +395,11 @@ def test_list_schedule(client, session, mapping_row, query_result) -> None:
                         "away_implied_wp": 0.4347826,
                         "home_spread": -3.5,
                         "odds_bookmaker_count": 4,
+                        "away_is_back_to_back": True,
+                        "away_last_night_opponent_abbreviation": "SAC",
+                        "away_last_night_was_home": False,
+                        "away_last_night_score": 108,
+                        "away_last_night_opponent_score": 115,
                     }
                 )
             ]
@@ -418,6 +423,12 @@ def test_list_schedule(client, session, mapping_row, query_result) -> None:
     assert row["home_spread"] == -3.5
     assert row["national_tv"] == "ESPN, ABC"
     assert "home_implied_wp" not in row
+    assert row["away_is_back_to_back"] is True
+    assert row["away_last_night_opponent_abbreviation"] == "SAC"
+    assert (row["away_last_night_score"], row["away_last_night_opponent_score"]) == (108, 115)
+    # Not on a back-to-back: the flag defaults off and last night stays empty.
+    assert row["home_is_back_to_back"] is False
+    assert row["home_last_night_opponent_abbreviation"] is None
 
 
 @pytest.mark.unit
@@ -458,6 +469,7 @@ def test_list_schedule_sql_filters_upcoming() -> None:
     assert "LEFT JOIN gold.fct_game_predictions" in sql
     assert "fct_game_odds.market = 'h2h'" in sql
     assert "fct_game_odds.market = 'spreads'" in sql
+    assert "fct_games_schedule.away_is_back_to_back" in sql
     assert "gold.fct_games_schedule" in str(LIST_SCHEDULE_COUNT)
     assert "gold.fct_games_schedule" in str(LIST_SEASONS)
 

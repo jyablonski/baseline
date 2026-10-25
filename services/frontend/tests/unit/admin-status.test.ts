@@ -489,6 +489,7 @@ describe("runActionLabel", () => {
     expect(runActionLabel("skipped_disabled")).toBe("Disabled");
     expect(runActionLabel("noop")).toBe("Nothing to scrape");
     expect(runActionLabel("dbt")).toBe("dbt only");
+    expect(runActionLabel("catch-up")).toBe("Catch-up");
     expect(runActionLabel(null)).toBe("—");
     expect(runActionLabel("something_new")).toBe("something_new");
   });

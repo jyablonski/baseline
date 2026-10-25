@@ -24,14 +24,16 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 from notify import (
     SourceStreak,
     StepOutcome,
     SyncAlert,
     SyncFailedError,
+    format_catch_up_text,
     format_degraded_text,
     format_streak_lines,
     post_webhook_text,
@@ -40,6 +42,7 @@ from sqlalchemy.orm import Session
 
 from config import missing_odds_env_names, missing_reddit_env_names, settings
 from db import get_session
+from queries.catch_up import SELECT_CATCH_UP_GAPS
 from queries.pipeline_runs import (
     INSERT_DBT_ONLY_RUN,
     INSERT_PIPELINE_RUN,
@@ -59,7 +62,7 @@ from scrapers.contracts import scrape_contracts
 from scrapers.games import scrape_games, scrape_todays_games
 from scrapers.injuries import scrape_injuries
 from scrapers.odds import scrape_odds
-from scrapers.play_by_play import scrape_play_by_play
+from scrapers.play_by_play import games_missing_play_by_play, scrape_play_by_play
 from scrapers.player_game_logs import scrape_logs_for_games, scrape_player_game_logs
 from scrapers.reddit import DEFAULT_SUBREDDIT, scrape_reddit
 from scrapers.standings import scrape_standings
@@ -88,6 +91,8 @@ DAILY_REDDIT_TIME_FILTER = "day"
 DAILY_REDDIT_COMMENTS_PER_POST = 250
 
 logger = logging.getLogger(__name__)
+
+EASTERN = ZoneInfo("America/New_York")
 
 _NBA_RUN_ACTIONS = frozenset({"daily", "season"})
 
@@ -248,8 +253,39 @@ def compose_run_action(
     return "+".join(parts) if parts else nba_action
 
 
-def _final_game_ids(games: list[dict]) -> list[str]:
-    return [str(game["game_id"]) for game in games if game.get("game_id")]
+def _pending_games() -> tuple[list[dict], list[str]]:
+    """Refresh the schedule, then return Finals missing box scores and Finals missing play-by-play.
+
+    Two lists because BRef publishes the two pages separately: a game can
+    have its box score and still be waiting on play-by-play.
+    """
+    return scrape_todays_games(), games_missing_play_by_play()
+
+
+def _pending_rows(pending: tuple[list[dict], list[str]]) -> int:
+    return len(pending[0])
+
+
+def _scrape_game_data(
+    collector: SyncAlert, log_games: list[dict], pbp_game_ids: list[str]
+) -> tuple[int, int]:
+    """Box scores, then play-by-play, for whatever is pending. Returns (log rows, pbp events)."""
+    if log_games:
+        n_logs = collector.try_run("player_game_logs", lambda: scrape_logs_for_games(log_games))
+    else:
+        # Record the step rather than omit it: an absent row is
+        # indistinguishable from a step that silently stopped existing, and
+        # off-days are the common case.
+        collector.record_skipped("player_game_logs", reason="No completed games without box scores")
+        n_logs = 0
+    if pbp_game_ids:
+        n_pbp = collector.try_run(
+            "play_by_play", lambda: scrape_play_by_play(game_ids=pbp_game_ids)
+        )
+    else:
+        collector.record_skipped("play_by_play", reason="No completed games without play-by-play")
+        n_pbp = 0
+    return (0 if n_logs is None else n_logs, 0 if n_pbp is None else n_pbp)
 
 
 def execute_scrape(
@@ -261,7 +297,7 @@ def execute_scrape(
     """Run the scrape implied by ``action``. Returns (rows_or_games, detail)."""
     collector = alert if alert is not None else SyncAlert(action)
     if action == "daily":
-        games = collector.try_run("todays_games", scrape_todays_games, rows=len)
+        pending = collector.try_run("todays_games", _pending_games, rows=_pending_rows)
         daily_season = current_season()
         n_standings = collector.try_run(
             "standings",
@@ -289,30 +325,18 @@ def execute_scrape(
             f"standings: {standings_count}; injuries: {injuries_count}; odds: {odds_count}; "
             f"broadcasts: {broadcasts_count}."
         )
-        if not games:
-            # Record the game-dependent steps rather than omitting them: an
-            # absent row is indistinguishable from a step that silently stopped
-            # existing, and off-days are the common case.
-            for game_step in ("player_game_logs", "play_by_play"):
-                collector.record_skipped(game_step, reason="No completed games without box scores")
-            collector.raise_if_failed()
+        log_games, pbp_game_ids = pending or ([], [])
+        log_count, pbp_count = _scrape_game_data(collector, log_games, pbp_game_ids)
+        collector.raise_if_failed()
+        if not log_games and not pbp_game_ids:
             return (
                 snapshot_count,
-                f"No completed games without box scores; {extra}",
+                f"No completed games without box scores or play-by-play; {extra}",
             )
-        game_ids = _final_game_ids(games)
-        count = collector.try_run("player_game_logs", lambda: scrape_logs_for_games(games))
-        n_pbp = collector.try_run(
-            "play_by_play",
-            lambda: scrape_play_by_play(game_ids=game_ids),
-        )
-        log_count = 0 if count is None else count
-        pbp_count = 0 if n_pbp is None else n_pbp
-        collector.raise_if_failed()
         return (
             log_count + snapshot_count + pbp_count,
-            f"Upserted logs for {len(games)} game(s); {log_count} player log rows; "
-            f"pbp: {pbp_count}; {extra}",
+            f"Upserted logs for {len(log_games)} game(s); {log_count} player log rows; "
+            f"pbp: {pbp_count} for {len(pbp_game_ids)} game(s); {extra}",
         )
     if action == "season":
         season = config.target_season
@@ -628,6 +652,154 @@ def run_pipeline_scrape(
         "scrape_exit": scrape_exit,
         "reddit_ran": reddit_ran,
         "reddit_exit": reddit_exit,
+    }
+
+
+@dataclass(frozen=True)
+class GameGap:
+    """One game from the catch-up night that is still missing data."""
+
+    game_id: str
+    away_team: str | None
+    home_team: str | None
+    is_final: bool
+    has_box_score: bool
+    has_play_by_play: bool
+
+    def describe(self) -> str:
+        matchup = f"{self.away_team or '?'} @ {self.home_team or '?'}"
+        if not self.is_final:
+            missing = "no final score on the schedule"
+        else:
+            missing = " and ".join(
+                part
+                for part, present in (
+                    ("no box score", self.has_box_score),
+                    ("no play-by-play", self.has_play_by_play),
+                )
+                if not present
+            )
+        return f"{matchup}: {missing}"
+
+
+def catch_up_game_date(now: datetime | None = None) -> date:
+    """Last night in Eastern time, which is how BRef dates games.
+
+    A naive ``now`` is taken as Eastern wall-clock.
+    """
+    moment = now or datetime.now(EASTERN)
+    if moment.tzinfo is not None:
+        moment = moment.astimezone(EASTERN)
+    return moment.date() - timedelta(days=1)
+
+
+def find_game_gaps(session: Session, game_date: date) -> list[GameGap]:
+    rows = session.execute(SELECT_CATCH_UP_GAPS, {"game_date": game_date}).mappings()
+    return [
+        GameGap(
+            game_id=str(row["game_id"]),
+            away_team=row["away_team"],
+            home_team=row["home_team"],
+            is_final=bool(row["is_final"]),
+            has_box_score=bool(row["has_box_score"]),
+            has_play_by_play=bool(row["has_play_by_play"]),
+        )
+        for row in rows
+    ]
+
+
+def run_catch_up(*, final: bool = False, now: datetime | None = None) -> dict[str, Any]:
+    """Re-scrape last night's games while any are still missing data.
+
+    Only the game half of the daily (schedule, box scores, play-by-play):
+    standings, odds, injuries and reddit already ran at the daily and would
+    only burn API quota hourly. Returns ``changed`` so the caller knows
+    whether dbt has anything new to build.
+
+    Writes no ``scrape_source_runs`` rows. Those drive the degraded-streak
+    alert, which counts one daily run per day; hourly retries during a slow
+    BRef morning would trip it within three hours.
+
+    Silent on every attempt. ``final`` marks the last one in the window: if
+    games are still missing then, it posts one Slack message listing them.
+    """
+    game_date = catch_up_game_date(now)
+    with get_session() as session:
+        config = load_config(session)
+        nba_action, gate_detail = decide_action(config)
+        if nba_action != "daily":
+            return {
+                "run_id": None,
+                "status": "skipped",
+                "changed": False,
+                "remaining": None,
+                "detail": gate_detail,
+            }
+        gaps = find_game_gaps(session, game_date)
+        if not gaps:
+            return {
+                "run_id": None,
+                "status": "complete",
+                "changed": False,
+                "remaining": 0,
+                "detail": f"Nothing missing for {game_date}.",
+            }
+        run_id = start_run(session, triggered_by="catch-up", scrape_action="catch-up")
+
+    alert = SyncAlert("catch-up")
+    try:
+        pending = alert.try_run("todays_games", _pending_games, rows=_pending_rows)
+        log_games, pbp_game_ids = pending or ([], [])
+        log_count, pbp_count = _scrape_game_data(alert, log_games, pbp_game_ids)
+        with get_session() as session:
+            remaining = find_game_gaps(session, game_date)
+    except Exception as exc:
+        # Close the run row before surfacing the error, or /admin shows it
+        # 'running' forever.
+        with get_session() as session:
+            finish_run(
+                session,
+                run_id,
+                status="failed",
+                scrape_exit=1,
+                detail=f"Catch-up for {game_date} failed: {exc}",
+            )
+        raise
+    # Rows count too: the pending lists cover every Final still missing data,
+    # so an older game can land while last night's gaps stay the same.
+    changed = remaining != gaps or log_count > 0 or pbp_count > 0
+    status = "failed" if alert.failures else "success"
+    detail = (
+        f"Catch-up for {game_date}: {len(gaps)} game(s) missing data before, "
+        f"{len(remaining)} after; {log_count} player log rows; pbp: {pbp_count}."
+    )
+    if alert.failures:
+        detail = f"{detail} Failed: {', '.join(item.step for item in alert.failures)}."
+
+    with get_session() as session:
+        if changed and not alert.failures:
+            mark_scrape_success(session)
+        finish_run(
+            session,
+            run_id,
+            status=status,
+            scrape_exit=1 if alert.failures else 0,
+            detail=detail,
+        )
+
+    if final and remaining:
+        post_webhook_text(
+            format_catch_up_text(
+                game_date.isoformat(), [gap.describe() for gap in remaining], alert.failures
+            )
+        )
+
+    return {
+        "run_id": run_id,
+        "status": status,
+        "changed": changed,
+        "remaining": len(remaining),
+        "detail": detail,
     }
 
 

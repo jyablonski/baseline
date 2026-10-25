@@ -62,16 +62,20 @@ def load_regular_season_finals(session: Session) -> list[GameRow]:
     return [game_row_from_mapping(row) for row in rows]
 
 
-def load_upcoming_games(session: Session, *, from_date: date, through_date: date) -> list[GameRow]:
-    """Unplayed games in the scoring window, both ends inclusive.
+def load_upcoming_games(
+    session: Session, *, from_date: date, through_date: date, scored_at: datetime
+) -> list[GameRow]:
+    """Unplayed games in the scoring window that have not tipped off by ``scored_at``.
 
     The window opens on the scoring date because a row stamped after game day
     is never graded, and with one row per game it would overwrite the pregame
-    prediction that is.
+    prediction that is. Games already under way are skipped for the same
+    reason.
     """
     rows = (
         session.execute(
-            SELECT_UPCOMING_GAMES, {"from_date": from_date, "through_date": through_date}
+            SELECT_UPCOMING_GAMES,
+            {"from_date": from_date, "through_date": through_date, "scored_at": scored_at},
         )
         .mappings()
         .all()
@@ -412,7 +416,7 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
     with get_session() as session:
         history = load_regular_season_finals(session)
         upcoming = load_upcoming_games(
-            session, from_date=scored_at.date(), through_date=through_date
+            session, from_date=scored_at.date(), through_date=through_date, scored_at=scored_at
         )
         market = load_market_wp(session)
         feature_rows = load_feature_rows(session)

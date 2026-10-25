@@ -71,6 +71,9 @@ def test_query_sql_targets_gold_and_source() -> None:
     assert "INSERT INTO source.game_predictions" in str(INSERT_GAME_PREDICTION)
     assert "ON CONFLICT (game_id, model_version)" in str(INSERT_GAME_PREDICTION)
     assert "BETWEEN :from_date AND :through_date" in str(SELECT_UPCOMING_GAMES)
+    # Games already under way keep the pregame prediction they were graded on.
+    assert "game_date + start_time_et" in str(SELECT_UPCOMING_GAMES)
+    assert "AT TIME ZONE 'America/New_York'" in str(SELECT_UPCOMING_GAMES)
 
 
 @pytest.mark.unit
@@ -130,12 +133,19 @@ def test_load_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
         }
     ]
     upcoming = load_upcoming_games(
-        session, from_date=date(2024, 10, 26), through_date=date(2024, 11, 2)
+        session,
+        from_date=date(2024, 10, 26),
+        through_date=date(2024, 11, 2),
+        scored_at=datetime(2024, 10, 26, 23, 30),
     )
     assert upcoming[0].home_won is None
     assert session.execute.call_args.args == (
         SELECT_UPCOMING_GAMES,
-        {"from_date": date(2024, 10, 26), "through_date": date(2024, 11, 2)},
+        {
+            "from_date": date(2024, 10, 26),
+            "through_date": date(2024, 11, 2),
+            "scored_at": datetime(2024, 10, 26, 23, 30),
+        },
     )
     session.execute.return_value.mappings.return_value.all.return_value = [
         {"game_id": _id("003"), "market_wp": 0.58},
@@ -169,7 +179,13 @@ def test_score_and_persist_and_evaluate(monkeypatch: pytest.MonkeyPatch) -> None
     result = score_and_persist(as_of=datetime(2024, 10, 26, 8, 0, 0))
     # Today through the 7-day horizon, one row per game and model overwritten in
     # place, and anything already stored past the horizon cleared.
-    assert windows == [{"from_date": date(2024, 10, 26), "through_date": date(2024, 11, 2)}]
+    assert windows == [
+        {
+            "from_date": date(2024, 10, 26),
+            "through_date": date(2024, 11, 2),
+            "scored_at": datetime(2024, 10, 26, 8, 0, 0),
+        }
+    ]
     assert conflicts == [["game_id", "model_version"]]
     session.execute.assert_any_call(
         DELETE_PREDICTIONS_BEYOND_HORIZON, {"through_date": date(2024, 11, 2)}

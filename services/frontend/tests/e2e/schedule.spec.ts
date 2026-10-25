@@ -169,3 +169,16 @@ test("schedule surfaces the API failure instead of the empty slate copy", async 
   await page.goto("/schedule");
   await expect(page.getByText(API_FAILURE_DETAIL)).toBeVisible();
 });
+
+test("a B2B badge opens last night's result without leaving the page", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/schedule");
+  await expect(page.getByText("Played last night")).toBeVisible();
+  await page.getByRole("button", { name: "LAL played last night: L 108–115 @ SAC" }).click();
+  const popover = page.getByRole("dialog", { name: "LAL played last night" });
+  await expect(popover).toContainText("L 108–115 @ SAC · second night of a back-to-back");
+  // A sibling of the team link, so the tap opens the detail instead of navigating.
+  await expect(page).toHaveURL(/\/schedule$/);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});

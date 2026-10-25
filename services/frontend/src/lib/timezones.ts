@@ -127,6 +127,16 @@ export function formatGameTime(
   return formatInstant(tip, timezone);
 }
 
+/**
+ * The tip's local date (formatGameTime's `date`) when it is not the game's
+ * Eastern date (a 10 PM ET tip read from Europe), else null. A day view names
+ * the Eastern date once, so rows only need a date of their own when they
+ * disagree with it.
+ */
+export function otherLocalDate(tipDate: string, gameDate: string | null | undefined) {
+  return tipDate === formatScheduleDate(gameDate) ? null : tipDate;
+}
+
 /** When the data was last scraped, read the way the account reads game times. */
 export function formatScrapedAt(
   value: string | null | undefined,

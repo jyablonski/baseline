@@ -622,5 +622,7 @@ def test_team_season_games_sql_reads_every_state_and_flags_back_to_backs() -> No
     sql = str(LIST_TEAM_SEASON_GAMES)
     assert "FROM gold.fct_games_schedule" in sql
     assert "gold.fct_team_game_results" not in sql
-    assert "lag(fct_games_schedule.game_date) OVER" in sql
+    # Back-to-backs come from the mart, from this team's side, not recomputed here.
+    assert "THEN fct_games_schedule.home_is_back_to_back" in sql
+    assert "lag(" not in sql
     assert "THEN fct_game_predictions.model_wp" in sql

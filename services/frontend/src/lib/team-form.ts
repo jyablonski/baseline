@@ -37,6 +37,21 @@ export function streakFromGames(games: FormGame[]): string | null {
   return `${first ? "W" : "L"}${count}`;
 }
 
+/**
+ * "W6" → { length: 6, sentence: "has won 6 straight" }; null for anything that
+ * is not a W/L streak.
+ */
+export function streakSentence(
+  streak: string | null | undefined
+): { length: number; sentence: string } | null {
+  const match = /^([WL])(\d+)$/.exec(streak ?? "");
+  if (!match) return null;
+  return {
+    length: Number(match[2]),
+    sentence: `has ${match[1] === "W" ? "won" : "lost"} ${match[2]} straight`,
+  };
+}
+
 // The play-in decides seeds 7-10, so a settled bracket outranks record order
 // (POR 42-40 seeded 7th over PHX 45-37). Falls back to record rank mid-season.
 export function standingsSeed(row: {

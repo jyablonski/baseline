@@ -6,7 +6,7 @@
 	refresh-daily-once seed-demo seed-demo-clean \
 	prod-config prod-up prod-migrate prod-dbt prod-deploy prod-release prod-build prod-pull prod-pull-tools prod-record-deploy \
 	prod-pipeline-status prod-pipeline-enable prod-pipeline-disable prod-refresh prod-refresh-daily-once \
-	prod-health prod-smoke prod-prune prod-check-freshness check-freshness prod-caddy-reload \
+	prod-health prod-smoke prod-prune prod-check-freshness check-freshness prod-caddy-reload catch-up prod-catch-up \
 	prod-scrape prod-ml prod-ml-backfill prod-ml-train prod-ml-snapshot admin-jobs prod-admin-jobs test-admin-jobs quality \
 	db-backup prod-db-backup db-restore-test db-restore prod-db-restore test-backups
 
@@ -138,6 +138,12 @@ prod-refresh: ## Run the production scrape -> dbt -> ml job on the deployed regi
 	@test -n "$(IMAGE_PREFIX)" || { echo "prod-refresh requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
 	$(MAKE) prod-pull-tools
 	COMPOSE="$(COMPOSE_PROD)" FORCE=0 ./scripts/refresh-daily.sh
+
+# No prod-pull-tools: the pre-check has to stay a single psql call so an hour
+# with nothing missing exits at once. The 12:00 prod-refresh pulled today.
+prod-catch-up: ## Hourly retry: scrape last night's games still missing data, then dbt + ml if anything landed
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-catch-up requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
+	COMPOSE="$(COMPOSE_PROD)" ./scripts/catch-up.sh
 
 # --full-refresh because this target exists for changed model SQL, which is
 # precisely when an incremental model must be rebuilt instead of appended to.
@@ -371,6 +377,9 @@ refresh: ## scrape then dbt then ml; bind-mounts host files; does not recreate p
 
 refresh-daily-once: ## Force one scrape→dbt→ml cycle; bind-mounts host files; does not recreate postgres
 	FORCE=1 ./scripts/refresh-daily.sh
+
+catch-up: ## Scrape last night's games still missing data, then dbt + ml if anything landed
+	./scripts/catch-up.sh
 
 # Local only: there is deliberately no prod- variant. The seed clears the old
 # demo rows first, so rerunning it rolls the fake schedule forward to today.

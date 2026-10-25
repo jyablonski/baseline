@@ -38,3 +38,27 @@ models:
         description: Away team (Baseline team UUID).
         data_tests:
           - not_null
+      - name: home_is_back_to_back
+        description: True when the home team played the day before (Eastern game date), the second night of a back-to-back. Previous game is within the same season.
+        data_tests:
+          - not_null
+      - name: home_last_night_opponent_abbreviation
+        description: The home team's opponent the night before; null unless home_is_back_to_back.
+      - name: home_last_night_was_home
+        description: Whether the home team was at home the night before; null unless home_is_back_to_back.
+      - name: home_last_night_score
+        description: The home team's points the night before; null unless home_is_back_to_back, and null while that game is not Final yet.
+      - name: home_last_night_opponent_score
+        description: Its opponent's points the night before; null under the same conditions as home_last_night_score.
+      - name: away_is_back_to_back
+        description: True when the away team played the day before (Eastern game date), the second night of a back-to-back. Previous game is within the same season.
+        data_tests:
+          - not_null
+      - name: away_last_night_opponent_abbreviation
+        description: The away team's opponent the night before; null unless away_is_back_to_back.
+      - name: away_last_night_was_home
+        description: Whether the away team was at home the night before; null unless away_is_back_to_back.
+      - name: away_last_night_score
+        description: The away team's points the night before; null unless away_is_back_to_back, and null while that game is not Final yet.
+      - name: away_last_night_opponent_score
+        description: Its opponent's points the night before; null under the same conditions as away_last_night_score.

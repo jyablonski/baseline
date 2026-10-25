@@ -213,6 +213,15 @@ def test_schedule_carries_predictions_and_consensus_odds(integration_client) -> 
     ):
         assert bare[key] is None
 
+    # The next-night rematch: both sides on a back-to-back, last night not Final yet.
+    assert (bare["home_is_back_to_back"], bare["away_is_back_to_back"]) == (True, True)
+    assert bare["home_last_night_opponent_abbreviation"] == "GSW"
+    assert bare["home_last_night_was_home"] is False
+    assert (bare["home_last_night_score"], bare["home_last_night_opponent_score"]) == (None, None)
+    assert bare["away_last_night_was_home"] is True
+    assert priced["home_is_back_to_back"] is False
+    assert priced["home_last_night_opponent_abbreviation"] is None
+
 
 @pytest.mark.integration
 def test_game_detail_matches_schedule_row(integration_client) -> None:

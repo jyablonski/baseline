@@ -143,30 +143,11 @@ if [[ "$DBT_EXIT" -ne 0 ]]; then
   exit "$DBT_EXIT"
 fi
 
-# The ml stage is scoring plus the gold copy, the same pair `make ml` runs.
-# ML_STEP names whichever half failed so the alert points at the right one.
-set +e
-echo "==> ml score (Elo + logit pregame)"
-compose_run ml python -m main score
-ML_EXIT=$?
-ML_STEP="ml score"
-if [[ "$ML_EXIT" -eq 0 ]]; then
-  echo "==> dbt copy source.game_predictions → gold.fct_game_predictions"
-  compose_run dbt sh -c \
-    'dbt deps --profiles-dir . && dbt run --profiles-dir . --select stg_game_predictions+'
-  ML_EXIT=$?
-  ML_STEP="dbt predictions copy"
-fi
-set -e
-
-if [[ -n "$RUN_ID" ]]; then
-  compose_run scraper python -m main pipeline mark-ml --notify \
-    --run-id "$RUN_ID" --ml-exit "$ML_EXIT" --detail "${ML_STEP} finished with exit ${ML_EXIT}" \
-    >/dev/null || true
-fi
-
+# shellcheck source=scripts/lib/ml-stage.sh
+source "$ROOT/scripts/lib/ml-stage.sh"
+ML_EXIT=0
+run_ml_stage "$RUN_ID" || ML_EXIT=$?
 if [[ "$ML_EXIT" -ne 0 ]]; then
-  echo "==> ${ML_STEP} failed (exit ${ML_EXIT})"
   exit "$ML_EXIT"
 fi
 

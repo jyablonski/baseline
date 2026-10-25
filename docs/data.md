@@ -4,7 +4,7 @@ scrape → `source` → dbt → `silver`/`gold` → REST and Cube.
 
 Alembic owns `source` DDL, dbt owns silver and gold, Cube YAML sits on gold. Nothing auto-scrapes: scraper, dbt, and ml are on profile `tools`.
 
-Until dbt builds gold, `GET /api/v1/status` fails and the UI shows `Scraped —`.
+Until dbt builds gold, `GET /api/v1/status` fails and the UI shows `Data as of —`.
 
 ## First load
 
@@ -52,7 +52,7 @@ Click CLI, `python -m main`. Upserts only — Alembic must have created the tabl
 
 All Basketball-Reference HTML goes through one shared conservative transport with retries. Identity is never guessed from a name alone.
 
-**Play-by-play is today's Finals only.** The daily scrape passes today's Final game ids, then the same `dbt build` enriches them. Running `scrape-play-by-play` without `--game-id` backfills a whole season and is a deliberate manual operation — the full history is 8–10M rows.
+**Play-by-play is today's Finals only.** The daily scrape passes every current-season Final with no play-by-play yet, chosen separately from the box-score list because BRef can post the two pages at different times. The same `dbt build` then enriches them. Running `scrape-play-by-play` without `--game-id` backfills a whole season and is a deliberate manual operation — the full history is 8–10M rows.
 
 ## dbt
 
@@ -136,6 +136,10 @@ Served by REST: `GET /api/v1/injuries` (current, `team_id` and `notable` filters
 `fct_games_schedule.national_tv` lists a game's national TV and streaming networks, comma-separated (`ESPN, ABC`). It is null for a local-only game or one ESPN has not listed.
 
 The source is ESPN's public scoreboard JSON, the only thing taken from ESPN: neither Basketball-Reference nor The Odds API carries a broadcaster. `scrape-broadcasts` (also a daily pipeline step) reads today plus 14 days, one request per day because the endpoint rejects date ranges, into `source.game_broadcasts`. Events are matched to `source.games` by both teams and the Eastern date, the same way odds are. The endpoint is undocumented and unkeyed, so treat a failure as a source that can change shape without notice. For that reason the step is optional in the daily run: a failure is logged and recorded against the source, but the run still goes on to dbt. The TV column is blank for games further out than the window. Preseason events are stored but match nothing, since preseason games are not on the schedule.
+
+### Back-to-backs
+
+`fct_games_schedule.home_is_back_to_back` / `away_is_back_to_back` mark the second night of a back-to-back: that team's previous game in the season was the day before, by Eastern game date. The `*_last_night_*` columns describe that game (opponent abbreviation, whether the team was at home, both scores) and are null unless the flag is set; the scores also stay null while it is not Final. This is the one definition: the schedule and game endpoints serve the columns as they are, and `GET /api/v1/teams/{id}/season-games` reads the flag from the team's side. The UI shows a B2B badge beside the tired team on `/schedule` and in the game header (before the final), with last night's result in its popover. Home leaves it out to keep its slate to the matchup and national TV. It is not `fct_player_game_logs.is_back_to_back`, which is per player.
 
 ## Serving
 

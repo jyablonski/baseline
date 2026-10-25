@@ -597,7 +597,14 @@ describe("game page states", () => {
   }
 
   it("previews a scheduled game: tip time, who wins, and before tip-off", async () => {
-    getGame.mockResolvedValue(SCHEDULED_GAME);
+    getGame.mockResolvedValue({
+      ...SCHEDULED_GAME,
+      home_is_back_to_back: true,
+      home_last_night_opponent_abbreviation: "DAL",
+      home_last_night_was_home: false,
+      home_last_night_score: 110,
+      home_last_night_opponent_score: 104,
+    });
     renderPage();
 
     await waitFor(() => {
@@ -608,6 +615,12 @@ describe("game page states", () => {
     );
     expect(screen.getByTestId("game-scoreline")).toHaveTextContent("7:30 PM");
     expect(screen.getByTestId("game-scoreline")).toHaveTextContent("ABC");
+    // SAS played last night: a badge by its record, outside the team link.
+    const badge = within(screen.getByTestId("game-scoreline")).getByRole("button", {
+      name: "SAS played last night: W 110–104 @ DAL",
+    });
+    expect(badge.closest("a")).toBeNull();
+    expect(screen.getAllByRole("button", { name: /played last night/ })).toHaveLength(1);
     const [nyk, sas] = screen.getAllByTestId("pick-card");
     expect(nyk).toHaveTextContent("New York Knicks+130");
     expect(nyk).toHaveTextContent("Implied 43%");
@@ -653,7 +666,8 @@ describe("game page states", () => {
 
   it("recaps a final: score, headline, standout, and how the calls did", async () => {
     finalWithoutFlow();
-    getGame.mockResolvedValue({ ...FINALS_GAME, season_type: "Cup" });
+    // A final never shows the badge: "played last night" is no longer true of it.
+    getGame.mockResolvedValue({ ...FINALS_GAME, season_type: "Cup", home_is_back_to_back: true });
     renderPage();
 
     await waitFor(() => {
@@ -661,6 +675,10 @@ describe("game page states", () => {
         "Knicks beat the Spurs, 108–101."
       );
     });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "New York Knicks (W) @ San Antonio Spurs"
+    );
+    expect(screen.queryByRole("button", { name: /played last night/ })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "New York Knicks (W) @ San Antonio Spurs"
     );

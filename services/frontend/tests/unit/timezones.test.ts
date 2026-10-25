@@ -8,6 +8,7 @@ import {
   hasTipped,
   isTimezone,
   liveWindowStartDate,
+  otherLocalDate,
   TIMEZONES,
 } from "@/lib/timezones";
 
@@ -142,5 +143,22 @@ describe("liveWindowStartDate", () => {
     expect(liveWindowStartDate(new Date("2026-10-23T07:30:00Z"))).toBe("2026-10-23");
     // 9 PM EDT on the 22nd, when the server's UTC date is already the 23rd.
     expect(liveWindowStartDate(new Date("2026-10-23T01:00:00Z"))).toBe("2026-10-22");
+  });
+});
+
+describe("otherLocalDate", () => {
+  const local = (gameDate: string, tip: string | null, timezone: string | null) =>
+    otherLocalDate(formatGameTime(gameDate, tip, timezone).date, gameDate);
+
+  it("is null while the tip falls on the game's Eastern date", () => {
+    expect(local("2026-10-24", "19:00", null)).toBeNull();
+    expect(local("2026-10-24", "19:00", "America/Los_Angeles")).toBeNull();
+    // No tip time: nothing to move the date.
+    expect(local("2026-10-24", null, "Europe/London")).toBeNull();
+  });
+
+  it("names the local date once a late tip crosses midnight there", () => {
+    // 10 PM EDT is 3 AM the next day in London.
+    expect(local("2026-10-24", "22:00", "Europe/London")).toBe("Sun, Oct 25, 2026");
   });
 });
