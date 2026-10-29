@@ -8,6 +8,11 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
 
+from elo_v2 import MODEL_NAME as ELO_V2_MODEL_NAME
+from elo_v2 import MODEL_VERSION as ELO_V2_MODEL_VERSION
+from elo_v2 import RECENT_ABSENCE_DAYS, GameContext
+from elo_v2 import score_games as score_games_v2
+from elo_v2 import walk_forward as walk_forward_v2
 from logit import (
     FEATURE_NAMES,
     FeatureRow,
@@ -51,10 +56,14 @@ from queries.artifacts import (
     UPSERT_MODEL_ARTIFACT,
 )
 from queries.evaluations import UPSERT_MODEL_EVALUATION
-from queries.features import SELECT_GAME_FEATURES
+from queries.features import SELECT_GAME_CONTEXT, SELECT_GAME_FEATURES
 from queries.games import SELECT_REGULAR_SEASON_FINALS, SELECT_UPCOMING_GAMES
 from queries.odds import SELECT_MARKET_WP_BY_GAME
-from queries.predictions import DELETE_PREDICTIONS_BEYOND_HORIZON, SELECT_LIVE_PREDICTED_GAMES
+from queries.predictions import (
+    DELETE_COLD_START_PREDICTIONS,
+    DELETE_PREDICTIONS_BEYOND_HORIZON,
+    SELECT_LIVE_PREDICTED_GAMES,
+)
 
 
 def load_regular_season_finals(session: Session) -> list[GameRow]:
@@ -103,6 +112,21 @@ def load_live_predicted_games(session: Session) -> set[tuple[UUID, str]]:
 def load_feature_rows(session: Session) -> list[FeatureRow]:
     rows = session.execute(SELECT_GAME_FEATURES).mappings().all()
     return feature_rows_from_mappings(rows)
+
+
+def load_game_contexts(session: Session) -> dict[UUID, GameContext]:
+    rows = (
+        session.execute(SELECT_GAME_CONTEXT, {"recent_days": RECENT_ABSENCE_DAYS}).mappings().all()
+    )
+    return {
+        UUID(str(row["game_id"])): GameContext(
+            home_back_to_back=bool(row["home_back_to_back"]),
+            away_back_to_back=bool(row["away_back_to_back"]),
+            home_notable_out=int(row["home_notable_out"]),
+            away_notable_out=int(row["away_notable_out"]),
+        )
+        for row in rows
+    }
 
 
 def load_model_artifact(session: Session, model_version: str) -> dict[str, Any] | None:
@@ -285,17 +309,21 @@ def snapshot_elo(*, trained_at: datetime | None = None) -> dict[str, Any]:
     }
 
 
-def register_elo_v1(session: Session) -> None:
-    """Registry row so CHAMPION_MODEL_VERSION=elo-v1 can promote it. Elo has no artifact."""
-    session.execute(
-        REGISTER_MODEL,
-        {
-            "model_version": ELO_V1_MODEL_VERSION,
-            "model_name": ELO_V1_MODEL_NAME,
-            "artifact": "{}",
-            "trained_at": datetime.now(),
-        },
-    )
+def register_elo_models(session: Session) -> None:
+    """Registry rows so CHAMPION_MODEL_VERSION can promote elo-v1 or elo-v2. Elo has no artifact."""
+    for version, name in (
+        (ELO_V1_MODEL_VERSION, ELO_V1_MODEL_NAME),
+        (ELO_V2_MODEL_VERSION, ELO_V2_MODEL_NAME),
+    ):
+        session.execute(
+            REGISTER_MODEL,
+            {
+                "model_version": version,
+                "model_name": name,
+                "artifact": "{}",
+                "trained_at": datetime.now(),
+            },
+        )
 
 
 def set_champion_model(session: Session, model_version: str) -> None:
@@ -420,46 +448,65 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
         )
         market = load_market_wp(session)
         feature_rows = load_feature_rows(session)
+        contexts = load_game_contexts(session)
         _v0_games, _v0_preds, ratings = walk_elo_v0(history, load_elo_seed(session, MODEL_VERSION))
         elo_probs = score_games(upcoming, ratings)
         rows = build_prediction_rows(upcoming, elo_probs, market, as_of=scored_at)
-        _v1_games, _v1_preds, v1_state = walk_elo_v1(
+        v1_games, v1_preds, v1_state = walk_elo_v1(
             history, load_elo_seed(session, ELO_V1_MODEL_VERSION)
         )
+        v1_probs = score_games_v1(upcoming, v1_state)
         rows.extend(
             build_prediction_rows(
                 upcoming,
-                score_games_v1(upcoming, v1_state),
+                v1_probs,
                 market,
                 as_of=scored_at,
                 model_name=ELO_V1_MODEL_NAME,
                 model_version=ELO_V1_MODEL_VERSION,
             )
         )
+        _v2_preds, v2_weights = walk_forward_v2(v1_games, v1_preds, contexts)
+        rows.extend(
+            build_prediction_rows(
+                upcoming,
+                score_games_v2(upcoming, v1_probs, contexts, v2_weights),
+                market,
+                as_of=scored_at,
+                model_name=ELO_V2_MODEL_NAME,
+                model_version=ELO_V2_MODEL_VERSION,
+            )
+        )
         logit_version = settings.logit_model_version or DEFAULT_LOGIT_MODEL_VERSION
         logit_artifact = load_model_artifact(session, logit_version)
         if logit_artifact is not None:
             features_by_game = {row.game_id: row for row in feature_rows}
-            logit_probs: list[float] = []
-            for game, elo_prob in zip(upcoming, elo_probs, strict=True):
-                feature_row = features_by_game.get(game.game_id)
-                if feature_row is None or cold_start(feature_row, settings.logit_cold_start_games):
-                    logit_probs.append(elo_prob)
-                else:
-                    logit_probs.append(predict_artifact(logit_artifact, feature_row))
+            logit_scored = [
+                (game, predict_artifact(logit_artifact, features_by_game[game.game_id]))
+                for game in upcoming
+                if game.game_id in features_by_game
+                and not cold_start(features_by_game[game.game_id], settings.logit_cold_start_games)
+            ]
             rows.extend(
                 build_prediction_rows(
-                    upcoming,
-                    logit_probs,
+                    [game for game, _prob in logit_scored],
+                    [prob for _game, prob in logit_scored],
                     market,
                     as_of=scored_at,
                     model_name=LOGIT_MODEL_NAME,
                     model_version=logit_version,
                 )
             )
-        register_elo_v1(session)
+        register_elo_models(session)
         set_champion_model(session, settings.champion_model_version)
         session.execute(DELETE_PREDICTIONS_BEYOND_HORIZON, {"through_date": through_date})
+        session.execute(
+            DELETE_COLD_START_PREDICTIONS,
+            {
+                "model_version": logit_version,
+                "cold_start_games": settings.logit_cold_start_games,
+            },
+        )
         written = upsert_rows(
             session,
             GamePrediction,
@@ -472,7 +519,7 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
         "written": written,
         "model_name": MODEL_NAME,
         "model_version": MODEL_VERSION,
-        "model_versions": [MODEL_VERSION, ELO_V1_MODEL_VERSION]
+        "model_versions": [MODEL_VERSION, ELO_V1_MODEL_VERSION, ELO_V2_MODEL_VERSION]
         + ([logit_version] if logit_artifact is not None else []),
         "as_of": scored_at.isoformat(),
     }
@@ -523,6 +570,7 @@ def build_backfill_rows(
     season: str | None,
     scraped_at: datetime,
     live: set[tuple[UUID, str]] | None = None,
+    contexts: Mapping[UUID, GameContext] | None = None,
     with_logit: bool = False,
     v0_seed: Mapping[str, Any] | None = None,
     v1_seed: Mapping[str, Any] | None = None,
@@ -531,14 +579,16 @@ def build_backfill_rows(
 
     Both Elos walk every loaded season so ratings carry over (regressed) into
     the target one, starting from a stored snapshot when the seasons behind it
-    are no longer loaded. Logit is opt-in because it refits per 50-game block (the
-    same blocks as `eval-logit`), which is by far the slow part; games in the
-    first block have nothing to train on and get no logit row. Any (game,
+    are no longer loaded. Elo v2 layers on Elo v1's walk with each game's
+    `contexts`. Logit is opt-in because it refits per 50-game block (the same
+    blocks as `eval-logit`), which is by far the slow part; cold-start games and
+    those in the first block (nothing to train on) get no logit row. Any (game,
     model_version) in `live` already has a real pregame prediction and is left
     alone, so the scorecard keeps grading what was actually published.
     """
     v0_games, v0_probs, _ratings = walk_elo_v0(history, v0_seed)
     v1_games, v1_probs, _state = walk_elo_v1(history, v1_seed)
+    v2_probs, _weights = walk_forward_v2(v1_games, v1_probs, contexts or {})
     rows = [
         *build_graded_rows(
             list(zip(v0_games, v0_probs, strict=True)),
@@ -553,6 +603,14 @@ def build_backfill_rows(
             market_wp,
             model_name=ELO_V1_MODEL_NAME,
             model_version=ELO_V1_MODEL_VERSION,
+            season=season,
+            scraped_at=scraped_at,
+        ),
+        *build_graded_rows(
+            list(zip(v1_games, v2_probs, strict=True)),
+            market_wp,
+            model_name=ELO_V2_MODEL_NAME,
+            model_version=ELO_V2_MODEL_VERSION,
             season=season,
             scraped_at=scraped_at,
         ),
@@ -596,11 +654,12 @@ def backfill_and_persist(
             season=season,
             scraped_at=timestamp,
             live=load_live_predicted_games(session),
+            contexts=load_game_contexts(session),
             with_logit=with_logit,
             v0_seed=load_elo_seed(session, MODEL_VERSION),
             v1_seed=load_elo_seed(session, ELO_V1_MODEL_VERSION),
         )
-        register_elo_v1(session)
+        register_elo_models(session)
         written = 0
         # One multi-row INSERT per batch keeps each statement under Postgres's
         # 65,535 bind-parameter limit (9 columns per row).
@@ -652,24 +711,13 @@ def _evaluate_logit_predictions(
 ) -> list[tuple[FeatureRow, float]]:
     """Return expanding-window predictions paired with their game rows.
 
-    With `season`, blocks holding none of its games are not refit at all: the
-    refit is the expensive step, and those predictions would be discarded.
+    Cold-start games are left out, as in `score`. With `season`, blocks holding
+    none of its games are not refit at all: the refit is the expensive step, and
+    those predictions would be discarded.
     """
     completed = [row for row in rows if row.home_won is not None]
     if not completed:
         return []
-    game_rows = [
-        GameRow(
-            game_id=row.game_id,
-            game_date=row.game_date,
-            season=row.season,
-            home_team_id=row.home_team_id,
-            away_team_id=row.away_team_id,
-            home_won=row.home_won,
-        )
-        for row in completed
-    ]
-    elo_probs, _ratings = walk_forward(game_rows)
     scored_rows: list[tuple[FeatureRow, float]] = []
     threshold = settings.logit_cold_start_games if cold_start_games is None else cold_start_games
     for block_start in range(0, len(completed), block_size):
@@ -682,12 +730,9 @@ def _evaluate_logit_predictions(
         ):
             continue
         artifact = fit_artifact(training_rows)
-        for index in range(block_start, block_end):
-            row = completed[index]
-            probability = (
-                elo_probs[index] if cold_start(row, threshold) else predict_artifact(artifact, row)
-            )
-            scored_rows.append((row, probability))
+        for row in completed[block_start:block_end]:
+            if not cold_start(row, threshold):
+                scored_rows.append((row, predict_artifact(artifact, row)))
     return scored_rows
 
 

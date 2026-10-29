@@ -5,10 +5,12 @@ from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
+from elo_v2 import GameContext
 from logit import FEATURE_NAMES, FeatureRow, fit_artifact
 
 import scoring
 from elo import GameRow
+from queries import DELETE_COLD_START_PREDICTIONS, SELECT_GAME_CONTEXT
 
 HOME = UUID("00000000-0000-4000-8000-000000000201")
 AWAY = UUID("00000000-0000-4000-8000-000000000202")
@@ -142,9 +144,85 @@ def test_score_writes_elo_and_logit_when_artifact_exists(monkeypatch: pytest.Mon
         lambda _session, _model, rows, _conflict: captured.extend(rows) or len(rows),
     )
     result = scoring.score_and_persist(as_of=datetime(2024, 10, 20, 12, 0, 0))
-    assert result["written"] == 3
-    assert {row["model_version"] for row in captured} == {"elo-v0", "elo-v1", "logit-v1"}
-    assert result["model_versions"] == ["elo-v0", "elo-v1", "logit-v1"]
+    assert result["written"] == 4
+    assert {row["model_version"] for row in captured} == {"elo-v0", "elo-v1", "elo-v2", "logit-v1"}
+    assert result["model_versions"] == ["elo-v0", "elo-v1", "elo-v2", "logit-v1"]
+
+
+@pytest.mark.unit
+def test_score_writes_no_logit_row_before_cold_start_ends(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    upcoming = [
+        GameRow(
+            game_id=UUID(int=100),
+            game_date=date(2024, 10, 20),
+            season="2024-25",
+            home_team_id=HOME,
+            away_team_id=AWAY,
+        )
+    ]
+    artifact = fit_artifact([_feature(index, index % 2 == 0) for index in range(12)])
+    session = MagicMock()
+
+    @contextmanager
+    def session_context():
+        yield session
+
+    captured: list[dict] = []
+    monkeypatch.setattr(scoring, "get_session", session_context)
+    monkeypatch.setattr(scoring.settings, "logit_cold_start_games", 10)
+    monkeypatch.setattr(scoring, "load_regular_season_finals", lambda _session: [])
+    monkeypatch.setattr(scoring, "load_upcoming_games", lambda _session, **_window: upcoming)
+    monkeypatch.setattr(scoring, "load_market_wp", lambda _session: {})
+    monkeypatch.setattr(
+        scoring, "load_feature_rows", lambda _session: [_feature(0, None, before=9)]
+    )
+    monkeypatch.setattr(scoring, "load_model_artifact", lambda _session, _version: artifact)
+    monkeypatch.setattr(scoring, "set_champion_model", lambda *_args: None)
+    monkeypatch.setattr(
+        scoring,
+        "upsert_rows",
+        lambda _session, _model, rows, _conflict: captured.extend(rows) or len(rows),
+    )
+    scoring.score_and_persist(as_of=datetime(2024, 10, 20, 12, 0, 0))
+    # Nine games behind each team: the Elos score it, logit waits.
+    assert {row["model_version"] for row in captured} == {"elo-v0", "elo-v1", "elo-v2"}
+    # Earlier cold-start logit rows are cleared too.
+    session.execute.assert_any_call(
+        DELETE_COLD_START_PREDICTIONS,
+        {"model_version": "logit-v1", "cold_start_games": 10},
+    )
+
+
+@pytest.mark.unit
+def test_evaluate_logit_predictions_skip_cold_start_games() -> None:
+    rows = [_feature(index, index % 2 == 0, before=index) for index in range(12)]
+    scored = scoring._evaluate_logit_predictions(rows, block_size=5, cold_start_games=8)
+    # Games 0-4 have nothing to train on; of the rest only 8+ are past cold start.
+    assert [row.home_games_before for row, _probability in scored] == [8, 9, 10, 11]
+
+
+@pytest.mark.unit
+def test_load_game_contexts() -> None:
+    session = MagicMock()
+    session.execute.return_value.mappings.return_value.all.return_value = [
+        {
+            "game_id": str(UUID(int=7)),
+            "home_back_to_back": True,
+            "away_back_to_back": False,
+            "home_notable_out": 2,
+            "away_notable_out": 0,
+        }
+    ]
+    assert scoring.load_game_contexts(session) == {
+        UUID(int=7): GameContext(home_back_to_back=True, home_notable_out=2)
+    }
+    assert session.execute.call_args.args == (SELECT_GAME_CONTEXT, {"recent_days": 14})
+    # Recency reads only games before this one, never the game being predicted.
+    assert "fct_player_game_logs.game_date < fct_game_injuries.game_date" in str(
+        SELECT_GAME_CONTEXT
+    )
 
 
 @pytest.mark.unit

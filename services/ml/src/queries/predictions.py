@@ -69,3 +69,20 @@ DELETE_PREDICTIONS_BEYOND_HORIZON = text(
         AND games.game_date > :through_date
     """
 )
+
+# Logit writes nothing until both teams have :cold_start_games Finals behind
+# them, so the scorecard grades only real logit predictions. This also clears
+# rows from before that rule, when the cold start borrowed Elo v0's number.
+# Raising the threshold later deletes real, graded predictions below the new
+# one, so treat it as fixed for a model version and raise it under a new one.
+DELETE_COLD_START_PREDICTIONS = text(
+    """
+    DELETE FROM source.game_predictions
+    USING silver.int_game_features
+    WHERE
+        game_predictions.game_id = int_game_features.game_id
+        AND game_predictions.model_version = :model_version
+        AND least(int_game_features.home_games_before, int_game_features.away_games_before)
+            < :cold_start_games
+    """
+)

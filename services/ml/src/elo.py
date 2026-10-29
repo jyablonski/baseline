@@ -6,6 +6,7 @@ with game_date < g.game_date. Same-game scores are never inputs.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -39,6 +40,14 @@ def expected_home_win(home_rating: float, away_rating: float) -> float:
 
 def clip_probability(value: float) -> float:
     return min(1.0 - 1e-6, max(1e-6, value))
+
+
+def sigmoid(value: float) -> float:
+    # Branch on sign so math.exp never overflows on a large logit.
+    if value >= 0:
+        return 1.0 / (1.0 + math.exp(-value))
+    exponent = math.exp(value)
+    return exponent / (1.0 + exponent)
 
 
 def regress_ratings(ratings: dict[UUID, float]) -> dict[UUID, float]:

@@ -236,7 +236,7 @@ def test_build_backfill_rows_logit_is_opt_in_and_live_rows_are_kept(
 
     monkeypatch.setattr("scoring._evaluate_logit_predictions", _logit)
     elo_only = build_backfill_rows(history, [], {}, season="2024-25", scraped_at=scraped_at)
-    assert sorted(row["model_version"] for row in elo_only) == ["elo-v0", "elo-v1"]
+    assert sorted(row["model_version"] for row in elo_only) == ["elo-v0", "elo-v1", "elo-v2"]
     assert seasons == []
 
     rows = build_backfill_rows(
@@ -250,7 +250,7 @@ def test_build_backfill_rows_logit_is_opt_in_and_live_rows_are_kept(
     )
     by_version = {row["model_version"]: row for row in rows}
     # elo-v0 already has a live prediction for "b", so the replay stays out.
-    assert sorted(by_version) == ["elo-v1", "logit-v1"]
+    assert sorted(by_version) == ["elo-v1", "elo-v2", "logit-v1"]
     assert by_version["logit-v1"]["model_wp"] == 0.7
     assert seasons == ["2024-25"]
 
@@ -282,6 +282,7 @@ def test_backfill_and_persist_batches_upserts(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr("scoring.load_feature_rows", lambda sess: feature_loads.append(True) or [])
     monkeypatch.setattr("scoring.load_market_wp", lambda sess: {})
     monkeypatch.setattr("scoring.load_live_predicted_games", lambda sess: {(_id("0"), "elo-v1")})
+    monkeypatch.setattr("scoring.load_game_contexts", lambda sess: {})
     monkeypatch.setattr("scoring.BACKFILL_BATCH_SIZE", 4)
 
     def _upsert(session, model, rows, conflict_columns):
@@ -290,10 +291,10 @@ def test_backfill_and_persist_batches_upserts(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr("scoring.upsert_rows", _upsert)
     result = backfill_and_persist(season="2024-25")
-    # 3 games x 2 Elo versions, minus the one live elo-v1 prediction.
-    assert batches == [4, 1]
-    assert result["written"] == 5
-    assert result["model_versions"] == ["elo-v0", "elo-v1"]
+    # 3 games x 3 Elo versions, minus the one live elo-v1 prediction.
+    assert batches == [4, 4]
+    assert result["written"] == 8
+    assert result["model_versions"] == ["elo-v0", "elo-v1", "elo-v2"]
     assert result["season"] == "2024-25"
     assert session.execute.call_args.args[0] is REGISTER_MODEL
     # Features are only loaded (and logit only replayed) when asked for.

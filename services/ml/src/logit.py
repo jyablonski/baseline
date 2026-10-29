@@ -14,7 +14,7 @@ from datetime import date
 from typing import Any, cast
 from uuid import UUID
 
-from elo import clip_probability
+from elo import clip_probability, sigmoid
 
 MODEL_NAME = "logit"
 MODEL_VERSION = "logit-v1"
@@ -104,14 +104,6 @@ def _standardized_values(
     ]
 
 
-def _sigmoid(value: float) -> float:
-    if value >= 0:
-        inverse = math.exp(-value)
-        return 1.0 / (1.0 + inverse)
-    exponent = math.exp(value)
-    return exponent / (1.0 + exponent)
-
-
 def _fit_binary_logit(
     values: Sequence[Sequence[float]],
     labels: Sequence[int],
@@ -130,7 +122,7 @@ def _fit_binary_logit(
         intercept_gradient = 0.0
         coefficient_gradients = [0.0] * len(coefficients)
         for row, label in zip(values, labels, strict=True):
-            probability = _sigmoid(
+            probability = sigmoid(
                 intercept
                 + sum(
                     coefficient * value
@@ -258,7 +250,7 @@ def predict_artifact(artifact: Mapping[str, Any], row: FeatureRow) -> float:
     calibrated_logit = float(calibration.get("slope", 1.0)) * raw_logit + float(
         calibration.get("intercept", 0.0)
     )
-    return clip_probability(_sigmoid(calibrated_logit))
+    return clip_probability(sigmoid(calibrated_logit))
 
 
 def cold_start(row: FeatureRow, threshold: int) -> bool:
