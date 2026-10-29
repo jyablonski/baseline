@@ -1,7 +1,7 @@
 export const PRIMARY_NAV = [
   { href: "/", label: "Home" },
   { href: "/schedule", label: "Schedule" },
-  { href: "/games", label: "Games" },
+  { href: "/games", label: "Past Games" },
   { href: "/players", label: "Players" },
   { href: "/teams", label: "Teams" },
   { href: "/social", label: "Social" },

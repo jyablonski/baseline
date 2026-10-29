@@ -1,5 +1,3 @@
-{{ config(materialized='table') }}
-
 -- Regular Season standings for every team-season with scraped standings or at
 -- least one Final: scraped values where Basketball-Reference has them, the
 -- rest derived from fct_team_game_results. int_playoff_seeds and fct_standings

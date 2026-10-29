@@ -684,6 +684,10 @@ describe("game page states", () => {
     );
     expect(screen.getByLabelText("NYK 108, winner")).toBeInTheDocument();
     expect(screen.getByLabelText("SAS 101")).toBeInTheDocument();
+    // Both enter 2–2; the header counts this result.
+    const scoreline = screen.getByTestId("game-scoreline");
+    expect(scoreline).toHaveTextContent("3–2");
+    expect(scoreline).toHaveTextContent("2–3");
     const calls = screen.getAllByTestId("recap-call").map((call) => call.textContent);
     // The market had the winner; the model had the home side and lost.
     expect(calls).toEqual(["Market favored NYK 55%", "Model favored SAS 60%"]);
@@ -840,7 +844,7 @@ describe("game page states", () => {
     // The recap cards: the winner's star, then the losing side's top scorer.
     const cards = screen.getAllByTestId("recap-card").map((card) => card.textContent);
     expect(cards[0]).toMatch(/^Star41Jalen Brunson/);
-    expect(cards.at(-1)).toMatch(/^Spurs28Victor Wembanyama/);
+    expect(cards.at(-1)).toMatch(/^Spurs top scorer28Victor Wembanyama/);
     const table = () => within(screen.getByRole("table"));
     expect(table().getByText("Jalen Brunson")).toBeInTheDocument();
     expect(table().queryByText("Victor Wembanyama")).not.toBeInTheDocument();

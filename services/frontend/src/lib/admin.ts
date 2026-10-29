@@ -38,6 +38,8 @@ export type SourceHealth = {
   last_success_at: string | null;
   /** Most recent attempted runs in a row that failed or returned below expectation. */
   unhealthy_streak: number;
+  /** triggered_by of the run behind the latest row: "scheduled", "catch-up", ... */
+  run_triggered_by: string | null;
 };
 
 export type TableFreshness = {

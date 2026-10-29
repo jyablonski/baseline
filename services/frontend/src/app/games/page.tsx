@@ -45,7 +45,7 @@ function GamesIndex() {
   return (
     <div className="space-y-10">
       <div>
-        <h1 className="type-page">Games</h1>
+        <h1 className="type-page">Past Games</h1>
         <p className="mt-1 text-sm text-ink-2">
           Finished games and the season&apos;s standouts. Upcoming games are on the{" "}
           <Link href="/schedule" className="underline underline-offset-2">

@@ -7,6 +7,8 @@ models:
       post_reddit_id associates the comment to fct_reddit_posts.
       Queryable via Cube / MCP.
     config:
+      indexes:
+        - columns: [post_reddit_id]
       meta:
         grain: One row per Reddit comment.
     columns:

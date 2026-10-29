@@ -1,0 +1,30 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: model_evaluations
+        description: >
+          Persisted per-season evaluation metrics for versioned ML models.
+        columns:
+          - name: model_name
+            description: Model family.
+          - name: model_version
+            description: Model version.
+          - name: evaluation_name
+            description: Evaluation scheme, e.g. expanding-window.
+          - name: season
+            description: Season evaluated.
+          - name: evaluated_at
+            description: When the evaluation ran.
+          - name: n
+            description: Games evaluated.
+          - name: logloss
+            description: Mean log loss.
+          - name: brier
+            description: Mean Brier score.
+          - name: accuracy
+            description: Share of games where the model picked the winner (home when model_wp >= 0.5).
+          - name: home_always_accuracy
+            description: Baseline accuracy of always picking the home team.

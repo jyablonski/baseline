@@ -58,6 +58,22 @@ function sides(game: GameDetail) {
 
 type Side = ReturnType<typeof sides>["home"];
 
+/**
+ * The API's records are entering the game; once it is Final the header shows
+ * where each team stands after it, so the result is counted. Both count the
+ * game's own season type, so adding it is exact.
+ */
+function recordsAfter(game: GameDetail, both: { away: Side; home: Side }) {
+  if (!isFinal(game)) return both;
+  const homeSideWon = homeWon(game);
+  const after = (side: Side, won: boolean) => ({
+    ...side,
+    wins: side.wins + (won ? 1 : 0),
+    losses: side.losses + (won ? 0 : 1),
+  });
+  return { away: after(both.away, !homeSideWon), home: after(both.home, homeSideWon) };
+}
+
 // Records count the game's own season type, so a playoff game shows a playoff
 // record; say so, or "15–3" reads as the season.
 function recordSuffix(game: GameDetail) {
@@ -86,7 +102,7 @@ export function GameHeader({
   const tip = formatGameTime(game.game_date, game.start_time_et, timezone);
   const final = isFinal(game);
   const winner = winnerId(game);
-  const { away, home } = sides(game);
+  const { away, home } = recordsAfter(game, sides(game));
   const suffix = recordSuffix(game);
   const context = meetingsLoading ? null : contextLine(game, meetings);
   const meta = [tip.date, context, game.arena || game.arena_city].filter(Boolean);
@@ -98,7 +114,7 @@ export function GameHeader({
         {/* A finished game goes back to its day on Games; an upcoming one to the schedule. */}
         {final ? (
           <Link href={`/games?date=${game.game_date.slice(0, 10)}`} className="hover:text-primary">
-            ← Games
+            ← Past Games
           </Link>
         ) : (
           <Link href="/schedule" className="hover:text-primary">

@@ -1,0 +1,27 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: teams
+        description: Repo-owned franchise catalog with provider-independent UUID identity.
+        columns:
+          - name: team_id
+            description: Baseline team UUID.
+          - name: canonical_slug
+            description: Stable repo-owned franchise slug.
+          - name: abbreviation
+            description: Team abbreviation, e.g. BOS.
+          - name: full_name
+            description: Full team name, e.g. Boston Celtics.
+          - name: city
+            description: Team city or region.
+          - name: nickname
+            description: Team nickname, e.g. Celtics.
+          - name: conference
+            description: East or West.
+          - name: division
+            description: Division name.
+          - name: scraped_at
+            description: When the scraper last wrote this row.

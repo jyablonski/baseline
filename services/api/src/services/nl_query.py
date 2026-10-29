@@ -1,6 +1,6 @@
 """Rule-based natural-language query routing over Cube named operations.
 
-Covers B2B, career compare, arena-city W/L, blown leads, remaining
+Covers B2B, season compare, arena-city W/L, blown leads, remaining
 salary/payroll, and standings. Each handler runs a Cube query via CubeAnalytics. Adding a family
 is a Cube member plus one intent — not a new gold SQL string.
 """
@@ -812,7 +812,7 @@ class NaturalLanguageQueryService:
         diff = leader_games - runner_games
         value = None
         if leader_games == 0:
-            answer = f"No career games for {leader['full_name']} or {runner['full_name']} yet."
+            answer = f"No games yet this season for {leader['full_name']} or {runner['full_name']}."
         elif diff == 0:
             answer = (
                 f"{leader['full_name']} and {runner['full_name']} have played "
@@ -834,7 +834,7 @@ class NaturalLanguageQueryService:
             data=self._ask_rows(rows, compare_keys),
             sql="cube:players compare ordered by career_games_played",
             entities=self._entities(
-                *(("player", name) for name in names), ("topic", "Career compare")
+                *(("player", name) for name in names), ("topic", "Season compare")
             ),
             follow_ups=follow_ups,
         )

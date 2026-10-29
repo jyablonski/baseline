@@ -11,7 +11,6 @@ const PUBLIC_PATHS = [
   "/social",
   "/ask",
   "/about",
-  "/data",
   "/privacy",
   "/terms",
 ];

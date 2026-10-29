@@ -21,7 +21,7 @@ export const NOTABLE_TAB_INFO: Record<
     label: "Upsets",
     description: "Underdog wins, ranked by how unlikely the morning line made them.",
     headline: "Market win %",
-    secondary: "Line",
+    secondary: "Moneyline",
     empty: "No upsets yet this season. An upset needs a final result and a pregame line.",
   },
   closest: {

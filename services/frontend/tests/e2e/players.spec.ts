@@ -1,19 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-import {
-  API_FAILURE_DETAIL,
-  expectNo2010Range,
-  lastApiCall,
-  mockApi,
-  waitForApiCall,
-} from "./helpers";
+import { API_FAILURE_DETAIL, expectNo2010Range, mockApi, waitForApiCall } from "./helpers";
 
 test("players directory to profile shows remaining-contract snapshot and B2B", async ({ page }) => {
   await mockApi(page);
   await page.goto("/players");
   await expect(page.getByRole("heading", { name: "Players" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Kawhi Leonard" }).first()).toBeVisible();
-  await expect(page.getByLabel("Active only")).toBeVisible();
   await expectNo2010Range(page);
 
   await page.getByRole("link", { name: "Kawhi Leonard" }).first().click();
@@ -66,20 +59,6 @@ test("players search debounces into the URL and sends a fuzzy query", async ({ p
   await expect(page).toHaveURL(/[?&]search=kawh/);
   const searched = await waitForApiCall(page, "search=kawh");
   expect(searched.some((url) => url.includes("/players"))).toBe(true);
-});
-
-test("players active-only toggle drops the active filter from the request", async ({ page }) => {
-  await mockApi(page);
-  await page.goto("/players");
-  // Checked by default, so the first request already narrows to active players.
-  await waitForApiCall(page, "active=true");
-  await expect(page.getByLabel("Active only")).toBeChecked();
-
-  await page.getByLabel("Active only").click();
-  await expect(page.getByLabel("Active only")).not.toBeChecked();
-  await expect
-    .poll(async () => (await lastApiCall(page, "/players?"))?.includes("active=true"))
-    .toBe(false);
 });
 
 test("players team filter narrows the request to one team", async ({ page }) => {
@@ -135,13 +114,9 @@ test("players page plots production vs salary and highlights a picked team", asy
   await expect(page.getByText(/^Undervalued\s*1$/)).toBeVisible();
   await expect(page.getByText(/^Overpaid\s*1$/)).toBeVisible();
 
-  // Hovering the info button explains MVP score; moving away closes it.
-  const mvpTip = page.getByRole("dialog", { name: "MVP score" });
-  await page.getByRole("button", { name: "About MVP score" }).hover();
-  await expect(mvpTip).toContainText("proprietary Baseline metric");
-  await page.getByRole("heading", { name: "Production vs Salary" }).hover();
-  await page.mouse.move(0, 0);
-  await expect(mvpTip).toHaveCount(0);
+  // "How it's scored" opens the steps and the colour rules inline.
+  await page.getByRole("button", { name: /How it's scored/ }).click();
+  await expect(page.getByText("MVP score, in four steps")).toBeVisible();
 
   // The dashed lines say what they are, and nobody is ringed until picked.
   await expect(page.locator("svg text", { hasText: /^Median salary \$/ })).toBeVisible();

@@ -132,6 +132,7 @@ class AdminRepository:
                 "finished_at": as_utc(row["finished_at"]),
                 "last_success_at": as_utc(row["last_success_at"]),
                 "unhealthy_streak": int(row["unhealthy_streak"] or 0),
+                "run_triggered_by": row["run_triggered_by"],
             }
             for row in rows
         ]

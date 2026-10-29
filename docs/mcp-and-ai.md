@@ -76,7 +76,7 @@ Free-form gold SQL (`query_nba_data`) was removed and is not coming back.
 
 - `nba://schema` — Cube meta, not gold DDL
 - `nba://examples` — example questions mapped to tools
-- Prompts: `analyze_player`, `compare_careers`, `team_performance`
+- Prompts: `analyze_player`, `compare_seasons`, `team_performance`
 
 ## Adding a tool
 

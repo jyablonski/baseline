@@ -36,7 +36,6 @@ function PlayersDirectory() {
   const searchParams = useSearchParams();
   const { season, isLoading: seasonLoading } = useSeason();
   const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
-  const [activeOnly, setActiveOnly] = useState(true);
   const [teamId, setTeamId] = useState("");
   const [sort, setSort] = useState<PlayerSort>("mvp");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -63,10 +62,9 @@ function PlayersDirectory() {
   }, [debounced, router, searchParams]);
 
   const playersQuery = useQuery({
-    queryKey: ["players", debounced, activeOnly, teamId, season, sort, page],
+    queryKey: ["players", debounced, teamId, season, sort, page],
     queryFn: () =>
       api.searchPlayers(debounced.trim(), {
-        active: activeOnly ? true : undefined,
         team_id: teamId || undefined,
         season: season || undefined,
         sort,
@@ -116,16 +114,6 @@ function PlayersDirectory() {
             fuzzy
           </span>
         ) : null}
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
-            checked={activeOnly}
-            onCheckedChange={(checked) => {
-              setActiveOnly(checked);
-              setPage(0);
-            }}
-          />
-          Active only
-        </label>
         <select
           className={cn("field", teamId && "field-query")}
           value={teamId}

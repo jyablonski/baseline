@@ -11,6 +11,8 @@ models:
       This is the morning report, not the official inactive list: played says
       whether a listed player logged minutes once the game is Final.
     config:
+      indexes:
+        - columns: [game_id]
       meta:
         grain: One row per game per player on either team's injury report.
     columns:

@@ -1,0 +1,61 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: player_game_logs
+        description: Basketball-Reference box-score rows keyed by Baseline UUIDs.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: player_id
+            description: Baseline player UUID.
+          - name: game_id
+            description: Baseline game UUID.
+          - name: team_id
+            description: Player's team in this game (Baseline team UUID).
+          - name: game_date
+            description: Game date.
+          - name: season
+            description: NBA season label, e.g. 2025-26.
+          - name: matchup
+            description: Matchup string, e.g. BOS vs. NYK (home) or BOS @ NYK (away).
+          - name: wl
+            description: W or L.
+          - name: min
+            description: Minutes played.
+          - name: pts
+            description: Points.
+          - name: reb
+            description: Total rebounds.
+          - name: ast
+            description: Assists.
+          - name: stl
+            description: Steals.
+          - name: blk
+            description: Blocks.
+          - name: tov
+            description: Turnovers.
+          - name: fgm
+            description: Field goals made.
+          - name: fga
+            description: Field goals attempted.
+          - name: fg_pct
+            description: Field goal percentage (0-1).
+          - name: fg3m
+            description: Three-pointers made.
+          - name: fg3a
+            description: Three-pointers attempted.
+          - name: fg3_pct
+            description: Three-point percentage (0-1).
+          - name: ftm
+            description: Free throws made.
+          - name: fta
+            description: Free throws attempted.
+          - name: ft_pct
+            description: Free throw percentage (0-1).
+          - name: plus_minus
+            description: Plus-minus while on court.
+          - name: scraped_at
+            description: When the scraper last wrote this row.

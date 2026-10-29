@@ -1,12 +1,3 @@
-{{
-    config(
-        indexes=[
-            {'columns': ['post_reddit_id']},
-            {'columns': ['entity_type', 'created_utc']},
-        ],
-    )
-}}
-
 with documents as (
     select * from {{ ref('int_reddit_documents') }}
 ),

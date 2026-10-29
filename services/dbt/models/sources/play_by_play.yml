@@ -1,0 +1,45 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: play_by_play
+        description: >
+          Basketball-Reference play-by-play actions. Unique on (game_id, action_number, action_id).
+          Opt-in current-season ingest; not a full-history backfill.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: game_id
+            description: Baseline game UUID.
+          - name: season
+            description: NBA season label, e.g. 2025-26.
+          - name: action_number
+            description: Sequence number of the action within the game.
+          - name: action_id
+            description: Secondary sequence id; equals action_number for Basketball-Reference rows.
+          - name: period
+            description: Period number; 5+ is overtime.
+          - name: clock
+            description: Time remaining in the period as shown, e.g. 11:45.0.
+          - name: score_home
+            description: Home score after the action; null on rows where it is not shown.
+          - name: score_away
+            description: Away score after the action; null on rows where it is not shown.
+          - name: team_id
+            description: Team credited with the action (Baseline team UUID).
+          - name: player_id
+            description: Primary player (Baseline player UUID).
+          - name: secondary_player_id
+            description: Assister / stealer / blocker / fouled / subbed-out player; null on rows ingested before the parser captured it.
+          - name: action_type
+            description: Always null for Basketball-Reference; int_play_by_play_events parses the description instead.
+          - name: sub_type
+            description: Always null for Basketball-Reference.
+          - name: description
+            description: Free-text play description.
+          - name: extras
+            description: Provider-specific extra fields (JSONB).
+          - name: scraped_at
+            description: When the scraper last wrote this row.

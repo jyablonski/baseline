@@ -372,7 +372,7 @@ describe("social page", () => {
   it("pages through the feed past the first screen", async () => {
     replace.mockClear();
     renderPage();
-    expect(await screen.findByText("1–10 of 41 posts")).toBeInTheDocument();
+    expect(await screen.findByText("1–5 of 41 posts")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "← Prev" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Next →" }));
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/social?page=2"));

@@ -12,6 +12,12 @@ models:
       is only populated for games ingested after that fix, so it is null for
       rows loaded earlier until they are re-scraped with --refresh.
     config:
+      materialized: incremental
+      unique_key: game_id
+      incremental_strategy: delete+insert
+      on_schema_change: sync_all_columns
+      indexes:
+        - columns: [game_id]
       meta:
         grain: One row per play-by-play action.
     columns:

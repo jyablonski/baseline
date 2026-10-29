@@ -1,0 +1,31 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: reddit_comments
+        description: >
+          PRAW comment ingest. Unique on reddit_id. post_reddit_id
+          associates the comment to reddit_posts.
+        columns:
+          - name: reddit_id
+            description: Reddit base36 id (no t1_ prefix).
+          - name: post_reddit_id
+            description: Parent submission's reddit_id.
+          - name: parent_id
+            description: "Reddit fullname of the parent: t3_ for a top-level comment, t1_ for a reply."
+          - name: author
+            description: Author username; null when deleted.
+          - name: body
+            description: Comment text; [removed] / [deleted] when moderated.
+          - name: author_flair
+            description: Author's user flair; resolved in fct_reddit_flair.
+          - name: score
+            description: Net upvotes at scrape time.
+          - name: created_utc
+            description: Creation time in UTC.
+          - name: permalink
+            description: Absolute reddit.com URL.
+          - name: scraped_at
+            description: When the scraper last wrote this row.

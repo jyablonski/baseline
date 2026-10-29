@@ -180,6 +180,25 @@ describe("turningPointCard", () => {
       caption: "NYK won after trailing by 7 entering Q4 and by 16 in Q2",
     });
     expect(turningPointCard({ ...flow, largest_lead_blown: 3 }, loserRun)).toBeNull();
+    // A modest deficit and the loser's run: the winner's own lead tells it.
+    expect(
+      turningPointCard(
+        {
+          ...flow,
+          largest_lead_blown: 8,
+          home_team_abbreviation: "SAS",
+          away_team_abbreviation: "NYK",
+          max_away_lead: 24,
+          away_lead_pct: 0.69,
+        },
+        loserRun
+      )
+    ).toEqual({
+      label: "Turning point",
+      figure: "+24",
+      name: "NYK max lead",
+      caption: "Led 69% of the game",
+    });
     expect(turningPointCard({ ...flow, largest_lead_blown: 3 }, run)?.caption).toBe(
       "Closed the game"
     );
@@ -222,7 +241,7 @@ describe("star and losing cards", () => {
 
   it("names the losing side's top scorer under the team's name", () => {
     expect(losingCard(rows, GAME, "Spurs")).toEqual({
-      label: "Spurs",
+      label: "Spurs top scorer",
       figure: "25",
       name: "Dylan Harper",
       caption: "5 reb, 4 ast · 10-19 FG",

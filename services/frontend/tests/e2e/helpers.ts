@@ -3,7 +3,7 @@ import { expect, type Page } from "@playwright/test";
 export const PRIMARY_NAV = [
   "Home",
   "Schedule",
-  "Games",
+  "Past Games",
   "Players",
   "Teams",
   "Social",

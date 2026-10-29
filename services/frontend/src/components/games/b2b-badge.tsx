@@ -12,7 +12,7 @@ const B2B_BADGE =
 /**
  * "B2B" beside a team that played the night before. A button of its own, set
  * next to the team link and never inside it, so a tap opens the detail instead
- * of navigating. Opens on hover for a mouse, like InfoTip.
+ * of navigating. Opens on hover for a mouse.
  */
 export function B2BBadge({
   game,

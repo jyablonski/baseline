@@ -386,12 +386,12 @@ def test_score_ratios_are_null_at_zero_score_but_discussion_ratio_is_floored() -
 
 
 @pytest.mark.unit
-def test_contested_threshold_matches_the_observed_score_floor() -> None:
-    from queries.social import CONTESTED_MAX_SCORE, CONTESTED_MIN_COMMENTS, IS_CONTESTED
+def test_contested_compares_comments_to_score() -> None:
+    from queries.social import CONTESTED_MIN_COMMENTS, IS_CONTESTED
 
-    assert CONTESTED_MAX_SCORE == 25
     assert CONTESTED_MIN_COMMENTS == 50
-    assert f"posts.score <= {CONTESTED_MAX_SCORE}" in IS_CONTESTED
+    assert f"posts.num_comments >= {CONTESTED_MIN_COMMENTS}" in IS_CONTESTED
+    assert "posts.num_comments >= posts.score" in IS_CONTESTED
     assert "NOT ILIKE 'game thread:%'" in IS_CONTESTED
 
 

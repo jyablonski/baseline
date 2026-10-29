@@ -818,6 +818,7 @@ def test_admin_health_against_real_schema(integration_client, postgres_engine) -
     sources = {row["source_name"]: row for row in body["sources"]}
     assert sources["standings"]["status"] == "success"
     assert sources["standings"]["unhealthy_streak"] == 0
+    assert sources["standings"]["run_triggered_by"] == "cron"
     # Latest attempt wins, and each failed run counts once against the streak.
     assert sources["injuries"]["status"] == "failed"
     assert sources["injuries"]["attempt"] == 2

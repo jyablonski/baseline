@@ -23,6 +23,7 @@ import { playerHref } from "@/lib/nav";
 import {
   axisTicks,
   isPicked,
+  median,
   plotLabel,
   VALUE_CATEGORIES,
   type PlayerValuePoint,
@@ -306,12 +307,6 @@ function MedianLabel({
       {value}
     </text>
   );
-}
-
-function median(values: number[]) {
-  const sorted = [...values].sort((left, right) => left - right);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
 // Memoised: the plot is a few hundred custom SVG nodes, so it should redraw

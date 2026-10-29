@@ -127,9 +127,9 @@ const SCORES = [
     title: "Discussion ratio",
     pages: "Social",
     detail:
-      "How much a post is argued about relative to how much it is upvoted. Many comments on a low score reads as contested.",
+      "How much a post is argued about relative to how much it is upvoted. More comments than upvotes reads as contested.",
     formula:
-      "discussion ratio = comments ÷ max(score, 1)\ncontested when score ≤ 25 and comments ≥ 50",
+      "discussion ratio = comments ÷ max(score, 1)\ncontested when comments ≥ 50 and comments ≥ score",
   },
 ];
 

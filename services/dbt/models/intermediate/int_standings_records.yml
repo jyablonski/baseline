@@ -10,6 +10,7 @@ models:
       the NBA criteria the data can answer; the model header lists what is not
       modeled. Read by int_playoff_seeds and fct_standings.
     config:
+      materialized: table
       meta:
         grain: One row per team per Regular Season.
     columns:

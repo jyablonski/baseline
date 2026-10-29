@@ -87,6 +87,9 @@ ADMIN_RUN_COUNT = text("SELECT count(*) FROM source.pipeline_runs")
 # recent attempted runs in a row failed or came back below expectation. One bad
 # night is noise; a streak is a parse break. Same rule as the scraper's
 # SELECT_UNHEALTHY_SOURCE_STREAKS, which decides when Slack is told.
+# run_triggered_by says which kind of run wrote the latest row: the hourly
+# catch-up records a source only when it recovered it, so 'catch-up' there
+# means the daily's gap has been filled.
 ADMIN_SOURCE_HEALTH = text(
     """
     WITH latest AS (
@@ -169,10 +172,12 @@ ADMIN_SOURCE_HEALTH = text(
         latest.started_at,
         latest.finished_at,
         last_success.succeeded_at AS last_success_at,
-        coalesce(streaks.unhealthy_streak, 0) AS unhealthy_streak
+        coalesce(streaks.unhealthy_streak, 0) AS unhealthy_streak,
+        pipeline_runs.triggered_by AS run_triggered_by
     FROM latest
     LEFT JOIN last_success ON last_success.source_name = latest.source_name
     LEFT JOIN streaks ON streaks.source_name = latest.source_name
+    LEFT JOIN source.pipeline_runs ON pipeline_runs.run_id = latest.run_id
     ORDER BY latest.source_name
     """
 )

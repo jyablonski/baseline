@@ -1,0 +1,37 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: players
+        description: Baseline player registry with provider-independent UUID identity.
+        columns:
+          - name: player_id
+            description: Baseline player UUID.
+          - name: first_name
+            description: "Given name: the full name up to the first space."
+          - name: last_name
+            description: Everything after the first space of the full name.
+          - name: full_name
+            description: Display name as Basketball-Reference shows it.
+          - name: is_active
+            description: Set true whenever a roster, injury, contract, or play-by-play scrape writes the player; never reset to false.
+          - name: jersey_number
+            description: Roster jersey number, as text.
+          - name: position
+            description: Raw roster position code (PG, G-F, or a 1-5 sort key on older scrapes); stg_players maps it to a label.
+          - name: height
+            description: Height as text, e.g. 6-9.
+          - name: weight
+            description: Weight in pounds.
+          - name: birth_date
+            description: Date of birth.
+          - name: team_id
+            description: Team of the latest roster that listed the player (Baseline team UUID).
+          - name: from_year
+            description: Earliest year in the roster years cell.
+          - name: to_year
+            description: Latest year in the roster years cell.
+          - name: scraped_at
+            description: When the scraper last wrote this row.

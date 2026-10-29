@@ -1,0 +1,37 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: games
+        description: Basketball-Reference schedule and result rows keyed by Baseline UUIDs.
+        columns:
+          - name: game_id
+            description: Baseline game UUID.
+          - name: season
+            description: NBA season label, e.g. 2025-26.
+          - name: season_type
+            description: Regular Season, PlayIn, Playoffs, or Cup (the NBA Cup final only; other Cup games count as Regular Season).
+          - name: game_date
+            description: Scheduled date in Eastern Time.
+          - name: start_time_et
+            description: Scheduled start time in Eastern Time; null when unpublished.
+          - name: home_team_id
+            description: Home team (Baseline team UUID).
+          - name: away_team_id
+            description: Away team (Baseline team UUID).
+          - name: home_score
+            description: Home final score; null until Final.
+          - name: away_score
+            description: Away final score; null until Final.
+          - name: arena
+            description: Arena name from the schedule.
+          - name: city
+            description: Arena city.
+          - name: state
+            description: Arena state or province.
+          - name: status
+            description: Final or Scheduled.
+          - name: scraped_at
+            description: When the scraper last wrote this row.

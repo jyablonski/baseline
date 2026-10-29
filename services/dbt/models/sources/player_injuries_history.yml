@@ -1,0 +1,31 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: player_injuries_history
+        description: >
+          Append-only daily Basketball-Reference injury snapshots. Unique on
+          (player_id, team_id, snapshot_date).
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: player_id
+            description: Baseline player UUID.
+          - name: team_id
+            description: Team listing the injury (Baseline team UUID).
+          - name: player_name
+            description: Name as shown on the injury report.
+          - name: player_name_normalized
+            description: Lowercased, ASCII-folded, suffix-stripped name used for matching.
+          - name: update_date
+            description: Date Basketball-Reference last updated the note.
+          - name: description
+            description: Injury note text.
+          - name: source_url
+            description: Basketball-Reference page the row was parsed from.
+          - name: snapshot_date
+            description: Date of the daily scrape that captured this row.
+          - name: scraped_at
+            description: When the scraper last wrote this row.

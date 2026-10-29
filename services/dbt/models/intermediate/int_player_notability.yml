@@ -9,6 +9,9 @@ models:
       least injury_notable_min_games games. The injury marts also accept the
       previous season's flag, so opening night is not empty.
     config:
+      materialized: table
+      indexes:
+        - columns: [player_id, season]
       meta:
         grain: One row per player per season.
     columns:

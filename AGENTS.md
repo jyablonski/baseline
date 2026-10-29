@@ -115,4 +115,5 @@ ORDER BY
 - Scraper / dbt / ml → profile `tools`; MCP is on the default stack
 - Frontend agent notes: `services/frontend/AGENTS.md`
 - dbt agent notes: `services/dbt/AGENTS.md`
+- API agent notes: `services/api/AGENTS.md`
 - Markdown: never impose a line-length / wrap limit. Do not hard-wrap prose in `.md` files. Do not reflow paragraphs to 80 (or any) columns. Coding agents must not “fix” wrapping by adding mid-paragraph newlines.

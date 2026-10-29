@@ -27,6 +27,8 @@ import {
   overallLevel,
   parseAdminTab,
   parseRunsPage,
+  recoveredSources,
+  recoveryNote,
   reviewItems,
   reviewSummary,
   runActionLabel,
@@ -53,6 +55,7 @@ function source(overrides: Partial<SourceHealth> = {}): SourceHealth {
     finished_at: new Date().toISOString(),
     last_success_at: new Date().toISOString(),
     unhealthy_streak: 0,
+    run_triggered_by: null,
     ...overrides,
   };
 }
@@ -169,6 +172,34 @@ describe("sourceLevel", () => {
     expect(
       sourceLevel(source({ status: "success", expectation: "below", unhealthy_streak: 3 }))
     ).toBe("bad");
+  });
+});
+
+describe("recoveredSources", () => {
+  it("names the sources a catch-up filled, and only the healthy ones", () => {
+    const logs = source({
+      source_name: "player_game_logs",
+      run_id: 74,
+      run_triggered_by: "catch-up",
+    });
+    const pbp = source({ source_name: "play_by_play", run_id: 73, run_triggered_by: "catch-up" });
+    const daily = source({ run_triggered_by: "scheduled" });
+    const empty = source({ run_triggered_by: "catch-up", expectation: "below", rows_written: 0 });
+    expect(recoveredSources([logs, pbp, daily, empty])).toEqual([logs, pbp]);
+    expect(recoveryNote([logs])).toBe("recovered by catch-up #74");
+    expect(recoveryNote([logs, pbp])).toBe("recovered by catch-up #73 and #74");
+    expect(recoveryNote([])).toBeNull();
+  });
+
+  it("clears the review list once a catch-up recovers the daily's empty sources", () => {
+    const recovered = health({
+      sources: [
+        source({ source_name: "player_game_logs", run_id: 74, run_triggered_by: "catch-up" }),
+        source({ source_name: "play_by_play", run_id: 74, run_triggered_by: "catch-up" }),
+      ],
+    });
+    expect(reviewItems(recovered).filter((item) => item.key.startsWith("source-"))).toEqual([]);
+    expect(pipelineLevel(recovered)).toBe("ok");
   });
 });
 

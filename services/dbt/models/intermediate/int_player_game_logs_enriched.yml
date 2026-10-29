@@ -4,6 +4,10 @@ models:
   - name: int_player_game_logs_enriched
     description: Player game logs enriched with back-to-back flags and career/season game numbers.
     config:
+      materialized: table
+      indexes:
+        - columns: [player_id]
+        - columns: [game_id]
       meta:
         grain: One row per player per game played.
     columns:

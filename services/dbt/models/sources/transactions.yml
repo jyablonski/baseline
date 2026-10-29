@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: transactions
+        description: >
+          Basketball-Reference transactions log. Grain is transaction_key,
+          sha256(transaction_date|description).
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: transaction_key
+            description: sha256(transaction_date|description). The grain.
+          - name: transaction_date
+            description: Date listed for the transaction.
+          - name: season
+            description: NBA season label, e.g. 2025-26.
+          - name: description
+            description: Transaction text.
+          - name: source_url
+            description: Basketball-Reference page the row was parsed from.
+          - name: scraped_at
+            description: When the scraper last wrote this row.
