@@ -5,7 +5,7 @@ import { API_FAILURE_DETAIL, expectNo2010Range, mockApi, waitForApiCall } from "
 test("games index opens on the latest day and steps between game days", async ({ page }) => {
   await mockApi(page);
   await page.goto("/games");
-  await expect(page.getByRole("heading", { name: "Games", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Past Games", level: 1 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Latest · Tuesday, October 22" })).toBeVisible();
   // Scoped to the results: the notables below also name teams.
   const results = page.getByRole("region", { name: "Results" });

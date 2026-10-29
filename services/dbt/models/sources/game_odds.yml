@@ -1,0 +1,46 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: game_odds
+        description: >
+          The Odds API h2h / spreads lines. Upcoming events are refreshed each
+          scrape and pruned if they leave the feed; a started event keeps its
+          last pregame row as history (accruing from 2026-27). Unique on
+          (odds_event_id, bookmaker, market). Historical odds backfill is out
+          of scope. ODDS_API_KEY required to ingest.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: odds_event_id
+            description: The Odds API event id.
+          - name: commence_time
+            description: Scheduled tip-off time from The Odds API.
+          - name: home_team_name
+            description: Home team name as The Odds API spells it.
+          - name: away_team_name
+            description: Away team name as The Odds API spells it.
+          - name: game_id
+            description: Matched game (Baseline game UUID); null when no source.games row matched by teams and date.
+          - name: bookmaker
+            description: Bookmaker key, e.g. draftkings.
+          - name: market
+            description: h2h (moneyline) or spreads.
+          - name: home_price
+            description: Home American odds.
+          - name: away_price
+            description: Away American odds.
+          - name: home_implied_wp
+            description: Home win probability implied by home_price, vig included.
+          - name: away_implied_wp
+            description: Away win probability implied by away_price, vig included.
+          - name: home_market_wp
+            description: home_implied_wp normalized so both sides sum to 1 (de-vigged); null when either side is missing.
+          - name: away_market_wp
+            description: De-vigged away win probability.
+          - name: spread_home
+            description: Home point spread (negative when favored); spreads market only.
+          - name: scraped_at
+            description: When the scraper last wrote this row.

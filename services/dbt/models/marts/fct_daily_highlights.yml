@@ -15,6 +15,9 @@ models:
       game; MVP rank and percentiles use the season as it stands now. Thresholds
       and weights are the highlight_* vars in dbt_project.yml.
     config:
+      indexes:
+        - columns: [game_date]
+        - columns: [game_id]
       meta:
         grain: One row per highlight candidate (game x highlight type x subject x stat).
     columns:

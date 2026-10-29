@@ -1,9 +1,3 @@
-{{
-    config(
-        indexes=[{'columns': ['game_date']}, {'columns': ['game_id']}],
-    )
-}}
-
 {% set weights = var('highlight_weights') %}
 {% set mvp_cutoff = var('highlight_mvp_rank_cutoff') %}
 {% set min_team_games = var('highlight_min_team_games') %}

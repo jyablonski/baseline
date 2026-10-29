@@ -1102,7 +1102,14 @@ class _CatchUpHarness:
         self.marked: list[bool] = []
         self.posted: list[str] = []
         self.started: list[dict] = []
+        self.recorded: list[tuple[str, str, int | None]] = []
         monkeypatch.setattr("pipeline.get_session", lambda: _session(MagicMock()))
+        monkeypatch.setattr(
+            "pipeline.record_source_runs",
+            lambda session, run_id, steps: self.recorded.extend(
+                (step.step, step.status, step.rows) for step in steps
+            ),
+        )
         monkeypatch.setattr(
             "pipeline.load_config", lambda session: config or _config(season_end=None)
         )
@@ -1159,6 +1166,12 @@ def test_catch_up_loads_late_games_and_reports_a_change(monkeypatch: pytest.Monk
     assert harness.started == [{"triggered_by": "catch-up", "scrape_action": "catch-up"}]
     assert harness.marked == [True]
     assert harness.finished[0]["status"] == "success"
+    # Both sources recovered, so both get a row: /admin and the streak alert
+    # see the recovery. The schedule refresh is not one of them.
+    assert harness.recorded == [
+        ("player_game_logs", "success", 24),
+        ("play_by_play", "success", 450),
+    ]
     # Everything landed, so even the final attempt stays quiet.
     assert harness.posted == []
 
@@ -1176,6 +1189,9 @@ def test_catch_up_still_waiting_is_silent_until_the_final_attempt(
     assert result["remaining"] == 1
     assert harness.marked == []
     assert harness.posted == []
+    # An hourly retry that found nothing records nothing, or a slow morning
+    # would trip the degraded-streak alert.
+    assert harness.recorded == []
 
     harness.gap_results = [still_missing, still_missing]
     run_catch_up(final=True)
@@ -1197,6 +1213,8 @@ def test_catch_up_records_a_failed_step_without_alerting(monkeypatch: pytest.Mon
     assert result["changed"] is True
     assert "Failed: play_by_play." in result["detail"]
     assert harness.finished[0]["scrape_exit"] == 1
+    # Only the source that landed rows is recorded; the failure is not.
+    assert harness.recorded == [("player_game_logs", "success", 24)]
     # A failed run does not count as a successful scrape for freshness.
     assert harness.marked == []
     assert harness.posted == []

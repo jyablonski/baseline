@@ -1,7 +1,3 @@
-{{
-    config(indexes=[{'columns': ['post_reddit_id']}])
-}}
-
 with comments as (
     select * from {{ ref('stg_reddit_comments') }}
 )

@@ -895,7 +895,7 @@ def test_empty_warehouse_answers_say_so() -> None:
     b2b = engine.answer("How many back-to-backs has Kawhi Leonard played?", season="2026-27")
     assert b2b.answer == "No back-to-back sets for Kawhi Leonard in 2026-27 yet."
     compare = engine.answer("Compare LeBron James and Stephen Curry")
-    assert compare.answer == "No career games for LeBron James or Stephen Curry yet."
+    assert compare.answer == "No games yet this season for LeBron James or Stephen Curry."
     record = engine.answer("What is the Warriors' win percentage in Chicago?")
     assert record.answer == "The Warriors haven't played a game in Chicago yet."
 

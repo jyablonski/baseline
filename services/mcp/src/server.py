@@ -176,7 +176,7 @@ def analyze_player(player_name: str) -> str:
 
 
 @mcp.prompt()
-def compare_careers(player_a: str, player_b: str) -> str:
+def compare_seasons(player_a: str, player_b: str) -> str:
     """Guided prompt to compare two players over the current season."""
     return (
         f"Compare {player_a} and {player_b}:\n"

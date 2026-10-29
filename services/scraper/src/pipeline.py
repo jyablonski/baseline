@@ -708,6 +708,19 @@ def find_game_gaps(session: Session, game_date: date) -> list[GameGap]:
     ]
 
 
+# The sources a catch-up re-scrapes and can recover.
+CATCH_UP_SOURCES = frozenset({"player_game_logs", "play_by_play"})
+
+
+def recovered_steps(steps: Sequence[StepOutcome]) -> list[StepOutcome]:
+    """The catch-up steps worth recording: a game source that landed rows."""
+    return [
+        step
+        for step in steps
+        if step.step in CATCH_UP_SOURCES and step.status == "success" and (step.rows or 0) > 0
+    ]
+
+
 def run_catch_up(*, final: bool = False, now: datetime | None = None) -> dict[str, Any]:
     """Re-scrape last night's games while any are still missing data.
 
@@ -716,9 +729,11 @@ def run_catch_up(*, final: bool = False, now: datetime | None = None) -> dict[st
     only burn API quota hourly. Returns ``changed`` so the caller knows
     whether dbt has anything new to build.
 
-    Writes no ``scrape_source_runs`` rows. Those drive the degraded-streak
-    alert, which counts one daily run per day; hourly retries during a slow
-    BRef morning would trip it within three hours.
+    Writes a ``scrape_source_runs`` row only for a game source that landed
+    rows (``recovered_steps``). Those rows drive the degraded-streak alert,
+    which counts one daily run per day: recording every empty hourly retry
+    during a slow BRef morning would trip it within three hours, while a
+    recovery is exactly what should end a streak and clear /admin.
 
     Silent on every attempt. ``final`` marks the last one in the window: if
     games are still missing then, it posts one Slack message listing them.
@@ -786,6 +801,13 @@ def run_catch_up(*, final: bool = False, now: datetime | None = None) -> dict[st
             scrape_exit=1 if alert.failures else 0,
             detail=detail,
         )
+    # Separate session, as in the daily: per-source history is observability,
+    # and must not be able to roll back or fail the run bookkeeping above.
+    try:
+        with get_session() as session:
+            record_source_runs(session, run_id, recovered_steps(alert.steps))
+    except Exception:
+        logger.exception("Failed to record per-source run history for run_id=%s", run_id)
 
     if final and remaining:
         post_webhook_text(

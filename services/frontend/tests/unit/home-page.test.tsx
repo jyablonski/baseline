@@ -159,11 +159,8 @@ describe("home desk", () => {
     const cards = screen.getAllByRole("link", { name: /game flow$/ });
     expect(cards).toHaveLength(6);
     expect(cards[0]).toHaveAccessibleName("A7 97, H7 107: game flow");
-    // The rest of the night is one click away, pinned to that date.
-    expect(screen.getByRole("link", { name: "All 8 games →" })).toHaveAttribute(
-      "href",
-      "/games?date=2026-01-12"
-    );
+    // The rest of the night is the header link, pinned to that date.
+    expect(screen.queryByRole("link", { name: /^All \d+ games/ })).not.toBeInTheDocument();
     const card = screen.getByRole("link", { name: "A0 90, H0 100: game flow" });
     expect(card).toHaveAttribute("href", "/games/game-0");
     // Winner in bold, loser muted.
@@ -171,7 +168,10 @@ describe("home desk", () => {
     expect(within(card).getByText("90").parentElement).toHaveClass("text-ink-2");
     expect(screen.queryByText("H99")).not.toBeInTheDocument();
     // Every module heads with a link to its page, named like the nav.
-    expect(screen.getByRole("link", { name: "Games →" })).toHaveAttribute("href", "/games");
+    expect(screen.getByRole("link", { name: "See all latest results →" })).toHaveAttribute(
+      "href",
+      "/games?date=2026-01-12"
+    );
   });
 
   it("notes each game's lead highlight and the market's favourite, never the model's", async () => {
@@ -195,11 +195,11 @@ describe("home desk", () => {
     );
     renderHome();
     await screen.findByRole("link", { name: "A1 106, H1 100: game flow" });
-    // Upset, then comeback, then the rest; no "See all" with every game shown.
+    // Upset, then comeback, then the rest.
     expect(
       screen.getAllByRole("link", { name: /game flow$/ }).map((card) => card.getAttribute("href"))
     ).toEqual(["/games/game-1", "/games/game-2", "/games/game-0"]);
-    expect(screen.queryByRole("link", { name: /^See all/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^All \d+ games/ })).not.toBeInTheDocument();
 
     const upset = await screen.findByRole("link", { name: "A1 106, H1 100: game flow" });
     expect(within(upset).getByText("Upset")).toBeInTheDocument();
@@ -232,7 +232,7 @@ describe("home desk", () => {
     expect(screen.queryByRole("heading", { name: "Last night" })).not.toBeInTheDocument();
   });
 
-  it("lists today's games with logos and a reason to watch, capped", async () => {
+  it("lists today's games with logos and national TV, capped", async () => {
     listGames.mockResolvedValue(page([final(0, { home_team_id: "na-1" })]));
     listSchedule.mockResolvedValue(
       page([
@@ -273,9 +273,8 @@ describe("home desk", () => {
     // Only the nationally televised game carries a network tag.
     expect(screen.getAllByTitle(/^National TV:/)).toHaveLength(1);
     expect(screen.getByTitle("National TV: ESPN, ABC")).toHaveTextContent("ESPN, ABC");
-    // A streak of three or more is worth a note; BOS on an L1 is not.
-    expect(await screen.findByText("NYK has won 5 straight")).toBeInTheDocument();
-    expect(screen.queryByText(/BOS has lost/)).not.toBeInTheDocument();
+    // No streak notes: the rail is the matchup, the time and the network.
+    expect(screen.queryByText(/has won \d+ straight/)).not.toBeInTheDocument();
     // Back-to-backs stay on the schedule and game page: no badge, legend or note here.
     expect(screen.queryByRole("button", { name: /played last night/ })).not.toBeInTheDocument();
     expect(screen.queryByText("Played last night")).not.toBeInTheDocument();
@@ -283,7 +282,7 @@ describe("home desk", () => {
     expect(screen.queryByText("NH50")).not.toBeInTheDocument();
     // One way to the full slate: the header link, not a second count link under the list.
     expect(screen.queryByRole("link", { name: /^All \d+ games/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Schedule →" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "See full schedule →" })).toHaveAttribute(
       "href",
       "/schedule?season=2025-26"
     );
@@ -295,7 +294,7 @@ describe("home desk", () => {
 
     expect(await screen.findByText("Thu 15 Jan · 1 game · ET")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Next up" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Schedule →" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See full schedule →" })).toBeInTheDocument();
   });
 
   it("shows every team in each conference with games back, last ten, and streak", async () => {

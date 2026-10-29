@@ -11,7 +11,7 @@ import { useSocialFilters } from "@/hooks/use-social-filters";
 import { api, queryErrorMessage } from "@/lib/api";
 import { SOCIAL_SORTS, previousWindow, rangeToDates, risingEntity } from "@/lib/social";
 
-const FEED_PAGE_SIZE = 10;
+const FEED_PAGE_SIZE = 5;
 
 export default function SocialPage() {
   return (

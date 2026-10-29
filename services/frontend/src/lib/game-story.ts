@@ -176,7 +176,7 @@ export function starCard(rows: BoxScoreRow[], game: GameDetail): RecapCard | nul
   };
 }
 
-/** The losing side's top scorer, labelled with the team. */
+/** The losing side's top scorer, labelled "<team> top scorer". */
 export function losingCard(rows: BoxScoreRow[], game: GameDetail, label: string): RecapCard | null {
   if (game.home_score == null || game.away_score == null) return null;
   const loserId = sideOf(game, false);
@@ -184,7 +184,12 @@ export function losingCard(rows: BoxScoreRow[], game: GameDetail, label: string)
     .filter((row) => row.team_id === loserId && row.points != null && row.player_name)
     .sort((a, b) => (b.points ?? 0) - (a.points ?? 0))[0];
   if (!top) return null;
-  return { label, figure: String(top.points), name: top.player_name ?? "", caption: statLine(top) };
+  return {
+    label: `${label} top scorer`,
+    figure: String(top.points),
+    name: top.player_name ?? "",
+    caption: statLine(top),
+  };
 }
 
 /**
@@ -248,6 +253,19 @@ export function turningPointCard(flow: GameFlow, run: BiggestRun | null): RecapC
       figure: String(blown),
       name: "point comeback",
       caption: `${winner} won after trailing ${deficits}`,
+    };
+  }
+  // No decisive run and no real comeback: the winner simply pulled away, so
+  // say how far and for how long rather than leave the card out.
+  const winnerIsHome = winner === flow.home_team_abbreviation;
+  const winnerLead = winnerIsHome ? flow.max_home_lead : flow.max_away_lead;
+  const winnerShare = winnerIsHome ? flow.home_lead_pct : flow.away_lead_pct;
+  if ((winnerIsHome || winner === flow.away_team_abbreviation) && winnerLead != null) {
+    return {
+      label: "Turning point",
+      figure: `+${winnerLead}`,
+      name: `${winner} max lead`,
+      caption: winnerShare != null ? `Led ${Math.round(winnerShare * 100)}% of the game` : null,
     };
   }
   return null;

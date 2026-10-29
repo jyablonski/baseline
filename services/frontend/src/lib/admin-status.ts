@@ -211,6 +211,23 @@ export function sourceCounts(sources: SourceHealth[]) {
 }
 
 /**
+ * Sources whose latest healthy row came from the hourly catch-up. It records a
+ * source only when it landed rows, so these are the daily's gaps, since filled.
+ */
+export function recoveredSources(sources: SourceHealth[]): SourceHealth[] {
+  return sources.filter(
+    (source) => source.run_triggered_by === "catch-up" && sourceLevel(source) === "ok"
+  );
+}
+
+/** "recovered by catch-up #74", or by "catch-up #73 and #74" when it took two. */
+export function recoveryNote(sources: SourceHealth[]): string | null {
+  const runs = [...new Set(sources.flatMap((source) => source.run_id ?? []))].sort((a, b) => a - b);
+  if (runs.length === 0) return null;
+  return `recovered by catch-up ${joinNames(runs.map((run) => `#${run}`))}`;
+}
+
+/**
  * Which `source` tables each scraper source fills. The API reports the two
  * separately (per-source runs, per-table watermarks) and has no join between
  * them; a source that is not listed here simply shows no tables.

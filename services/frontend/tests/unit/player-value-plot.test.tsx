@@ -87,16 +87,27 @@ describe("player value plot", () => {
     expect(legend("MVP candidate").querySelector("[aria-hidden]")).toHaveStyle({
       background: "#5B3A8C",
     });
-    // What MVP score is sits behind an info button, not in the caption.
-    expect(screen.queryByText(/proprietary Baseline metric/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "About MVP score" }));
-    const tip = await screen.findByRole("dialog", { name: "MVP score" });
-    expect(tip).toHaveTextContent("A proprietary Baseline metric that combines");
-    expect(tip).toHaveTextContent("The top 10 are the MVP candidates on the plot.");
-    fireEvent.click(within(tip).getByRole("button", { name: "Close" }));
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: "MVP score" })).not.toBeInTheDocument()
-    );
+    // Each legend entry says its rule in a few words.
+    expect(legend("Undervalued").parentElement).toHaveTextContent("Score rank ≫ salary rank");
+    // How MVP score works sits behind a disclosure, closed by default.
+    const toggle = screen.getByRole("button", { name: /How it's scored/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("MVP score, in four steps")).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("MVP score, in four steps")).toBeInTheDocument();
+    expect(screen.getByText("Availability")).toBeInTheDocument();
+    expect(
+      screen.getByText("Top 10 in the league by MVP score, whatever they are paid.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Salary ranks at least 30 percentile points higher than MVP score.")
+    ).toBeInTheDocument();
+    expect(screen.getByText(/The league median is/)).toBeInTheDocument();
+    // /data is not linked from the app yet.
+    expect(screen.queryByRole("link", { name: /formula/i })).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.queryByText("MVP score, in four steps")).not.toBeInTheDocument();
     // No caption under the plot: the legend and the labelled median lines say it.
     expect(screen.queryByText(/Undervalued and Overpaid mean/)).not.toBeInTheDocument();
     expect(screen.queryByText(/dashed lines mark/)).not.toBeInTheDocument();
@@ -170,7 +181,7 @@ describe("player value plot", () => {
 
     expect(await screen.findByRole("heading", { name: "Production vs Salary" })).toBeVisible();
     expect(listPlayerValue).toHaveBeenCalledWith(undefined);
-    expect(screen.queryByText(/Each dot is a player/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Each dot is a player/)).toBeInTheDocument();
   });
 
   it("waits for the season, renders nothing without data, and reports a failure", async () => {

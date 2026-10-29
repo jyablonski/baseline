@@ -1,0 +1,38 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: reddit_posts
+        description: >
+          PRAW submission ingest. Unique on reddit_id.
+        columns:
+          - name: reddit_id
+            description: Reddit base36 id (no t3_ prefix).
+          - name: subreddit
+            description: Subreddit name.
+          - name: title
+            description: Submission title.
+          - name: author
+            description: Author username; null when deleted.
+          - name: score
+            description: Net upvotes at scrape time.
+          - name: num_comments
+            description: Comment count at scrape time.
+          - name: created_utc
+            description: Creation time in UTC.
+          - name: permalink
+            description: Absolute reddit.com URL.
+          - name: url
+            description: Link target; the permalink itself for self posts.
+          - name: selftext
+            description: Self-post body.
+          - name: flair
+            description: Post (link) flair.
+          - name: author_flair
+            description: Author's user flair; resolved in fct_reddit_flair.
+          - name: is_self
+            description: True for a text post.
+          - name: scraped_at
+            description: When the scraper last wrote this row.

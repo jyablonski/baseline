@@ -233,7 +233,12 @@ function RecapSummary({
       )}
       {cards.length > 0 ? (
         <div
-          className="grid border-y border-rule sm:grid-cols-3 sm:divide-x sm:divide-rule"
+          // Columns follow the cards: a game with no turning point has two,
+          // and a fixed three-column grid leaves a blank third.
+          className={cn(
+            "grid border-y border-rule sm:divide-x sm:divide-rule",
+            cards.length === 3 ? "sm:grid-cols-3" : cards.length === 2 ? "sm:grid-cols-2" : ""
+          )}
           data-testid="recap-cards"
         >
           {cards.map((card) => (

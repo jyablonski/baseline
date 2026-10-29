@@ -10,6 +10,9 @@ models:
       penalizing past a grace share of team games missed and caps out. Knobs
       are the mvp_* vars in dbt_project.yml.
     config:
+      indexes:
+        - columns: [player_id]
+        - columns: [season, season_type, mvp_rank]
       meta:
         grain: One row per player per season per season type (Regular Season and Playoffs).
     columns:

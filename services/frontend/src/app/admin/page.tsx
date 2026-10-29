@@ -30,6 +30,8 @@ import {
   parseAdminTab,
   parseRunsPage,
   pipelineLevel,
+  recoveredSources,
+  recoveryNote,
   reviewItems,
   reviewSummary,
   runActionLabel,
@@ -148,6 +150,9 @@ function Overview({ health, items }: { health: AdminHealth; items: ReviewItem[] 
   // The headline is the last successful scrape, so label it with the run that was one.
   const latestRun = runs.find((run) => run.status === "success") ?? runs.at(0);
   const counts = sourceCounts(sources);
+  // Sources the daily left empty that a catch-up has since filled: healthy, but
+  // said so, so a recovered gap does not read as an untouched daily.
+  const recovered = recoveredSources(sources);
   const host = diagnostics.snapshot?.host ?? null;
   const memUsed =
     host?.mem_total_bytes != null && host.mem_available_bytes != null
@@ -252,6 +257,9 @@ function Overview({ health, items }: { health: AdminHealth; items: ReviewItem[] 
                       ? "no source runs recorded"
                       : [
                           `${counts.succeeded} succeeded`,
+                          recovered.length > 0
+                            ? `${recovered.length} ${recoveryNote(recovered)}`
+                            : null,
                           counts.failed > 0 ? `${counts.failed} failed or empty` : null,
                           counts.skipped > 0 ? `${counts.skipped} skipped` : null,
                         ]
@@ -305,6 +313,7 @@ function Pipeline({
   const hasPendingJob = jobs.some((job) => job.status === "queued" || job.status === "running");
   const failedJobLog = jobs.find((job) => job.status === "failed")?.log_tail;
   const tables = new Map(freshness.map((table) => [table.table_name, table]));
+  const recovered = recoveredSources(sources);
   const shown = new Set(sources.flatMap((source) => SOURCE_TABLES[source.source_name] ?? []));
   const otherTables = freshness.filter((table) => !shown.has(table.table_name));
 
@@ -408,6 +417,8 @@ function Pipeline({
                         >
                           {source.error_detail}
                         </p>
+                      ) : recovered.includes(source) ? (
+                        <p className="type-caption">{recoveryNote([source])}</p>
                       ) : null}
                     </TableCell>
                     <TableCell className="text-right">

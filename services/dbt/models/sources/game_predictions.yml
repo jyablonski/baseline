@@ -1,0 +1,31 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: game_predictions
+        description: >
+          Pregame home win probabilities written by services/ml. Grain is
+          (game_id, model_version), overwritten in place by each run.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: game_id
+            description: Baseline game UUID.
+          - name: as_of
+            description: When services/ml produced the prediction.
+          - name: model_name
+            description: Model family, e.g. elo.
+          - name: model_version
+            description: Model version, e.g. elo-v0.
+          - name: home_team_id
+            description: Home team (Baseline team UUID).
+          - name: away_team_id
+            description: Away team (Baseline team UUID).
+          - name: model_wp
+            description: Pregame home win probability.
+          - name: market_wp
+            description: Consensus de-vigged home win probability at scoring time; null when no odds matched.
+          - name: scraped_at
+            description: When the row was written.

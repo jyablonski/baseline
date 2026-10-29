@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: model_artifacts
+        description: >
+          Versioned ML artifacts and the single configured champion model.
+        columns:
+          - name: model_version
+            description: Model version; primary key.
+          - name: model_name
+            description: Model family.
+          - name: artifact
+            description: Serialized model parameters (JSONB).
+          - name: trained_at
+            description: When the artifact was fit.
+          - name: is_champion
+            description: True for the model fct_game_predictions surfaces; elo-v0 is used when none is set.

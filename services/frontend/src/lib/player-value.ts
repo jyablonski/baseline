@@ -38,6 +38,12 @@ export function minGamesFor(rows: PlayerValue[]) {
   return Math.min(MIN_GAMES, Math.ceil(most / 2));
 }
 
+export function median(values: number[]) {
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
 function percentile(values: number[], value: number) {
   if (values.length < 2) return 0.5;
   const below = values.filter((other) => other < value).length;

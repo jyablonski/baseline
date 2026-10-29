@@ -11,13 +11,11 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-# Reddit reports a floor, not a measurement: across the first 169 posts collected
-# there are 23 posts at exactly 0 and no negative scores, and 21 of those 23 were
-# over a day old when scraped — so 0 is not a score still waiting to be revealed.
-# A post pinned at the floor with a crowded comment section is being argued over.
-# Only 9 posts in that sample sit between 1 and 25, so the score bound is close to
-# a no-op and the comment floor does the real filtering.
-CONTESTED_MAX_SCORE = 25
+# Contested means more comments than upvotes on a post busy enough to matter. A fixed
+# score ceiling does not survive the season: the offseason sample sat at Reddit's 0
+# floor, but in-season a post argued over still collects ~100 upvotes, and a
+# "score <= 25" bound matched nothing. Comparing comments to score scales with traffic
+# and still keeps posts pinned at the floor.
 CONTESTED_MIN_COMMENTS = 50
 
 # flair is null on ~85% of posts; the usable taxonomy is the leading bracket in
@@ -65,12 +63,12 @@ POST_CONTENT_TYPE = f"""
 
 CONTENT_TYPES = ("highlight", "report", "game_thread", "discussion", "link")
 
-# A live game thread is busy by design and rarely upvoted, so it passes both bounds
+# A live game thread is busy by design and rarely upvoted, so it passes both tests
 # without anyone arguing. "[Post Game Thread]" opens with a bracket and is kept.
 IS_CONTESTED = f"""
     (
-        posts.score <= {CONTESTED_MAX_SCORE}
-        AND posts.num_comments >= {CONTESTED_MIN_COMMENTS}
+        posts.num_comments >= {CONTESTED_MIN_COMMENTS}
+        AND posts.num_comments >= posts.score
         AND btrim(posts.title) NOT ILIKE 'game thread:%'
     )
 """

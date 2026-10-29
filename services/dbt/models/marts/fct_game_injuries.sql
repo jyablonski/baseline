@@ -1,9 +1,3 @@
-{{
-    config(
-        indexes=[{'columns': ['game_id']}],
-    )
-}}
-
 {% set max_age = var('injury_snapshot_max_age_days') %}
 
 -- Who was on the injury report for each game, from the daily snapshots. A game

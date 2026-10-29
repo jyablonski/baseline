@@ -1,0 +1,28 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: transaction_participants
+        description: >
+          Teams and players named by a transaction, resolved from href slugs.
+          Unique on (transaction_key, participant_type, bref_slug, direction);
+          a team sending and receiving in one trade is two rows.
+        columns:
+          - name: id
+            description: Surrogate key.
+          - name: transaction_key
+            description: Parent transaction.
+          - name: participant_type
+            description: player or team.
+          - name: direction
+            description: from / to for teams; the sentinel 'none' for players, so the unique constraint still works.
+          - name: bref_slug
+            description: Basketball-Reference href slug.
+          - name: display_name
+            description: Link text as shown.
+          - name: player_id
+            description: Resolved player (Baseline player UUID); null for teams or unresolved slugs.
+          - name: team_id
+            description: Resolved team (Baseline team UUID); null for players or unresolved slugs.

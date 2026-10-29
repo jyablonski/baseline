@@ -12,6 +12,9 @@ models:
       dim_players cannot disambiguate a surname shared with a retired player they do
       not contain.
     config:
+      indexes:
+        - columns: [post_reddit_id]
+        - columns: [entity_type, created_utc]
       meta:
         grain: One row per entity (player or team) per document (post or comment).
     data_tests:

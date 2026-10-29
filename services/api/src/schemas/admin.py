@@ -42,6 +42,8 @@ class SourceHealth(BaseModel):
     # Most recent attempted runs in a row that failed or came back below
     # expectation. Skipped runs neither extend nor break it.
     unhealthy_streak: int = 0
+    # triggered_by of the run behind the latest row ('scheduled', 'catch-up', ...).
+    run_triggered_by: str | None = None
 
 
 class TableFreshness(BaseModel):

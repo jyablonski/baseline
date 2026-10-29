@@ -123,7 +123,7 @@ function ScheduleBody() {
               {season ? `${season} schedule` : "Upcoming schedule"} from today onward. Finished
               games are under{" "}
               <Link href="/games" className="underline underline-offset-2">
-                Games
+                Past Games
               </Link>
               .
             </span>

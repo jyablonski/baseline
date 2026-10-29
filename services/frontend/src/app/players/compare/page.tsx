@@ -20,7 +20,7 @@ import {
 import type { HeadToHeadComparison, HeadToHeadPlayerAverages, PlayerComparison } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type CompareView = "career" | "h2h";
+type CompareView = "season" | "h2h";
 
 const STAT_OPTIONS = [
   { value: "games_played", label: "Games" },
@@ -46,7 +46,7 @@ function ComparePlayers() {
   const searchParams = useSearchParams();
   const idsParam = searchParams.get("ids") ?? "";
   const statParam = searchParams.get("stat") ?? "games_played";
-  const viewParam = searchParams.get("view") === "h2h" ? "h2h" : "career";
+  const viewParam = searchParams.get("view") === "h2h" ? "h2h" : "season";
   // MVP columns follow ?season=; without it the API uses the latest scored season.
   const seasonParam = searchParams.get("season") ?? "";
   const [stat, setStat] = useState(statParam);
@@ -65,12 +65,12 @@ function ComparePlayers() {
   );
 
   const canH2h = ids.length === 2;
-  const activeView: CompareView = canH2h ? view : "career";
+  const activeView: CompareView = canH2h ? view : "season";
 
   const compareQuery = useQuery({
     queryKey: ["players", "compare", ids, stat, seasonParam],
     queryFn: () => api.comparePlayers(ids, stat, seasonParam || undefined),
-    enabled: ids.length >= 2 && activeView === "career",
+    enabled: ids.length >= 2 && activeView === "season",
   });
   const h2hQuery = useQuery({
     queryKey: ["players", "compare", "h2h", ids],
@@ -114,7 +114,7 @@ function ComparePlayers() {
 
   function removeId(id: string) {
     const next = ids.filter((item) => item !== id);
-    if (next.length !== 2) setView("career");
+    if (next.length !== 2) setView("season");
     replaceIds(next);
   }
 
@@ -159,8 +159,8 @@ function ComparePlayers() {
             <div className="flex border border-border" role="group" aria-label="Compare mode">
               <button
                 type="button"
-                onClick={() => setCompareView("career")}
-                className={cn("seg-btn", activeView === "career" && "seg-btn-active")}
+                onClick={() => setCompareView("season")}
+                className={cn("seg-btn", activeView === "season" && "seg-btn-active")}
               >
                 Season
               </button>
@@ -173,7 +173,7 @@ function ComparePlayers() {
               </button>
             </div>
           ) : null}
-          {activeView === "career" ? (
+          {activeView === "season" ? (
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
               Sort by
               <select

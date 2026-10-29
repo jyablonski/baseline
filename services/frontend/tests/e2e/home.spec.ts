@@ -37,15 +37,13 @@ test("home empty warehouse shows empty copy for every module", async ({ page }) 
 test("home modules link out to their full views", async ({ page }) => {
   await mockApi(page);
   await page.goto("/");
-  // Every module heads with a link named like the nav, so exact: the nav has "Games" too.
-  await expect(page.getByRole("link", { name: "Games →", exact: true })).toHaveAttribute(
-    "href",
-    "/games"
-  );
-  await expect(page.getByRole("link", { name: "Schedule →", exact: true })).toHaveAttribute(
-    "href",
-    /^\/schedule/
-  );
+  // Every module heads with a link at its top right.
+  await expect(
+    page.getByRole("link", { name: "See all latest results →", exact: true })
+  ).toHaveAttribute("href", /^\/games/);
+  await expect(
+    page.getByRole("link", { name: "See full schedule →", exact: true })
+  ).toHaveAttribute("href", /^\/schedule/);
   await expect(page.getByRole("link", { name: "Social →", exact: true })).toHaveAttribute(
     "href",
     "/social"

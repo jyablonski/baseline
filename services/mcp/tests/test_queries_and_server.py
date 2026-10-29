@@ -141,8 +141,8 @@ def test_analyze_player_prompt() -> None:
 
 
 @pytest.mark.unit
-def test_compare_careers_prompt() -> None:
-    result = server.compare_careers("LeBron", "Curry")
+def test_compare_seasons_prompt() -> None:
+    result = server.compare_seasons("LeBron", "Curry")
     assert "LeBron" in result
     assert "Curry" in result
 

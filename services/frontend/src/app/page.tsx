@@ -22,7 +22,7 @@ import {
 import { teamHref, withSeason } from "@/lib/nav";
 import { formatDayTitle, gameOdds, rankSlate } from "@/lib/results";
 import { CONTENT_TYPE_LABELS, formatCount, rangeToDates } from "@/lib/social";
-import { conferenceStandings, standingsSeed, streakSentence } from "@/lib/team-form";
+import { conferenceStandings, standingsSeed } from "@/lib/team-form";
 import { cn } from "@/lib/utils";
 import { formatGameTime, formatScrapedAt } from "@/lib/timezones";
 import type { LeagueGame, ScheduledGame, StandingRow } from "@/lib/types";
@@ -42,7 +42,6 @@ const UPCOMING_LIMIT = 5;
 // Seeds 1-6 are in outright; 7-10 go to the play-in.
 const PLAYOFF_LOCK_SEED = 6;
 const SOCIAL_LIMIT = 3;
-const NOTABLE_STREAK = 3;
 
 function HomeDesk() {
   const { season, isLoading: seasonIsLoading } = useSeason();
@@ -132,7 +131,6 @@ function HomeDesk() {
               season={season}
               isLoading={seasonIsLoading || scheduleQuery.isLoading}
               error={scheduleQuery.isError ? scheduleQuery.error : null}
-              standings={standings}
             />
           </section>
           <section className="border-t border-rule py-[var(--ct-space-4)]">
@@ -176,8 +174,9 @@ function ResultsStrip({
             </p>
           ) : null}
         </div>
-        <Link href="/games" className="text-sm text-primary">
-          Games →
+        {/* Pinned to the night, so it still lands there once a newer slate is in. */}
+        <Link href={day ? `/games?date=${day}` : "/games"} className="text-sm text-primary">
+          See all latest results →
         </Link>
       </div>
       {isLoading ? (
@@ -187,28 +186,38 @@ function ResultsStrip({
       ) : shown.length === 0 ? (
         <QuietNote>No games yet for this season.</QuietNote>
       ) : (
-        <ul className="grid border-t border-rule-strong sm:grid-cols-2 lg:grid-cols-3 [&>li]:border-b [&>li]:border-rule">
-          {shown.map((game) => (
-            <li
-              key={game.game_id}
-              className="lg:[&:not(:nth-child(3n))]:border-r sm:max-lg:[&:nth-child(odd)]:border-r"
-            >
-              <ResultCard game={game} />
-            </li>
-          ))}
-        </ul>
+        // Every card rules its right edge and the list runs a pixel past its
+        // clip, so the last column's rule is hidden at any column count.
+        <div className="overflow-hidden">
+          <ul
+            className={cn(
+              "-mr-px grid border-t border-rule-strong [&>li]:border-r [&>li]:border-b [&>li]:border-rule",
+              shown.length > 1 && "sm:grid-cols-2",
+              RESULT_COLUMNS[shown.length]
+            )}
+          >
+            {shown.map((game) => (
+              <li key={game.game_id}>
+                <ResultCard game={game} />
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
-      {games.length > shown.length && day ? (
-        <p className="mt-3 text-sm">
-          {/* Pinned to the night, so it still lands there once a newer slate is in. */}
-          <Link href={`/games?date=${day}`} className="text-primary">
-            All {games.length} games →
-          </Link>
-        </p>
-      ) : null}
     </>
   );
 }
+
+// Columns follow the night so a short slate fills the row: one row up to
+// four games, five once there is room for them, six as two rows of three.
+const RESULT_COLUMNS: Record<number, string> = {
+  1: "sm:grid-cols-1",
+  2: "lg:grid-cols-2",
+  3: "lg:grid-cols-3",
+  4: "lg:grid-cols-4",
+  5: "lg:grid-cols-3 xl:grid-cols-5",
+  6: "lg:grid-cols-3",
+};
 
 function ResultCard({ game }: { game: LeagueGame }) {
   const away = game.away_team_abbreviation ?? "Away";
@@ -274,13 +283,11 @@ function UpcomingList({
   season,
   isLoading,
   error,
-  standings,
 }: {
   games: ScheduledGame[];
   season: string;
   isLoading: boolean;
   error: unknown;
-  standings: StandingRow[];
 }) {
   const { timezone } = useProfile();
   const date = games[0]?.game_date;
@@ -294,19 +301,24 @@ function UpcomingList({
   const title = date && date.slice(0, 10) === isoDateET() ? "Games today" : "Next up";
   return (
     <>
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <div className="flex flex-wrap items-baseline gap-x-3">
+      {/* The rail is narrow: the link holds the top right beside the title and
+          the date drops to its own line, rather than the link wrapping under. */}
+      <div className="mb-2">
+        <div className="flex items-baseline justify-between gap-3">
           <h2 className="type-module">{title}</h2>
-          {date ? (
-            <p className="type-caption">
-              {formatSlateDate(date)} · {games.length} {games.length === 1 ? "game" : "games"} ·{" "}
-              {zone}
-            </p>
-          ) : null}
+          <Link
+            href={withSeason("/schedule", season)}
+            className="text-sm whitespace-nowrap text-primary"
+          >
+            See full schedule →
+          </Link>
         </div>
-        <Link href={withSeason("/schedule", season)} className="text-sm text-primary">
-          Schedule →
-        </Link>
+        {date ? (
+          <p className="type-caption mt-0.5">
+            {formatSlateDate(date)} · {games.length} {games.length === 1 ? "game" : "games"} ·{" "}
+            {zone}
+          </p>
+        ) : null}
       </div>
       {isLoading ? (
         <LoadingState label="Loading upcoming games…" />
@@ -353,7 +365,6 @@ function UpcomingList({
                   {game.national_tv}
                 </span>
               ) : null}
-              <UpcomingNote note={streakNote(game, standings)} />
             </li>
           ))}
         </ul>
@@ -368,17 +379,10 @@ function UpcomingList({
 // between the two teams instead of hugging the home logo.
 const UPCOMING_GRID = "grid grid-cols-[4.25rem_3.75rem_auto_3.75rem_1fr] items-center gap-x-2";
 
-// Under the matchup, not beside it: with logos and a network tag the rail has
-// no room for another column.
 // A module with nothing to show says so in a line. The full-height EmptyState
 // is for a page with nothing on it, and three of those push the desk off-screen.
 function QuietNote({ children }: { children: React.ReactNode }) {
   return <p className="py-2 text-sm text-ink-2">{children}</p>;
-}
-
-function UpcomingNote({ note }: { note: string | null }) {
-  if (!note) return null;
-  return <span className="type-caption col-span-4 col-start-2">{note}</span>;
 }
 
 function SocialDigest() {
@@ -516,22 +520,4 @@ function ConferenceTable({
 function sameDay<T extends { game_date: string }>(rows: T[]): T[] {
   const first = rows[0]?.game_date.slice(0, 10);
   return rows.filter((row) => row.game_date.slice(0, 10) === first);
-}
-
-// One short reason to care about a game: the longer notable streak of the two
-// teams. Back-to-backs are left to the schedule and game page.
-function streakNote(game: ScheduledGame, standings: StandingRow[]) {
-  const sides = [
-    { id: game.away_team_id, abbreviation: game.away_team_abbreviation },
-    { id: game.home_team_id, abbreviation: game.home_team_abbreviation },
-  ];
-  const streaks = sides
-    .flatMap((side) => {
-      const parsed = streakSentence(standings.find((row) => row.team_id === side.id)?.streak);
-      return parsed && parsed.length >= NOTABLE_STREAK
-        ? [{ label: `${side.abbreviation} ${parsed.sentence}`, length: parsed.length }]
-        : [];
-    })
-    .sort((left, right) => right.length - left.length);
-  return streaks[0]?.label ?? null;
 }

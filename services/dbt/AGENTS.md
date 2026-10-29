@@ -47,6 +47,20 @@ dbt-score enforces both (`dbt_score_rules/baseline.py`): `has_grain_meta` is CRI
 - Docker: `dbt deps` during image build; `dbt_packages` is copied into runtime so `--no-deps` compose runs do not need Hub access
 - E2E: `make test-dbt` (repo root) → `docker-compose.e2e.yml` + `e2e/run.sh` (still runs `dbt deps` as a development-target fallback)
 
+## Model config
+
+- **Config lives in the model's yml, never in the SQL.** No `{{ config(...) }}` blocks in `.sql` files: `materialized`, `indexes`, `unique_key`, `incremental_strategy`, `on_schema_change` and the rest go under the model's `config:` beside `meta.grain`. Folder-wide defaults stay in `dbt_project.yml`.
+
+```yaml
+- name: int_play_by_play_scoring
+  config:
+    materialized: table
+    indexes:
+      - columns: [game_id]
+    meta:
+      grain: One row per score change.
+```
+
 ## Materialization policy
 
 Defaults in `dbt_project.yml`: staging + intermediate → `view`, marts → `table`. Override per model when the default costs real time.
@@ -61,13 +75,13 @@ Defaults in `dbt_project.yml`: staging + intermediate → `view`, marts → `tab
 
 ## Schemas
 
-- Sources: schema `source` (`_staging__sources.yml`). Alembic owns this DDL.
+- Sources: schema `source`, one file per table under `models/sources/` (`models/sources/<table>.yml`, each declaring the `source` source with just that table). Add a table as a new file, not by appending to another. Alembic owns this DDL.
 - Staging + intermediate: `+schema: silver`
 - Marts: `+schema: gold`
 - `macros/generate_schema_name.sql` uses the custom schema as-is (avoids `gold_gold` concatenation)
 
 ## Layout
 
-- `models/staging`, `models/intermediate`, `models/marts`, each with matching `*.yml`
+- `models/sources` (one yml per source table), then `models/staging`, `models/intermediate`, `models/marts`, each model with a matching `*.yml`
 - Singular tests: `tests/`
 - Do not commit unless asked; avoid churning `uv.lock` unless deps change

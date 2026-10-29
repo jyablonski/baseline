@@ -1,12 +1,3 @@
-{{
-    config(
-        indexes=[
-            {'columns': ['player_id']},
-            {'columns': ['season', 'season_type', 'mvp_rank']},
-        ],
-    )
-}}
-
 {% set grace = var('mvp_availability_grace_missed_pct') %}
 {% set full_penalty = var('mvp_availability_full_penalty_missed_pct') %}
 {% set max_penalty = var('mvp_availability_max_penalty') %}

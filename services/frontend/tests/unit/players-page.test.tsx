@@ -28,7 +28,7 @@ import PlayersPage from "@/app/players/page";
 import { Providers } from "@/components/providers";
 
 describe("players directory", () => {
-  it("defaults Active only on, ranks by MVP, sorts teams A–Z, and keeps APG and Status apart", async () => {
+  it("ranks by MVP, sorts teams A–Z, and keeps APG and Status apart", async () => {
     searchPlayers.mockResolvedValue({
       data: [
         {
@@ -81,10 +81,9 @@ describe("players directory", () => {
       </Providers>
     );
 
-    expect(screen.getByRole("checkbox", { name: "Active only" })).toBeChecked();
+    expect(screen.queryByRole("checkbox", { name: "Active only" })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(searchPlayers).toHaveBeenCalledWith("", {
-        active: true,
         team_id: undefined,
         season: "2025-26",
         sort: "mvp",
