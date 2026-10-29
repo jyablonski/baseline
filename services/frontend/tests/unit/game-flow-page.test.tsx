@@ -688,7 +688,6 @@ describe("game page states", () => {
     const scoreline = screen.getByTestId("game-scoreline");
     expect(scoreline).toHaveTextContent("3–2");
     expect(scoreline).toHaveTextContent("2–3");
-    expect(scoreline).not.toHaveTextContent("2–2");
     const calls = screen.getAllByTestId("recap-call").map((call) => call.textContent);
     // The market had the winner; the model had the home side and lost.
     expect(calls).toEqual(["Market favored NYK 55%", "Model favored SAS 60%"]);

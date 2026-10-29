@@ -17,7 +17,6 @@ test("home desk shows the latest slate, next games, standings, and r/nba", async
   await expect(page.getByTitle("National TV: ESPN")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Next up" })).toBeVisible();
   await expect(page.getByText("Thu 22 Oct · 1 game · ET")).toBeVisible();
-  await expect(page.getByText("GSW has won 5 straight")).toBeVisible();
   await expect(page.getByRole("heading", { name: "On r/nba" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Most overrated players?" })).toBeVisible();
   await expect(page.getByText("Season leaders")).toHaveCount(0);

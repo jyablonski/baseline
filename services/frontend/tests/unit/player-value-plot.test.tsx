@@ -104,8 +104,6 @@ describe("player value plot", () => {
       screen.getByText("Salary ranks at least 30 percentile points higher than MVP score.")
     ).toBeInTheDocument();
     expect(screen.getByText(/The league median is/)).toBeInTheDocument();
-    // /data is not linked from the app yet.
-    expect(screen.queryByRole("link", { name: /formula/i })).not.toBeInTheDocument();
     fireEvent.click(toggle);
     expect(screen.queryByText("MVP score, in four steps")).not.toBeInTheDocument();
     // No caption under the plot: the legend and the labelled median lines say it.

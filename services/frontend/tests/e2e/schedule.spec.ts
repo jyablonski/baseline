@@ -16,7 +16,7 @@ test("schedule lists the upcoming slate without scores or 2010-11 copy", async (
     .locator("p")
     .filter({ hasText: "2025-26 schedule from today onward." });
   await expect(scheduleDescription).toHaveText(
-    "2025-26 schedule from today onward. Finished games are under Games."
+    "2025-26 schedule from today onward. Finished games are under Past Games."
   );
   await page.getByRole("button", { name: "TV" }).click();
   await expect(page.getByRole("dialog", { name: "TV" })).toContainText(

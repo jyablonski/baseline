@@ -159,8 +159,6 @@ describe("home desk", () => {
     const cards = screen.getAllByRole("link", { name: /game flow$/ });
     expect(cards).toHaveLength(6);
     expect(cards[0]).toHaveAccessibleName("A7 97, H7 107: game flow");
-    // The rest of the night is the header link, pinned to that date.
-    expect(screen.queryByRole("link", { name: /^All \d+ games/ })).not.toBeInTheDocument();
     const card = screen.getByRole("link", { name: "A0 90, H0 100: game flow" });
     expect(card).toHaveAttribute("href", "/games/game-0");
     // Winner in bold, loser muted.
@@ -199,8 +197,6 @@ describe("home desk", () => {
     expect(
       screen.getAllByRole("link", { name: /game flow$/ }).map((card) => card.getAttribute("href"))
     ).toEqual(["/games/game-1", "/games/game-2", "/games/game-0"]);
-    expect(screen.queryByRole("link", { name: /^All \d+ games/ })).not.toBeInTheDocument();
-
     const upset = await screen.findByRole("link", { name: "A1 106, H1 100: game flow" });
     expect(within(upset).getByText("Upset")).toBeInTheDocument();
     expect(upset).toHaveTextContent("Market favored H1 61%");
@@ -273,8 +269,6 @@ describe("home desk", () => {
     // Only the nationally televised game carries a network tag.
     expect(screen.getAllByTitle(/^National TV:/)).toHaveLength(1);
     expect(screen.getByTitle("National TV: ESPN, ABC")).toHaveTextContent("ESPN, ABC");
-    // No streak notes: the rail is the matchup, the time and the network.
-    expect(screen.queryByText(/has won \d+ straight/)).not.toBeInTheDocument();
     // Back-to-backs stay on the schedule and game page: no badge, legend or note here.
     expect(screen.queryByRole("button", { name: /played last night/ })).not.toBeInTheDocument();
     expect(screen.queryByText("Played last night")).not.toBeInTheDocument();

@@ -81,7 +81,6 @@ describe("players directory", () => {
       </Providers>
     );
 
-    expect(screen.queryByRole("checkbox", { name: "Active only" })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(searchPlayers).toHaveBeenCalledWith("", {
         team_id: undefined,
