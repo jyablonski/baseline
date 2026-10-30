@@ -49,7 +49,6 @@ class Settings(BaseSettings):
     postgres_user: str = "nba_user"
     postgres_password: str = "nba_pass"
     database_url: str = ""
-    champion_model_version: str = "elo-v0"
     logit_model_version: str = "logit-v1"
     logit_cold_start_games: int = 10
     score_horizon_days: int = 7

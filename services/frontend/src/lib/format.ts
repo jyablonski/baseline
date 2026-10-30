@@ -77,6 +77,25 @@ export function formatScheduleDate(value: string | null | undefined) {
   });
 }
 
+/** "Oct 29" for a game date, which is already Eastern; the year is left out. */
+export function formatShortDate(value: string | null | undefined) {
+  if (!value) return "—";
+  return new Date(`${value.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** "Oct 29" for a moment in time, read on the Eastern calendar like game dates. */
+export function formatShortDateET(value: string) {
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "America/New_York",
+  });
+}
+
 /** Today's calendar date on the US East coast, which is what game dates are. */
 export function isoDateET(now = new Date()) {
   return now.toLocaleDateString("en-CA", { timeZone: "America/New_York" });

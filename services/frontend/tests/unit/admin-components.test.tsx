@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const refresh = vi.hoisted(() => vi.fn());
 const signIn = vi.hoisted(() => vi.fn());
@@ -10,6 +10,8 @@ const actionState = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("@/auth", () => ({ signIn }));
 vi.mock("@/app/admin/actions", () => ({
+  promoteModelAction: vi.fn(),
+  remindModelAction: vi.fn(),
   requestJobAction: vi.fn(),
   setFlagAction: vi.fn(),
   setPipelineAction: vi.fn(),
@@ -27,6 +29,7 @@ import { DbtBuildStatus, DBT_FAILED_NODES_CAP } from "@/components/admin/dbt-bui
 import { SignInButtons } from "@/components/account/sign-in-buttons";
 import { FeatureFlags } from "@/components/admin/feature-flags";
 import { JobButtons } from "@/components/admin/job-buttons";
+import { ModelsPanel } from "@/components/admin/models-panel";
 import { PipelineSwitches } from "@/components/admin/pipeline-switches";
 import { RunDuration } from "@/components/admin/run-duration";
 import { RunsPager } from "@/components/admin/runs-pager";
@@ -35,6 +38,7 @@ import { Meter, Status, StatusDot } from "@/components/admin/status";
 import { VmDiagnostics } from "@/components/admin/vm-diagnostics";
 import type { DbtStatus, Diagnostics, PipelineGate, PipelineRun } from "@/lib/admin";
 import type { ReviewItem } from "@/lib/admin-status";
+import { buildModelReview } from "@/lib/model-review";
 
 const JOB_LABELS = ["Re-run ingestion", "Re-run dbt", "Re-run ML", "Full refresh"];
 
@@ -570,6 +574,7 @@ describe("AdminTabs", () => {
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/admin",
       "/admin?tab=pipeline",
+      "/admin?tab=models",
       "/admin?tab=infrastructure",
       "/admin?tab=settings",
     ]);
@@ -689,5 +694,143 @@ describe("Section", () => {
       </Section>
     );
     expect(screen.getByText("6 running").parentElement).not.toHaveClass("justify-between");
+  });
+});
+
+describe("ModelsPanel", () => {
+  const scorecardRow = {
+    season: "2026-27",
+    model_name: "elo",
+    n: 4,
+    brier: 0.2,
+    home_always_accuracy: 0.5,
+    market_n: 4,
+    market_logloss: 0.575,
+    market_brier: 0.197,
+  };
+  const game = (id: string, v1: number, v2: number, homeWon: boolean) => ({
+    game_id: id,
+    game_date: "2026-10-29",
+    home_team_abbreviation: "POR",
+    away_team_abbreviation: "MEM",
+    home_won: homeWon,
+    market_wp: 0.55,
+    predictions: { "elo-v1": v1, "elo-v2": v2 },
+  });
+  const view = (serving = "elo-v1") =>
+    buildModelReview({
+      season: "2026-27",
+      live_model_version: "elo-v1",
+      serving_model_version: serving,
+      models: [
+        {
+          model_version: "elo-v1",
+          model_name: "elo",
+          is_champion: true,
+          promoted_at: "2026-10-20T12:00:00Z",
+          promoted_by: "jacob",
+        },
+      ],
+      rows: [
+        {
+          ...scorecardRow,
+          model_version: "elo-v1",
+          is_champion: true,
+          logloss: 0.62,
+          accuracy: 0.63,
+          calibration_error: 0.107,
+        },
+        {
+          ...scorecardRow,
+          model_version: "elo-v2",
+          is_champion: false,
+          logloss: 0.61,
+          accuracy: 0.62,
+          calibration_error: 0.117,
+        },
+      ],
+      games: [
+        game("a", 0.6, 0.7, true),
+        game("b", 0.6, 0.4, false),
+        game("c", 0.4, 0.6, true),
+        game("d", 0.55, 0.65, true),
+        game("e", 0.6, 0.45, true),
+      ],
+    });
+
+  beforeEach(() => {
+    actionState.current = null;
+  });
+
+  it("shows the live model, its baselines, and only the rest as promotable", () => {
+    render(<ModelsPanel view={view()} showLead />);
+    expect(screen.getByText("on Schedule since Oct 20 · 4 games")).toBeInTheDocument();
+    expect(screen.getByText("market 0.575 · lower is better")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "All models · 2026-27" })).toBeInTheDocument();
+
+    const live = screen.getByTestId("model-elo-v1");
+    expect(within(live).getByText("Live")).toBeInTheDocument();
+    expect(within(live).queryByRole("button", { name: /Promote/ })).not.toBeInTheDocument();
+    const shadow = screen.getByTestId("model-elo-v2");
+    expect(within(shadow).getByText("Shadow")).toBeInTheDocument();
+    expect(within(shadow).getByText("0.610")).toHaveClass("font-semibold");
+    // Tied on Brier, so neither row stands out.
+    expect(within(shadow).getByText("0.200")).not.toHaveClass("font-semibold");
+    expect(screen.getByRole("row", { name: /Sportsbook market/ })).toHaveTextContent("0.575");
+    expect(screen.getByRole("row", { name: /Always pick home/ })).toHaveTextContent("50%");
+  });
+
+  it("asks twice before changing what every visitor sees", () => {
+    render(<ModelsPanel view={view()} showLead={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Promote to live" }));
+    const confirm = screen.getByRole("button", { name: "Make Elo v2 live" });
+    expect(confirm).toHaveAttribute("type", "submit");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Promote to live" })).toBeInTheDocument();
+  });
+
+  it("offers the reminder while a lead is inside noise", () => {
+    render(<ModelsPanel view={view()} showLead />);
+    const banner = screen.getByTestId("shadow-lead");
+    expect(banner).toHaveTextContent("over the 5 games both predicted");
+    expect(within(banner).getByRole("button", { name: "Remind me at 150" })).toBeInTheDocument();
+  });
+
+  it("switches the calibration chart to the clicked model", () => {
+    render(<ModelsPanel view={view()} showLead={false} />);
+    expect(screen.getByRole("heading", { name: "Calibration · Elo v1" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Elo v2" }));
+    expect(screen.getByRole("heading", { name: "Calibration · Elo v2" })).toBeInTheDocument();
+  });
+
+  it("narrows the log to games the calls split on", () => {
+    render(<ModelsPanel view={view()} showLead={false} />);
+    expect(screen.getAllByTestId("prediction-log-row")).toHaveLength(5);
+    fireEvent.click(screen.getByRole("switch", { name: "Disagreements only" }));
+    expect(screen.getAllByTestId("prediction-log-row")).toHaveLength(3);
+  });
+
+  it("says when the schedule has yet to catch up, and reports a refused promotion", () => {
+    actionState.current = { ok: false, message: "This model has no predictions yet." };
+    render(<ModelsPanel view={view("elo-v0")} showLead={false} />);
+    expect(screen.getByText(/The schedule still shows/)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("This model has no predictions yet.");
+  });
+
+  it("has an honest empty state", () => {
+    render(
+      <ModelsPanel
+        view={buildModelReview({
+          season: null,
+          live_model_version: null,
+          serving_model_version: null,
+          models: [],
+          rows: [],
+          games: [],
+        })}
+        showLead={false}
+      />
+    );
+    expect(screen.getByText(/No graded predictions yet/)).toBeInTheDocument();
   });
 });

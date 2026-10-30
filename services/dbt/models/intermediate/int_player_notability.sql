@@ -66,5 +66,9 @@ select
     (
         ranked.league_rank <= {{ var('injury_notable_league_rank') }}
         or ranked.team_rank <= {{ var('injury_notable_team_rank') }}
-    ) as is_notable
+    ) as is_notable,
+    (
+        ranked.league_rank <= {{ var('injury_key_league_rank') }}
+        or ranked.team_rank <= {{ var('injury_notable_team_rank') }}
+    ) as is_key
 from ranked

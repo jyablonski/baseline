@@ -8,6 +8,7 @@ import {
   AdminApiError,
   fetchAdminFlags,
   fetchAdminHealth,
+  fetchAdminModels,
   type AdminHealth,
   type FeatureFlag,
   type PipelineGate,
@@ -39,9 +40,10 @@ import {
   sourceLevel,
   type ReviewItem,
 } from "@/lib/admin-status";
-import { AdminTabs } from "@/components/admin/admin-tabs";
+import { AdminTabs, TAB_LABEL } from "@/components/admin/admin-tabs";
 import { JobButtons } from "@/components/admin/job-buttons";
 import { FeatureFlags } from "@/components/admin/feature-flags";
+import { ModelsPanel } from "@/components/admin/models-panel";
 import { PipelineSwitches } from "@/components/admin/pipeline-switches";
 import { DbtBuildStatus } from "@/components/admin/dbt-build-status";
 import { RunDuration } from "@/components/admin/run-duration";
@@ -51,6 +53,8 @@ import { Status, StatusDot } from "@/components/admin/status";
 import { VmDiagnostics } from "@/components/admin/vm-diagnostics";
 import { auth } from "@/auth";
 import { adminJobsEnabled, isAdminUser } from "@/lib/admin-access";
+import { MODEL_REMINDER_COOKIE, buildModelReview, modelReviewItem } from "@/lib/model-review";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 // Operational data: never statically rendered, never cached.
@@ -75,6 +79,10 @@ export default async function AdminPage({
   const params = await searchParams;
   const tab = parseAdminTab(params.tab);
   const runsPage = tab === "pipeline" ? parseRunsPage(params.runs) : 1;
+
+  // Started alongside health, for the review badge on every tab. A failure here
+  // costs the Models tab only, never the health view.
+  const modelsRequest = fetchAdminModels().catch(() => null);
 
   let health;
   // Null when an older page of runs could not be read: only that table suffers.
@@ -114,8 +122,14 @@ export default async function AdminPage({
     );
   }
 
-  const overall = overallLevel(health);
-  const items = reviewItems(health);
+  const modelReview = await modelsRequest;
+  const models = modelReview ? buildModelReview(modelReview) : null;
+  const remindedFor = (await cookies()).get(MODEL_REMINDER_COOKIE)?.value;
+  const modelItem = models ? modelReviewItem(models, remindedFor) : null;
+
+  const healthLevel = overallLevel(health);
+  const overall = healthLevel === "ok" && modelItem ? "warn" : healthLevel;
+  const items = reviewItems(health, modelItem ? [modelItem] : []);
   const snapshot = health.diagnostics.snapshot;
 
   return (
@@ -138,6 +152,15 @@ export default async function AdminPage({
       {tab === "overview" ? <Overview health={health} items={items} /> : null}
       {tab === "pipeline" ? (
         <Pipeline health={health} runs={pagedRuns} runsPage={runsPage} />
+      ) : null}
+      {tab === "models" ? (
+        models ? (
+          <ModelsPanel view={models} showLead={modelItem !== null} />
+        ) : (
+          <div className="pt-10">
+            <Empty>Could not load the models.</Empty>
+          </div>
+        )
       ) : null}
       {tab === "infrastructure" ? <VmDiagnostics diagnostics={health.diagnostics} /> : null}
       {tab === "settings" ? <Settings pipeline={health.pipeline} /> : null}
@@ -236,7 +259,7 @@ function Overview({ health, items }: { health: AdminHealth; items: ReviewItem[] 
                     href={adminTabHref(item.tab)}
                     className="text-sm whitespace-nowrap text-primary hover:underline"
                   >
-                    {item.tab === "pipeline" ? "Pipeline" : "Infrastructure"} →
+                    {TAB_LABEL[item.tab]} →
                   </Link>
                 </li>
               ))}

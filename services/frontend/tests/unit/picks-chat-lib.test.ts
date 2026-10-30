@@ -4,13 +4,21 @@ import { CHAT_STARTERS, followUps, sourceLabel } from "@/lib/chat";
 import { PRIMARY_NAV, primaryNav } from "@/lib/nav";
 import {
   bestCall,
+  filterSettled,
   finalScore,
   formatMoney,
   formatPrice,
   formatSignedMoney,
+  modelTeam,
+  openSummary,
   pickLabel,
   pickProfit,
   picksCsv,
+  pickTotals,
+  recentForm,
+  splitLabel,
+  toggleSplit,
+  type SettledFilters,
 } from "@/lib/picks";
 import type { UserPick } from "@/lib/types";
 
@@ -171,5 +179,79 @@ describe("picksCsv", () => {
   it("quotes a value that would break a row", () => {
     const csv = picksCsv([pick({ home_team_abbreviation: 'G"S,W' })]);
     expect(csv.split("\n")[1]).toContain('"G""S,W"');
+  });
+});
+
+describe("picks page summaries", () => {
+  const now = new Date("2026-10-30T16:00:00Z");
+  const filters: SettledFilters = { range: "season", result: "all", team: "", splits: [] };
+
+  it("totals to the cent and leaves void picks out", () => {
+    const totals = pickTotals([
+      pick({ result: "won", stake: 10, profit: 0.1 }),
+      pick({ result: "won", stake: 10, profit: 0.2 }),
+      pick({ result: "void", stake: 10 }),
+    ]);
+    expect(totals).toEqual({ wins: 2, losses: 0, net: 0.3, staked: 20 });
+  });
+
+  it("compares the window with the season only when they differ", () => {
+    const won = pick({ result: "won" });
+    const lost = pick({ result: "lost" });
+    expect(recentForm([won, lost], 2).trend).toBeNull();
+    expect(recentForm([lost, lost, won], 2).trend).toBe("worse than your season");
+    expect(recentForm([won, lost, won, lost], 2).trend).toBe("level with your season");
+    // Oldest first, skipping void.
+    expect(recentForm([won, pick({ result: "void" }), lost]).picks.map((p) => p.result)).toEqual([
+      "lost",
+      "won",
+    ]);
+  });
+
+  it("works out the model's side from the result", () => {
+    const final = { home_score: 2, away_score: 1 };
+    expect(modelTeam(pick({ ...final, model_correct: true }))).toBe("GSW");
+    expect(modelTeam(pick({ ...final, model_correct: false }))).toBe("LAL");
+    expect(modelTeam(pick({ ...final, model_correct: null }))).toBeNull();
+  });
+
+  it("limits last 7 days to the week before today", () => {
+    const inside = pick({ game_date: "2026-10-23" });
+    const outside = pick({ game_date: "2026-10-22" });
+    expect(filterSettled([inside, outside], { ...filters, range: "week" }, "2026-10-30")).toEqual([
+      inside,
+    ]);
+  });
+
+  it("keeps one split per group and takes a chosen split back off", () => {
+    expect(toggleSplit(["favorite", "home"], "underdog")).toEqual(["home", "underdog"]);
+    expect(toggleSplit(["favorite"], "favorite")).toEqual([]);
+    expect(splitLabel("with-model")).toBe("With the model");
+  });
+
+  it("filters by the side taken against the model", () => {
+    const final = { home_score: 2, away_score: 1 };
+    const withModel = pick({ ...final, model_correct: true });
+    const against = pick({ ...final, model_correct: false });
+    const uncalled = pick(final);
+    const picks = [withModel, against, uncalled];
+    expect(filterSettled(picks, { ...filters, splits: ["with-model"] })).toEqual([withModel]);
+    expect(filterSettled(picks, { ...filters, splits: ["against-model"] })).toEqual([against]);
+  });
+
+  it("counts tonight apart from later, and names the first lock", () => {
+    const tonight = pick({ game_date: "2026-10-30", start_time_et: "19:30:00" });
+    const early = pick({ game_date: "2026-10-30", start_time_et: "16:00:00" });
+    const later = pick({ game_date: "2026-11-02", start_time_et: "19:30:00" });
+    expect(openSummary([tonight, early, later], null, now)).toBe(
+      "2 tonight · 1 later · first lock 4:00 PM"
+    );
+    expect(openSummary([later], null, now)).toBe("1 open · first lock Nov 2, 7:30 PM");
+    expect(openSummary([pick({ game_date: "2026-10-30", start_time_et: null })], null, now)).toBe(
+      "1 awaiting final"
+    );
+    expect(openSummary([pick({ game_date: "2026-11-02", start_time_et: null })], null, now)).toBe(
+      "1 open"
+    );
   });
 });

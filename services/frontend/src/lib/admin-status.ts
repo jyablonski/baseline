@@ -184,7 +184,7 @@ export function overallLevel(health: AdminHealth): Level {
   return worstOf(levels);
 }
 
-export const ADMIN_TABS = ["overview", "pipeline", "infrastructure", "settings"] as const;
+export const ADMIN_TABS = ["overview", "pipeline", "models", "infrastructure", "settings"] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 
 /** `?tab=` is user-editable, so anything unknown falls back to the overview. */
@@ -254,7 +254,7 @@ export type ReviewItem = {
   level: "bad" | "warn" | "idle";
   title: string;
   detail: string;
-  tab: "pipeline" | "infrastructure";
+  tab: "pipeline" | "models" | "infrastructure";
 };
 
 function pipelineReviewItems(health: AdminHealth): ReviewItem[] {
@@ -475,10 +475,15 @@ function infrastructureReviewItems(diagnostics: Diagnostics, now: number): Revie
 }
 
 /** Blocking items first, then the ones worth a look, then the merely notable. */
-export function reviewItems(health: AdminHealth, now = Date.now()): ReviewItem[] {
+export function reviewItems(
+  health: AdminHealth,
+  modelItems: ReviewItem[] = [],
+  now = Date.now()
+): ReviewItem[] {
   const order = { bad: 0, warn: 1, idle: 2 };
   return [
     ...pipelineReviewItems(health),
+    ...modelItems,
     ...infrastructureReviewItems(health.diagnostics, now),
   ].sort((a, b) => order[a.level] - order[b.level]);
 }

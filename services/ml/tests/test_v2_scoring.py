@@ -63,22 +63,6 @@ def test_load_feature_rows_and_model_artifact(monkeypatch: pytest.MonkeyPatch) -
     result.mappings.return_value.first.return_value = None
     assert scoring.load_model_artifact(session, "missing") is None
 
-    result.mappings.return_value.first.return_value = {
-        "model_version": "elo-v0",
-        "model_name": "elo",
-        "artifact": {},
-    }
-    scoring.set_champion_model(session, "elo-v0")
-    session.execute.assert_called()
-
-
-@pytest.mark.unit
-def test_set_champion_requires_registered_model() -> None:
-    session = MagicMock()
-    session.execute.return_value.mappings.return_value.first.return_value = None
-    with pytest.raises(ValueError, match="not registered"):
-        scoring.set_champion_model(session, "missing")
-
 
 @pytest.mark.unit
 def test_train_model_persists_json_artifact(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -137,7 +121,6 @@ def test_score_writes_elo_and_logit_when_artifact_exists(monkeypatch: pytest.Mon
     monkeypatch.setattr(scoring, "load_market_wp", lambda _session: {})
     monkeypatch.setattr(scoring, "load_feature_rows", lambda _session: [feature])
     monkeypatch.setattr(scoring, "load_model_artifact", lambda _session, _version: artifact)
-    monkeypatch.setattr(scoring, "set_champion_model", lambda *_args: None)
     monkeypatch.setattr(
         scoring,
         "upsert_rows",
@@ -179,7 +162,6 @@ def test_score_writes_no_logit_row_before_cold_start_ends(
         scoring, "load_feature_rows", lambda _session: [_feature(0, None, before=9)]
     )
     monkeypatch.setattr(scoring, "load_model_artifact", lambda _session, _version: artifact)
-    monkeypatch.setattr(scoring, "set_champion_model", lambda *_args: None)
     monkeypatch.setattr(
         scoring,
         "upsert_rows",

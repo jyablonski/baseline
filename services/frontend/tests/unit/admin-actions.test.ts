@@ -14,21 +14,31 @@ const session = vi.hoisted(() => ({ current: null as { user?: TestUser } | null 
 const setFlag = vi.hoisted(() => vi.fn());
 const setPipeline = vi.hoisted(() => vi.fn());
 const enqueue = vi.hoisted(() => vi.fn());
+const promote = vi.hoisted(() => vi.fn());
+const cookieSet = vi.hoisted(() => vi.fn());
 const revalidate = vi.hoisted(() => vi.fn());
 
 vi.mock("@/auth", () => ({ auth: async () => session.current }));
 vi.mock("next/cache", () => ({ revalidatePath: revalidate }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ set: cookieSet }) }));
 vi.mock("@/lib/admin", async () => {
   const actual = await vi.importActual<typeof import("@/lib/admin")>("@/lib/admin");
   return {
     ...actual,
     enqueueAdminJob: enqueue,
+    promoteAdminModel: promote,
     setAdminFlag: setFlag,
     setAdminPipeline: setPipeline,
   };
 });
 
-import { requestJobAction, setFlagAction, setPipelineAction } from "@/app/admin/actions";
+import {
+  promoteModelAction,
+  remindModelAction,
+  requestJobAction,
+  setFlagAction,
+  setPipelineAction,
+} from "@/app/admin/actions";
 import { AdminApiError } from "@/lib/admin";
 
 function form(jobType?: string): FormData {
@@ -266,5 +276,95 @@ describe("setPipelineAction", () => {
       ok: false,
       message: "Could not change the pipeline.",
     });
+  });
+});
+
+describe("promoteModelAction", () => {
+  const promotion = (version?: string) => {
+    const data = new FormData();
+    if (version) data.set("model_version", version);
+    return data;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("ADMIN_GITHUB_LOGINS", "allowed-user");
+    vi.stubEnv("ADMIN_JOBS_ENABLED", "true");
+    session.current = { user: { provider: "github", login: "allowed-user" } };
+  });
+
+  it("refuses anyone who is not the admin", async () => {
+    session.current = { user: { provider: "github", login: "stranger" } };
+    await expect(promoteModelAction(null, promotion("elo-v2"))).resolves.toMatchObject({
+      ok: false,
+    });
+    expect(promote).not.toHaveBeenCalled();
+  });
+
+  it("refuses a missing model", async () => {
+    await expect(promoteModelAction(null, promotion())).resolves.toEqual({
+      ok: false,
+      message: "Unknown model.",
+    });
+  });
+
+  it("promotes as the operator and says the rebuild is queued", async () => {
+    promote.mockResolvedValue({ model_version: "elo-v2", rebuild_queued: true });
+    const result = await promoteModelAction(null, promotion("elo-v2"));
+    expect(promote).toHaveBeenCalledWith("elo-v2", "allowed-user", true);
+    expect(result).toMatchObject({ ok: true });
+    expect(result?.message).toContain("queued dbt job");
+    expect(revalidate).toHaveBeenCalledWith("/admin");
+  });
+
+  it("asks for no rebuild where no runner would pick it up", async () => {
+    vi.stubEnv("ADMIN_JOBS_ENABLED", "");
+    promote.mockResolvedValue({ model_version: "elo-v2", rebuild_queued: false });
+    const result = await promoteModelAction(null, promotion("elo-v2"));
+    expect(promote).toHaveBeenCalledWith("elo-v2", "allowed-user", false);
+    expect(result?.message).toContain("next dbt run");
+  });
+
+  it("passes on the API's reason and hides anything unexpected", async () => {
+    promote.mockRejectedValueOnce(new AdminApiError("No predictions yet.", 409));
+    await expect(promoteModelAction(null, promotion("logit-v1"))).resolves.toEqual({
+      ok: false,
+      message: "No predictions yet.",
+    });
+    promote.mockRejectedValueOnce(new Error("boom"));
+    await expect(promoteModelAction(null, promotion("logit-v1"))).resolves.toEqual({
+      ok: false,
+      message: "Could not promote the model.",
+    });
+  });
+});
+
+describe("remindModelAction", () => {
+  const reminder = () => {
+    const data = new FormData();
+    data.set("model_version", "elo-v2");
+    return data;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("ADMIN_GITHUB_LOGINS", "allowed-user");
+    session.current = { user: { provider: "github", login: "allowed-user" } };
+  });
+
+  it("remembers the model for the admin alone", async () => {
+    await remindModelAction(reminder());
+    expect(cookieSet).toHaveBeenCalledWith(
+      "baseline_model_reminder",
+      "elo-v2",
+      expect.objectContaining({ httpOnly: true, path: "/admin" })
+    );
+    expect(revalidate).toHaveBeenCalledWith("/admin");
+  });
+
+  it("does nothing for anyone else", async () => {
+    session.current = null;
+    await remindModelAction(reminder());
+    expect(cookieSet).not.toHaveBeenCalled();
   });
 });

@@ -52,8 +52,14 @@ LIST_GAME_INJURIES = text(
         fct_game_injuries.update_date,
         fct_game_injuries.snapshot_date,
         fct_game_injuries.is_notable,
-        fct_game_injuries.played
+        fct_game_injuries.played,
+        fct_player_season_stats.ppg,
+        fct_player_season_stats.apg
     FROM gold.fct_game_injuries
+    LEFT JOIN gold.fct_player_season_stats
+        ON
+            fct_game_injuries.player_id = fct_player_season_stats.player_id
+            AND fct_game_injuries.season = fct_player_season_stats.season
     WHERE fct_game_injuries.game_id = :game_id
     ORDER BY
         fct_game_injuries.side DESC,

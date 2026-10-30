@@ -9,9 +9,10 @@ import { B2BBadge, B2BLegend } from "@/components/games/b2b-badge";
 import { PickCell } from "@/components/account/pick-cell";
 import { ColumnHelp } from "@/components/column-help";
 import { DayHeader, DayPicker } from "@/components/day-picker";
+import { InjuryField } from "@/components/injuries/injury-field";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TEAM_LOGO_SIZE, TeamAbbrLink } from "@/components/team-logo";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent } from "@/components/ui/popover";
 import { usePicks } from "@/hooks/use-picks";
 import { useProfile } from "@/hooks/use-profile";
 import { useSeason } from "@/hooks/use-season";
@@ -127,22 +128,10 @@ function ScheduleBody() {
               </Link>
               .
             </span>
-            {features.picks && (signedOut || picks.sheet) ? (
-              <span className="flex flex-wrap gap-x-4" data-testid="pick-intro">
-                {picks.sheet ? (
-                  <Link href="/picks" className="underline underline-offset-2">
-                    Your picks
-                  </Link>
-                ) : null}
-                <Popover>
-                  <PopoverTrigger className="underline underline-offset-2 hover:text-foreground">
-                    How picks work
-                  </PopoverTrigger>
-                  <PopoverContent title="How picks work">
-                    <HowPicksWork signInHref={signedOut ? signInHref : undefined} />
-                  </PopoverContent>
-                </Popover>
-              </span>
+            {features.picks && picks.sheet ? (
+              <Link href="/picks" className="underline underline-offset-2">
+                Your picks
+              </Link>
             ) : null}
           </p>
           {pickError ? (
@@ -239,6 +228,11 @@ function ScheduleTable({
   const awaySlot = rows.some((game) => game.away_is_back_to_back)
     ? AWAY_TEAM_SLOT_B2B
     : AWAY_TEAM_SLOT;
+  // Status read "Scheduled" on every row until a game was under way, so it only
+  // earns a column on a day that has one.
+  const showStatus = rows.some(
+    (game) => gamePhase(game.game_date, game.start_time_et, now) !== "upcoming"
+  );
   return (
     <div className={cn("overflow-x-auto", busy && "opacity-60")} aria-busy={busy}>
       <table className="data-table">
@@ -272,8 +266,14 @@ function ScheduleTable({
                 is favored by 3.5 points.
               </p>
             </ColumnHelp>
-            <th>Status</th>
-            <th>Arena</th>
+            <ColumnHelp label="Injuries" title="Injuries">
+              <p>
+                Players on the morning injury report. Shown when a top 100 player or a team&apos;s
+                top two is out or day to day.
+              </p>
+              <p className="mt-2">Red: one of them is out. Grey: day to day.</p>
+            </ColumnHelp>
+            {showStatus ? <th>Status</th> : null}
             {picks.sheet || signInHref ? (
               <ColumnHelp label="Your pick" title="How picks work" align="end">
                 <HowPicksWork signInHref={signInHref} />
@@ -292,6 +292,7 @@ function ScheduleTable({
               now={now}
               signInHref={signInHref}
               awaySlot={awaySlot}
+              showStatus={showStatus}
             />
           ))}
         </tbody>
@@ -353,6 +354,7 @@ function ScheduleGame({
   now,
   signInHref,
   awaySlot,
+  showStatus,
 }: {
   game: ScheduledGame;
   season: string;
@@ -362,11 +364,12 @@ function ScheduleGame({
   /** Set for a visitor with no session: a pick button explains picks instead of saving. */
   signInHref?: string;
   awaySlot: React.CSSProperties;
+  showStatus: boolean;
 }) {
   // The API refuses a pick from tip-off on, so the cell locks on the same clock.
   const phase = gamePhase(game.game_date, game.start_time_et, now);
   const locked = phase !== "upcoming";
-  const row = { game, season, timezone, phase, awaySlot };
+  const row = { game, season, timezone, phase, awaySlot, showStatus };
   if (signInHref) {
     return (
       <ScheduleRow {...row}>
@@ -434,6 +437,7 @@ function ScheduleRow({
   season,
   timezone,
   phase,
+  showStatus,
   awaySlot,
   children,
 }: {
@@ -441,6 +445,7 @@ function ScheduleRow({
   season: string;
   timezone: string | null;
   phase: ReturnType<typeof gamePhase>;
+  showStatus: boolean;
   /** Fixed width for the away team (and its badge) so the "@" aligns down the table. */
   awaySlot: React.CSSProperties;
   children?: React.ReactNode;
@@ -451,7 +456,6 @@ function ScheduleRow({
   const localDate = otherLocalDate(tip.date, game.game_date);
   const away = game.away_team_abbreviation ?? "Away";
   const home = game.home_team_abbreviation ?? "Home";
-  const arena = game.arena || game.arena_city || "—";
   return (
     <tr>
       <td className="tabular whitespace-nowrap">
@@ -492,8 +496,6 @@ function ScheduleRow({
           )}
           <B2BBadge game={game} side="home" />
         </span>
-        <NotableOut abbreviation={away} names={game.away_notable_out} />
-        <NotableOut abbreviation={home} names={game.home_notable_out} />
       </td>
       <td className="whitespace-nowrap" data-testid="national-tv">
         {game.national_tv || "—"}
@@ -514,10 +516,14 @@ function ScheduleRow({
           </span>
         )}
       </td>
-      <td className="whitespace-nowrap" data-testid="game-status">
-        <GameStatus status={game.status} phase={phase} />
+      <td className="whitespace-nowrap" data-testid="game-injuries">
+        {game.has_key_injury ? <InjuryField game={game} /> : <span className="text-ink-3">—</span>}
       </td>
-      <td>{arena}</td>
+      {showStatus ? (
+        <td className="whitespace-nowrap" data-testid="game-status">
+          <GameStatus status={game.status} phase={phase} />
+        </td>
+      ) : null}
       {children}
     </tr>
   );
@@ -544,14 +550,4 @@ function GameStatus({ status, phase }: { status: string; phase: ReturnType<typeo
 function pairOrDash(away: string, home: string) {
   if (away === "—" || home === "—") return "—";
   return `${away} / ${home}`;
-}
-
-/** A notable player ruled out, under the matchup. Nothing for doubts or bench players. */
-function NotableOut({ abbreviation, names }: { abbreviation: string; names?: string[] }) {
-  if (!names || names.length === 0) return null;
-  return (
-    <span className="mt-1 block text-xs text-destructive" data-testid="notable-out">
-      {abbreviation}: {names.join(", ")} out
-    </span>
-  );
 }

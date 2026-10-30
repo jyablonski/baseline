@@ -52,10 +52,13 @@ class ScheduledGame(BaseModel):
     home_spread: float | None = None
     odds_bookmaker_count: int | None = None
     odds_updated_at: datetime | None = None
-    # Notable players ruled out (Out or Out For Season) on the game's injury
-    # report, by name. Empty, never null, when nobody is.
-    home_notable_out: list[str] = Field(default_factory=list)
-    away_notable_out: list[str] = Field(default_factory=list)
+    # The game's injury report in numbers: ruled out, and everyone else listed.
+    injuries_out: int = 0
+    injuries_listed: int = 0
+    # A key player is Out or Day To Day, which fills the schedule's Injuries cell.
+    has_key_injury: bool = False
+    # Key players ruled out; any at all turns that cell red.
+    key_players_out: int = 0
 
 
 class GameDetail(ScheduledGame):

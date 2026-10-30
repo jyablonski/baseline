@@ -16,7 +16,7 @@ import { playerHref, withSeason } from "@/lib/nav";
 import type { PlayerSort } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 const SORT_OPTIONS: { value: PlayerSort; label: string }[] = [
   { value: "mvp", label: "MVP rank" },

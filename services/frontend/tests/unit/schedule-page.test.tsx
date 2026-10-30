@@ -40,6 +40,7 @@ vi.mock("next/navigation", async () => {
 
 vi.mock("@/lib/api", () => ({
   api: {
+    getGameInjuries: async () => ({ data: [], meta: { total: 0, limit: 0, offset: 0 } }),
     listSeasons: async () => ({
       data: [{ season: "2026-27" }],
       meta: { total: 1, limit: 1, offset: 0 },
@@ -73,8 +74,10 @@ vi.mock("@/lib/api", () => ({
           home_moneyline: -150,
           away_moneyline: 130,
           home_spread: -3.5,
-          home_notable_out: ["Stephen Curry"],
-          away_notable_out: [],
+          injuries_out: 1,
+          injuries_listed: 2,
+          has_key_injury: true,
+          key_players_out: 1,
         },
         {
           game_id: "0022600101",
@@ -150,17 +153,22 @@ describe("schedule page", () => {
     expect(screen.getByRole("link", { name: "LAL" })).toBeInTheDocument();
     expect(screen.getAllByText("@")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "GSW" })).toBeInTheDocument();
-    expect(screen.getAllByText("Scheduled")).toHaveLength(2);
-    expect(screen.getByText("Chase Center")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Injuries" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "GSW" })).toHaveAttribute(
       "href",
       "/teams/golden-state-warriors?season=2026-27"
     );
     expect(screen.queryByText("PBP →")).not.toBeInTheDocument();
-    // Only the notable player ruled out gets a chip; the other game has none.
-    expect(screen.getAllByTestId("notable-out").map((chip) => chip.textContent)).toEqual([
-      "GSW: Stephen Curry out",
+    // A key player fills the cell; the other game has a dash.
+    expect(screen.getAllByTestId("game-injuries").map((cell) => cell.textContent)).toEqual([
+      "3 listed▾",
+      "—",
     ]);
+    expect(screen.getByTestId("injury-field")).toHaveClass("text-destructive");
+    fireEvent.click(screen.getByRole("button", { name: "Injuries" }));
+    expect(await screen.findByRole("dialog", { name: "Injuries" })).toHaveTextContent(
+      "Red: one of them is out."
+    );
     // NYK played last night: a badge beside its link, not inside it, and one legend.
     const badge = screen.getByRole("button", { name: "NYK played last night: vs PHI" });
     expect(badge.closest("a")).toBeNull();
@@ -238,7 +246,7 @@ describe("schedule page", () => {
     ).toBeInTheDocument();
     expect(await screen.findByText("2 games")).toBeInTheDocument();
     // The later day is held back until asked for.
-    expect(screen.queryByText("Kaseya Center")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "MIA" })).not.toBeInTheDocument();
     const picker = screen.getByRole("group", { name: "Game day" });
     expect(within(picker).getByRole("button", { name: "Earlier game day" })).toBeDisabled();
 
@@ -248,8 +256,8 @@ describe("schedule page", () => {
     expect(
       await screen.findByRole("heading", { name: "Saturday, October 24" })
     ).toBeInTheDocument();
-    expect(await screen.findByText("Kaseya Center")).toBeInTheDocument();
-    expect(screen.queryByText("Chase Center")).not.toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "MIA" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "GSW" })).not.toBeInTheDocument();
     expect(screen.getByText("1 game")).toBeInTheDocument();
     // Nobody on a back-to-back that day: no badge, no legend.
     expect(screen.queryByText("Played last night")).not.toBeInTheDocument();
@@ -261,7 +269,7 @@ describe("schedule page", () => {
     expect(
       await screen.findByRole("heading", { name: "Next up · Thursday, October 22" })
     ).toBeInTheDocument();
-    expect(await screen.findByText("Chase Center")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "GSW" })).toBeInTheDocument();
   });
 
   it("keeps the last day on screen, dimmed, while the next one loads", async () => {
@@ -276,24 +284,24 @@ describe("schedule page", () => {
       return real(params);
     });
     renderPage();
-    expect(await screen.findByText("Chase Center")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "GSW" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Later game day" }));
     expect(
       await screen.findByRole("heading", { name: "Saturday, October 24" })
     ).toBeInTheDocument();
     // Oct 24 has not arrived: Oct 22's rows stay, dimmed, and no empty state flashes.
-    expect(screen.getByText("Chase Center")).toBeInTheDocument();
-    expect(screen.getByText("Chase Center").closest("[aria-busy]")).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "GSW" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "GSW" }).closest("[aria-busy]")).toHaveAttribute(
       "aria-busy",
       "true"
     );
     expect(screen.queryByText("No games are scheduled for this date.")).not.toBeInTheDocument();
 
     release();
-    expect(await screen.findByText("Kaseya Center")).toBeInTheDocument();
-    expect(screen.queryByText("Chase Center")).not.toBeInTheDocument();
-    expect(screen.getByText("Kaseya Center").closest("[aria-busy]")).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "MIA" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "GSW" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "MIA" }).closest("[aria-busy]")).toHaveAttribute(
       "aria-busy",
       "false"
     );
@@ -334,7 +342,7 @@ describe("schedule page", () => {
     const [live, unknown] = screen.getAllByTestId("game-status");
     expect(live).toHaveTextContent("Live");
     expect(unknown).toHaveTextContent("Awaiting final");
-    expect(screen.queryByText("Scheduled")).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Status" })).toBeInTheDocument();
   });
 
   it("asks for games from the Eastern date three hours ago, not the server's", async () => {

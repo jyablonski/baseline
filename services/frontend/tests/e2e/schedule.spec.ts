@@ -27,8 +27,12 @@ test("schedule lists the upcoming slate without scores or 2010-11 copy", async (
   await expect(page.getByText("LAL")).toBeVisible();
   await expect(page.getByText("@")).toBeVisible();
   await expect(page.getByRole("link", { name: "GSW" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Scheduled" })).toBeVisible();
-  await expect(page.getByText("Chase Center")).toBeVisible();
+  await page.getByRole("button", { name: "Injuries" }).click();
+  await expect(page.getByRole("dialog", { name: "Injuries" })).toContainText(
+    "Red: one of them is out."
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("link", { name: "GSW", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "PBP →" })).toHaveCount(0);
   await expectNo2010Range(page);
 });
@@ -50,7 +54,11 @@ test("schedule shows model win % and consensus odds, linking to the scorecard", 
     .getByRole("link", { name: "How accurate is the model? →" })
     .click();
   await expect(page).toHaveURL(/\/predictions$/);
-  await expect(page.getByRole("heading", { name: "Model Scorecard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "How accurate is the model?" })).toBeVisible();
+  await expect(page.getByText("Elo v0 sets the win %")).toBeVisible();
+  await expect(page.getByText("Said 60–70%")).toBeVisible();
+  await expect(page.getByRole("link", { name: "GSW 62% vs LAL" })).toBeVisible();
+  await page.getByText("Accuracy Details").click();
   await expect(page.getByRole("row", { name: /Sportsbook market/ })).toBeVisible();
   // Upsets moved to the Games page.
   await expect(page.getByRole("heading", { name: "Biggest upsets" })).toHaveCount(0);
@@ -88,9 +96,9 @@ test("schedule uses the same day picker as games: arrows, calendar, and the URL"
 }) => {
   await mockApi(page, { scheduleSecondDay: true });
   await page.goto("/schedule");
-  await expect(page.getByText("Chase Center")).toBeVisible();
+  await expect(page.getByRole("link", { name: "GSW", exact: true })).toBeVisible();
   // The later day is held back until asked for.
-  await expect(page.getByText("Kaseya Center")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "MIA", exact: true })).toHaveCount(0);
   const picker = page.getByRole("group", { name: "Game day" });
   await expect(picker.getByRole("button", { name: "Earlier game day" })).toBeDisabled();
 
@@ -98,8 +106,8 @@ test("schedule uses the same day picker as games: arrows, calendar, and the URL"
   await picker.getByRole("button", { name: "Later game day" }).click();
   await expect(page).toHaveURL(/\/schedule\?date=2026-10-24$/);
   await expect(page.getByRole("heading", { name: "Saturday, October 24" })).toBeVisible();
-  await expect(page.getByText("Kaseya Center")).toBeVisible();
-  await expect(page.getByText("Chase Center")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "MIA", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "GSW", exact: true })).toHaveCount(0);
   await expect(picker.getByRole("button", { name: "Later game day" })).toBeDisabled();
   const calls = await page.evaluate(
     () => (window as unknown as { __API_CALLS__: string[] }).__API_CALLS__
@@ -128,11 +136,11 @@ test("schedule uses the same day picker as games: arrows, calendar, and the URL"
   await calendar.getByRole("button", { name: "Next up" }).click();
   await expect(page).toHaveURL(/\/schedule$/);
   await expect(page.getByRole("heading", { name: "Next up · Thursday, October 22" })).toBeVisible();
-  await expect(page.getByText("Chase Center")).toBeVisible();
+  await expect(page.getByRole("link", { name: "GSW", exact: true })).toBeVisible();
 
   // A shared link opens on its day.
   await page.goto("/schedule?date=2026-10-24");
-  await expect(page.getByText("Kaseya Center")).toBeVisible();
+  await expect(page.getByRole("link", { name: "MIA", exact: true })).toBeVisible();
   // A date with no games says so, and the arrows still step to the days around it.
   await page.goto("/schedule?date=2026-10-23");
   await expect(page.getByText("No games are scheduled for this date.")).toBeVisible();

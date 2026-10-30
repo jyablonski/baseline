@@ -122,6 +122,18 @@ notable_listed as (
             and notability.is_notable
 ),
 
+key_listed as (
+    select distinct
+        listed.game_id,
+        listed.player_id
+    from listed
+    inner join notability
+        on
+            listed.player_id = notability.player_id
+            and notability.season in (listed.season, {{ previous_season('listed.season') }})
+            and notability.is_key
+),
+
 minutes_played as (
     select
         player_game_logs.game_id,
@@ -145,6 +157,7 @@ select
     listed.update_date,
     listed.snapshot_date,
     notable_listed.player_id is not null as is_notable,
+    key_listed.player_id is not null as is_key,
     -- Only known once the game is Final; no log at all means they sat.
     case
         when listed.status = 'Final' then coalesce(minutes_played.played, false)
@@ -154,6 +167,10 @@ left join notable_listed
     on
         listed.game_id = notable_listed.game_id
         and listed.player_id = notable_listed.player_id
+left join key_listed
+    on
+        listed.game_id = key_listed.game_id
+        and listed.player_id = key_listed.player_id
 left join minutes_played
     on
         listed.game_id = minutes_played.game_id

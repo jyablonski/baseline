@@ -298,7 +298,7 @@ describe("schedule picks", () => {
   it("shows an anonymous visitor the pick buttons, which lead to sign-in", async () => {
     state.account = null;
     page(<SchedulePage />);
-    expect(await screen.findByText("Chase Center")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "GSW" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Your pick" })).toBeInTheDocument();
     // The steps stay out of the way until asked for.
     expect(screen.queryByText("Pick a winner")).not.toBeInTheDocument();
@@ -319,16 +319,16 @@ describe("schedule picks", () => {
   it("shows no pick column when picks are switched off", async () => {
     state.flags = { chatbot: true, picks: false, isLoading: false };
     page(<SchedulePage />);
-    expect(await screen.findByText("Chase Center")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "GSW" })).toBeInTheDocument();
     expect(screen.queryByText("Your pick")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "How picks work" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Your pick" })).not.toBeInTheDocument();
     expect(actions.getPickSheetAction).not.toHaveBeenCalled();
 
     // Nor to an anonymous visitor: there is nothing to sign in for.
     state.account = null;
     page(<SchedulePage />);
-    await waitFor(() => expect(screen.getAllByText("Chase Center")).toHaveLength(2));
-    expect(screen.queryByRole("button", { name: "How picks work" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByRole("link", { name: "GSW" })).toHaveLength(2));
+    expect(screen.queryByRole("button", { name: "Your pick" })).not.toBeInTheDocument();
   });
 
   it("shows start times in the account's time zone, Eastern unless one is chosen", async () => {
@@ -349,8 +349,8 @@ describe("schedule picks", () => {
     page(<SchedulePage />);
     expect(await screen.findByText("Your pick")).toBeInTheDocument();
     // The record and net live on the picks page, not here.
-    expect(screen.getByTestId("pick-intro")).toHaveTextContent("Your picksHow picks work");
-    fireEvent.click(screen.getByRole("button", { name: "How picks work" }));
+    expect(screen.getByRole("link", { name: "Your picks" })).toHaveAttribute("href", "/picks");
+    fireEvent.click(screen.getByRole("button", { name: "Your pick" }));
     const steps = await screen.findByRole("dialog", { name: "How picks work" });
     expect(steps).toHaveTextContent("Track your net");
     // Already signed in, so there is nothing to start.
@@ -481,15 +481,6 @@ describe("picks page", () => {
     expect(screen.queryByRole("heading", { name: "Settled" })).not.toBeInTheDocument();
   });
 
-  it("heads the sheet with the provider's picture when there is one", async () => {
-    const picture = "https://avatars.githubusercontent.com/u/1?v=4";
-    state.account = { name: "Pat", image: picture, hasAccount: true };
-    const { container } = page(<PicksPage />);
-    const heading = await screen.findByRole("heading", { name: "Pat", level: 1 });
-    expect(heading.closest("header")!.querySelector("img")).toHaveAttribute("src", picture);
-    expect(container.querySelectorAll("img")).toHaveLength(1);
-  });
-
   it("shows the record, net, model comparison, best call and each pick", async () => {
     actions.getPickSheetAction.mockResolvedValue(
       sheet(
@@ -546,20 +537,26 @@ describe("picks page", () => {
       )
     );
     page(<PicksPage />);
-    expect(await screen.findByRole("heading", { name: "Pat", level: 1 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Your picks", level: 1 })
+    ).toBeInTheDocument();
+    expect(screen.getByText("2026-27 season · stakes are pretend dollars")).toBeInTheDocument();
 
-    expect(screen.getByText("2–1")).toBeInTheDocument();
+    expect(screen.getAllByText("2–1").length).toBeGreaterThan(0);
     expect(screen.getByText("67% correct")).toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "67");
     expect(screen.getByText("+$109")).toBeInTheDocument();
     expect(
-      screen.getByText("from 2 settled stakes · $100 riding on open picks")
+      screen.getByText("from 2 settled stakes · $150 staked · $100 riding on open picks")
     ).toBeInTheDocument();
     expect(screen.getByText("+2")).toBeInTheDocument();
-    expect(screen.getByText("net games ahead of Baseline's model over 3")).toBeInTheDocument();
+    expect(
+      screen.getByText("right when the model was wrong, minus the reverse")
+    ).toBeInTheDocument();
     // A net, never a balance: nobody is handed money to start with.
     expect(screen.queryByText(/balance|started at/i)).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: /^Show/ }));
     const [staked, plain] = screen.getAllByTestId("open-pick");
     expect(within(staked).getByText("LAL +104 at GSW")).toBeInTheDocument();
     expect(staked).toHaveTextContent("Thu, Oct 22, 2026 · 7:30 PM ET");
@@ -601,7 +598,7 @@ describe("picks page", () => {
       )
     );
     page(<PicksPage />);
-    expect(await screen.findByText("from 1 settled stake")).toBeInTheDocument();
+    expect(await screen.findByText("from 1 settled stake · $20 staked")).toBeInTheDocument();
     expect(screen.queryByText(/riding on open picks/)).not.toBeInTheDocument();
     // Twice: the Net tile and that pick's own row.
     expect(screen.getAllByText("−$20")).toHaveLength(2);
@@ -629,7 +626,7 @@ describe("picks page", () => {
     );
     page(<PicksPage />);
     expect(
-      await screen.findByText("net games ahead of Baseline's model over 1")
+      await screen.findByText("right when the model was wrong, minus the reverse")
     ).toBeInTheDocument();
     expect(screen.getByText("0")).toBeInTheDocument();
   });
@@ -646,6 +643,117 @@ describe("picks page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show 5 more" }));
     expect(screen.getAllByTestId("settled-pick")).toHaveLength(45);
     expect(screen.queryByRole("button", { name: /Show .* more/ })).not.toBeInTheDocument();
+  });
+
+  it("summarises open picks and keeps them folded until asked", async () => {
+    actions.getPickSheetAction.mockResolvedValue(
+      sheet([pick({ game_date: "2099-01-05" })], { ...emptySummary, pending: 1 })
+    );
+    page(<PicksPage />);
+    expect(await screen.findByText("1 open · first lock Jan 5, 7:30 PM")).toBeInTheDocument();
+    expect(screen.queryByTestId("open-pick")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Show/ }));
+    expect(screen.getByTestId("open-pick")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Hide/ })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("strips the last 20 results and says how they compare with the season", async () => {
+    const newestWins = Array.from({ length: 25 }, (_, index) =>
+      pick({
+        game_id: `g-${index}`,
+        result: index < 20 ? "won" : "lost",
+        home_score: 2,
+        away_score: 1,
+      })
+    );
+    actions.getPickSheetAction.mockResolvedValue(
+      sheet(newestWins, { ...emptySummary, wins: 20, losses: 5 })
+    );
+    page(<PicksPage />);
+    expect(await screen.findByText("Last 20")).toBeInTheDocument();
+    expect(screen.getAllByTestId("form-tile")).toHaveLength(20);
+    expect(screen.getByText("20–0 over the last 20 · better than your season")).toBeInTheDocument();
+  });
+
+  it("filters the settled list, totals what is left, and clears the chips", async () => {
+    actions.getPickSheetAction.mockResolvedValue(
+      sheet(
+        [
+          pick({
+            game_id: "gsw",
+            stake: 10,
+            profit: 6.66,
+            result: "won",
+            home_score: 2,
+            away_score: 1,
+            model_correct: false,
+          }),
+          pick({
+            game_id: "lal",
+            picked_team_id: "away",
+            moneyline: 150,
+            stake: 10,
+            profit: -10,
+            result: "lost",
+            home_score: 2,
+            away_score: 1,
+            model_correct: true,
+          }),
+        ],
+        { ...emptySummary, wins: 1, losses: 1, net: -3.34 }
+      )
+    );
+    page(<PicksPage />);
+    const summary = await screen.findByTestId("settled-summary");
+    expect(summary).toHaveTextContent("2 picks · 1–1 · 50% correct · Net −$3.34 on $20 staked");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Team" }), {
+      target: { value: "GSW" },
+    });
+    expect(summary).toHaveTextContent("1 pick · 1–0 · 100% correct · Net +$6.66 on $10 staked");
+    expect(screen.getAllByTestId("settled-pick")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove GSW filter" }));
+    fireEvent.click(screen.getByRole("button", { name: "Losses" }));
+    expect(screen.getByRole("button", { name: "Losses" })).toHaveAttribute("aria-pressed", "true");
+    expect(summary).toHaveTextContent("1 pick · 0–1");
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Breakdown/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Underdogs/ }));
+    expect(screen.getByRole("button", { name: "Remove Underdogs filter" })).toBeInTheDocument();
+    expect(summary).toHaveTextContent("1 pick · 0–1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    expect(summary).toHaveTextContent("2 picks · 1–1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Wins" }));
+    fireEvent.click(screen.getByRole("button", { name: "Last 7 days" }));
+    expect(screen.getByText("No picks match these filters.")).toBeInTheDocument();
+  });
+
+  it("adds the model's call as a column when asked", async () => {
+    actions.getPickSheetAction.mockResolvedValue(
+      sheet(
+        [
+          pick({
+            result: "won",
+            home_score: 2,
+            away_score: 1,
+            model_correct: false,
+          }),
+          pick({ game_id: "none", result: "lost", home_score: 1, away_score: 2 }),
+        ],
+        { ...emptySummary, wins: 1, losses: 1 }
+      )
+    );
+    page(<PicksPage />);
+    const [called, uncalled] = await screen.findAllByTestId("settled-pick");
+    fireEvent.click(screen.getByRole("switch", { name: "Show model" }));
+    expect(screen.getByRole("columnheader", { name: "Model" })).toBeInTheDocument();
+    // The model took the side that lost.
+    expect(within(called).getByText("LAL L")).toHaveClass("text-destructive");
+    expect(uncalled).toHaveTextContent("–");
   });
 
   it("shows the reason when the picks cannot be loaded", async () => {

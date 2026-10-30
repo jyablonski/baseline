@@ -44,7 +44,17 @@ from schemas.player import (
     PlayerSummary,
     PlayerValue,
 )
-from schemas.prediction import PredictionScorecard, ScorecardRow
+from schemas.prediction import (
+    CalibrationBucket,
+    ChampionChange,
+    ChampionUpdate,
+    ModelGame,
+    ModelReview,
+    PredictionGame,
+    PredictionScorecard,
+    RegisteredModel,
+    ScorecardRow,
+)
 from schemas.social import (
     SocialComment,
     SocialEntity,
@@ -124,7 +134,14 @@ __all__ = [
     "PlayerSeasonStats",
     "PlayerSummary",
     "PlayerValue",
+    "CalibrationBucket",
+    "ChampionChange",
+    "ChampionUpdate",
+    "ModelGame",
+    "ModelReview",
+    "PredictionGame",
     "PredictionScorecard",
+    "RegisteredModel",
     "QueryClarify",
     "QueryEntity",
     "QueryRequest",

@@ -117,7 +117,7 @@ To replace the live database: `make prod-db-restore DUMP=<path> CONFIRM_RESTORE=
 
 ## Admin console
 
-`/admin` shows ingestion, dbt, ML, and VM health, can re-run jobs, and holds the scrape gate switches and the feature flags. Two independent gates, both **fail closed**:
+`/admin` shows ingestion, dbt, ML, and VM health, can re-run jobs, compares the prediction models and promotes one to live (Models tab), and holds the scrape gate switches and the feature flags. Two independent gates, both **fail closed**:
 
 - **The page** is for the site owner only. Anyone can sign in with GitHub or Google, so a session proves nothing: the owner is whoever matches `ADMIN_GITHUB_LOGINS` (GitHub login) or `ADMIN_GOOGLE_EMAILS` (a Google address Google reports as verified). Each provider is matched on its own identifier only, so the owner's email on a GitHub profile opens nothing. Both unset means nobody gets in, including you. A signed-in account that is not the owner is redirected to `/admin/signin?error=AccessDenied`.
 - **The API** (`/api/v1/admin/*`) needs `Authorization: Bearer $ADMIN_API_TOKEN`. Unset returns 503 — never open.

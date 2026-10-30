@@ -748,8 +748,10 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                 home_moneyline: -150,
                 away_moneyline: 130,
                 home_spread: -3.5,
-                home_notable_out: ["Stephen Curry"],
-                away_notable_out: [],
+                injuries_out: 1,
+                injuries_listed: 0,
+                has_key_injury: true,
+                key_players_out: 1,
                 // LAL lost at SAC the night before: the B2B badge's popover.
                 away_is_back_to_back: true,
                 away_last_night_opponent_abbreviation: "SAC",
@@ -778,6 +780,28 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
           data: games,
           meta: { total: games.length, limit: 50, offset: 0 },
         });
+      }
+
+      if (url.includes("/predictions/calibration")) {
+        return json({
+          data: empty ? [] : [{ bucket: "60–70%", predicted: 0.65, actual: 0.7, n: 16 }],
+        });
+      }
+
+      if (url.includes("/predictions/games")) {
+        const calls = empty
+          ? []
+          : [
+              {
+                game_id: "0022400001",
+                game_date: "2026-01-15",
+                home_team_abbreviation: "GSW",
+                away_team_abbreviation: "LAL",
+                model_wp: 0.62,
+                home_won: true,
+              },
+            ];
+        return json({ data: calls, meta: { total: calls.length, limit: 20, offset: 0 } });
       }
 
       if (url.includes("/predictions/scorecard")) {

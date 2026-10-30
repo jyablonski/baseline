@@ -455,11 +455,13 @@ def test_injuries(integration_client) -> None:
     # The schedule chips: only the notable player ruled out, not the doubt.
     schedule = integration_client.get("/api/v1/schedule", params={"season": "2024-25"}).json()
     by_id = {row["game_id"]: row for row in schedule["data"]}
-    assert by_id[GAME_SCHEDULE]["home_notable_out"] == ["Stephen Curry"]
-    assert by_id[GAME_SCHEDULE]["away_notable_out"] == []
-    assert by_id[GAME_SCHEDULE_TWO]["home_notable_out"] == []
+    assert by_id[GAME_SCHEDULE]["injuries_out"] == 1
+    assert by_id[GAME_SCHEDULE]["injuries_listed"] == 1
+    assert by_id[GAME_SCHEDULE]["has_key_injury"] is True
+    assert by_id[GAME_SCHEDULE]["key_players_out"] == 1
+    assert by_id[GAME_SCHEDULE_TWO]["has_key_injury"] is False
     game = integration_client.get(f"/api/v1/games/{GAME_SCHEDULE}").json()["data"]
-    assert game["home_notable_out"] == ["Stephen Curry"]
+    assert game["key_players_out"] == 1
 
     player = integration_client.get(f"/api/v1/players/{PLAYER_CURRY}").json()["data"]
     assert (player["injury_status"], player["injury_detail"]) == ("Out", "Ankle")
@@ -500,11 +502,10 @@ def test_prediction_scorecard(integration_client) -> None:
     assert body["champion_model_version"] == "elo-v0"
     assert [(row["season"], row["model_version"]) for row in body["rows"]] == [
         ("2024-25", "elo-v0"),
-        ("2024-25", "logit-v1"),
         ("2023-24", "elo-v0"),
     ]
-    assert [row["is_champion"] for row in body["rows"]] == [True, False, True]
-    assert body["rows"][2]["market_logloss"] is None
+    assert all(row["is_champion"] for row in body["rows"])
+    assert body["rows"][1]["market_logloss"] is None
 
     filtered = integration_client.get("/api/v1/predictions/scorecard", params={"season": "2023-24"})
     assert len(filtered.json()["data"]["rows"]) == 1
@@ -879,6 +880,143 @@ def test_admin_health_is_unauthorized_without_the_token(integration_client) -> N
         admin_api_token="integration-admin-token"
     )
     assert integration_client.get("/api/v1/admin/health").status_code == 401
+
+
+@pytest.mark.integration
+def test_prediction_reads_follow_the_live_model_and_newest_season(integration_client) -> None:
+    calibration = integration_client.get("/api/v1/predictions/calibration").json()["data"]
+    assert [(row["bucket"], row["n"], row["actual"]) for row in calibration] == [
+        ("under 40%", 1, 0.0),
+        ("60–70%", 1, 1.0),
+    ]
+
+    games = integration_client.get("/api/v1/predictions/games").json()
+    assert games["meta"]["total"] == 2
+    assert [game["game_date"] for game in games["data"]] == ["2024-10-25", "2024-10-22"]
+    assert games["data"][0]["model_wp"] == 0.35
+
+
+@pytest.mark.integration
+def test_promoting_a_model_switches_the_registry_and_queues_dbt(
+    integration_client, postgres_engine
+) -> None:
+    from config import Settings, get_settings
+
+    token = "integration-admin-token"
+    integration_client.app.dependency_overrides[get_settings] = lambda: Settings(
+        admin_api_token=token
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    gameless = "00000000-0000-4000-8000-000000000201"
+
+    with postgres_engine.begin() as conn:
+        conn.execute(text("DELETE FROM source.admin_jobs"))
+        conn.execute(
+            text(
+                "INSERT INTO source.model_artifacts "
+                "(model_version, model_name, artifact, trained_at) VALUES "
+                "('elo-v9', 'elo', '{}', now()), ('elo-v8', 'elo', '{}', now())"
+            )
+        )
+        # The row only has to exist: source.games is empty in this database.
+        conn.execute(text("SET LOCAL session_replication_role = replica"))
+        conn.execute(
+            text(
+                "INSERT INTO source.game_predictions "
+                "(game_id, as_of, model_name, model_version, home_team_id, away_team_id, model_wp) "
+                "VALUES (:game_id, now(), 'elo', 'elo-v9', gen_random_uuid(), "
+                "gen_random_uuid(), 0.6)"
+            ),
+            {"game_id": gameless},
+        )
+
+    try:
+        body = {"model_version": "elo-v9", "updated_by": "jyablonski"}
+        unknown = integration_client.put(
+            "/api/v1/admin/models/champion",
+            json={**body, "model_version": "nope"},
+            headers=headers,
+        )
+        assert unknown.status_code == 404
+        unscored = integration_client.put(
+            "/api/v1/admin/models/champion",
+            json={**body, "model_version": "elo-v8"},
+            headers=headers,
+        )
+        assert unscored.status_code == 409
+
+        promoted = integration_client.put(
+            "/api/v1/admin/models/champion", json=body, headers=headers
+        )
+        assert promoted.status_code == 200
+        assert promoted.json()["data"]["rebuild_queued"] is True
+        assert promoted.json()["data"]["promoted_by"] == "jyablonski"
+
+        review = integration_client.get("/api/v1/admin/models", headers=headers).json()["data"]
+        assert review["live_model_version"] == "elo-v9"
+        # Gold has not been rebuilt, so the schedule still serves the old model.
+        assert review["serving_model_version"] == "elo-v0"
+        assert review["season"] == "2024-25"
+        assert [(row["model_version"], row["is_champion"]) for row in review["rows"]] == [
+            ("elo-v0", False),
+            ("logit-v1", False),
+        ]
+        newest, oldest = review["games"]
+        assert newest["predictions"] == {"elo-v0": 0.35}
+        assert oldest["predictions"] == {"elo-v0": 0.65, "logit-v1": 0.72}
+        assert oldest["market_wp"] == 0.6
+
+        # Another model covers a coming game and this one does not: it would blank
+        # the schedule.
+        with postgres_engine.begin() as conn:
+            conn.execute(text("SET LOCAL session_replication_role = replica"))
+            conn.execute(
+                text(
+                    "INSERT INTO source.game_predictions (game_id, as_of, model_name, "
+                    "model_version, home_team_id, away_team_id, model_wp) VALUES "
+                    "(:game_id, now(), 'elo', 'elo-v9', gen_random_uuid(), "
+                    "gen_random_uuid(), 0.6), "
+                    "(:gameless, now(), 'elo', 'elo-v7', gen_random_uuid(), "
+                    "gen_random_uuid(), 0.6)"
+                ),
+                {"game_id": GAME_SCHEDULE, "gameless": gameless},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO source.model_artifacts "
+                    "(model_version, model_name, artifact, trained_at) VALUES "
+                    "('elo-v7', 'elo', '{}', now())"
+                )
+            )
+        blanks_schedule = integration_client.put(
+            "/api/v1/admin/models/champion",
+            json={**body, "model_version": "elo-v7"},
+            headers=headers,
+        )
+        assert blanks_schedule.status_code == 409
+
+        again = integration_client.put("/api/v1/admin/models/champion", json=body, headers=headers)
+        assert again.json()["data"]["rebuild_queued"] is False
+
+        with postgres_engine.connect() as conn:
+            jobs = conn.execute(text("SELECT job_type, detail FROM source.admin_jobs")).all()
+        assert [tuple(job) for job in jobs] == [("dbt", "Promoted elo-v9")]
+    finally:
+        with postgres_engine.begin() as conn:
+            conn.execute(text("DELETE FROM source.admin_jobs"))
+            conn.execute(text("DELETE FROM source.game_predictions"))
+            conn.execute(
+                text(
+                    "DELETE FROM source.model_artifacts "
+                    "WHERE model_version IN ('elo-v9', 'elo-v8', 'elo-v7')"
+                )
+            )
+            conn.execute(
+                text(
+                    "UPDATE source.model_artifacts SET is_champion = TRUE WHERE model_version = 'elo-v0'"
+                )
+            )
+        integration_client.app.dependency_overrides.pop(get_settings, None)
 
 
 @pytest.mark.integration
