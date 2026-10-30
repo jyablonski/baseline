@@ -1,0 +1,44 @@
+version: 2
+
+models:
+  - name: fct_prediction_results
+    description: >
+      Each model's final pregame call on each finished game, beside the result.
+      The latest prediction on or before the scheduled game date is the one
+      graded; schedule data has date, not tip-time, precision. Every model
+      version is here, champion or shadow. fct_prediction_scorecard aggregates
+      it, and the API serves it for /predictions and the admin Models tab.
+    config:
+      meta:
+        grain: One row per model per Final game it predicted.
+    columns:
+      - name: game_id
+        description: Game UUID.
+        data_tests:
+          - not_null
+      - name: model_version
+        description: Model version string, e.g. elo-v0.
+        data_tests:
+          - not_null
+      - name: model_wp
+        description: The model's pregame home win probability.
+        data_tests:
+          - not_null
+      - name: market_wp
+        description: Vig-free home win probability from the morning line. Null when no odds were captured.
+      - name: season
+        description: NBA season label, e.g. 2025-26.
+        data_tests:
+          - not_null
+      - name: game_date
+        description: Scheduled Eastern game date.
+        data_tests:
+          - not_null
+      - name: home_won
+        description: True when the home team won.
+        data_tests:
+          - not_null
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["game_id", "model_version"]

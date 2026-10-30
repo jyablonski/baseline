@@ -284,6 +284,20 @@ CREATE TABLE IF NOT EXISTS gold.fct_prediction_scorecard (
     PRIMARY KEY (season, model_version)
 );
 
+CREATE TABLE IF NOT EXISTS gold.fct_prediction_results (
+    game_id                 UUID NOT NULL,
+    model_name              VARCHAR(50) NOT NULL,
+    model_version           VARCHAR(50) NOT NULL,
+    model_wp                DOUBLE PRECISION NOT NULL,
+    market_wp               DOUBLE PRECISION,
+    season                  VARCHAR(10) NOT NULL,
+    game_date               DATE NOT NULL,
+    home_team_abbreviation  VARCHAR(5),
+    away_team_abbreviation  VARCHAR(5),
+    home_won                BOOLEAN NOT NULL,
+    PRIMARY KEY (game_id, model_version)
+);
+
 CREATE TABLE IF NOT EXISTS gold.fct_player_injuries (
     player_id               UUID NOT NULL,
     team_id                 UUID NOT NULL,
@@ -344,6 +358,7 @@ CREATE TABLE IF NOT EXISTS gold.fct_game_injuries (
     update_date     DATE,
     snapshot_date   DATE NOT NULL,
     is_notable      BOOLEAN NOT NULL,
+    is_key          BOOLEAN NOT NULL DEFAULT FALSE,
     played          BOOLEAN,
     PRIMARY KEY (game_id, player_id)
 );

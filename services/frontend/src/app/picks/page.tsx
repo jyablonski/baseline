@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
-import { Avatar } from "@/components/account/avatar";
+import { PickGameLink, SettledPicks } from "@/components/account/settled-picks";
 import { SignInPrompt } from "@/components/account/sign-in-prompt";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { KpiCard, KpiStrip, KpiTitle } from "@/components/ui/kpi-card";
@@ -11,21 +11,23 @@ import { usePicks } from "@/hooks/use-picks";
 import { useProfile } from "@/hooks/use-profile";
 import { useAccount, useFeatures } from "@/lib/account";
 import { queryErrorMessage } from "@/lib/api";
+import { formatShortDate, seasonFromDate } from "@/lib/format";
 import {
   bestCall,
   finalScore,
   formatMoney,
   formatSignedMoney,
+  openSummary,
+  percentCorrect,
   pickLabel,
   pickProfit,
   picksCsv,
+  pickTotals,
+  recentForm,
 } from "@/lib/picks";
 import { formatGameTime } from "@/lib/timezones";
 import type { PickSheet, UserPick } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-// A season is hundreds of games; the newest are what a visitor came to see.
-const SETTLED_PAGE = 20;
 
 export default function PicksPage() {
   const { account, isLoading: accountIsLoading } = useAccount();
@@ -76,7 +78,7 @@ export default function PicksPage() {
       </Shell>
     );
   }
-  return <Sheet name={account.name || "Your picks"} image={account.image} sheet={picks.sheet} />;
+  return <Sheet sheet={picks.sheet} />;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -101,25 +103,29 @@ function downloadCsv(picks: UserPick[]) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function Sheet({ name, image, sheet }: { name: string; image: string | null; sheet: PickSheet }) {
+function Sheet({ sheet }: { sheet: PickSheet }) {
   const { summary, picks } = sheet;
-  const settledCount = summary.wins + summary.losses;
   const open = picks.filter((pick) => pick.result === "pending");
   // Void picks sit with the settled ones: they are finished, just not graded.
   const settled = picks.filter((pick) => pick.result !== "pending");
   const best = bestCall(picks);
   const staked = picks.filter((pick) => pick.profit != null).length;
-  const { timezone } = useProfile();
+  const { staked: stakedTotal } = pickTotals(picks);
+  const season = seasonFromDate(picks[0]?.game_date ?? new Date().toISOString());
 
   return (
     <div className="space-y-[var(--ct-space-5)]">
       <header className="flex items-center gap-[var(--ct-space-4)]">
-        <Avatar name={name} image={image} className="size-14 text-lg" />
         <div className="min-w-0">
-          <h1 className="type-page truncate">{name}</h1>
+          <h1 className="type-page truncate">Your picks</h1>
+          <p className="mt-1 text-ink-2">{season} season · stakes are pretend dollars</p>
         </div>
         {picks.length > 0 ? (
-          <button type="button" className="btn-ghost ml-auto" onClick={() => downloadCsv(picks)}>
+          <button
+            type="button"
+            className="btn-ghost ml-auto shrink-0 whitespace-nowrap"
+            onClick={() => downloadCsv(picks)}
+          >
             Download CSV
           </button>
         ) : null}
@@ -129,12 +135,12 @@ function Sheet({ name, image, sheet }: { name: string; image: string | null; she
         <KpiCard
           label="Record"
           value={`${summary.wins}–${summary.losses}`}
-          progress={settledCount > 0 ? summary.wins / settledCount : undefined}
-          note={
-            settledCount > 0
-              ? `${Math.round((summary.wins / settledCount) * 100)}% correct`
-              : "no finished games yet"
+          progress={
+            summary.wins + summary.losses > 0
+              ? summary.wins / (summary.wins + summary.losses)
+              : undefined
           }
+          note={percentCorrect(summary.wins, summary.losses) ?? "no finished games yet"}
         />
         <KpiCard
           label="Net"
@@ -142,6 +148,7 @@ function Sheet({ name, image, sheet }: { name: string; image: string | null; she
           note={
             [
               staked > 0 ? `from ${staked} settled ${staked === 1 ? "stake" : "stakes"}` : null,
+              staked > 0 ? `${formatMoney(stakedTotal)} staked` : null,
               summary.staked_open > 0
                 ? `${formatMoney(summary.staked_open)} riding on open picks`
                 : null,
@@ -159,7 +166,7 @@ function Sheet({ name, image, sheet }: { name: string; image: string | null; she
           }
           note={
             summary.model_games > 0
-              ? `net games ahead of Baseline's model over ${summary.model_games}`
+              ? "right when the model was wrong, minus the reverse"
               : "no finished games the model also called"
           }
         />
@@ -182,6 +189,8 @@ function Sheet({ name, image, sheet }: { name: string; image: string | null; she
         />
       </KpiStrip>
 
+      <RecentForm picks={picks} />
+
       {picks.length === 0 ? (
         <EmptyState
           title="No picks yet"
@@ -189,124 +198,107 @@ function Sheet({ name, image, sheet }: { name: string; image: string | null; she
         />
       ) : null}
 
-      <section>
-        <div className="flex items-baseline justify-between border-b border-rule-strong pb-2">
-          <h2 className="type-module">Open picks</h2>
-          <Link href="/schedule" className="text-sm text-primary">
-            Schedule →
-          </Link>
-        </div>
-        {open.length === 0 ? (
-          <p className="type-caption py-3">Nothing open. Picks lock when a game tips.</p>
-        ) : (
-          <ul>
-            {open.map((pick) => {
-              const tip = formatGameTime(pick.game_date, pick.start_time_et, timezone);
-              return (
-                <li
-                  key={pick.game_id}
-                  className="flex items-center gap-[var(--ct-space-4)] border-b border-rule py-3"
-                  data-testid="open-pick"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">
-                      <PickGameLink pick={pick} />
-                    </p>
-                    <p className="type-caption mt-0.5">
-                      {tip.date}
-                      {tip.zone ? ` · ${tip.time} ${tip.zone}` : ""}
-                    </p>
-                  </div>
-                  <span className="tabular w-14 text-right">
-                    {pick.stake ? formatMoney(pick.stake) : "–"}
-                  </span>
-                  <span className="type-caption w-24 text-right whitespace-nowrap">
-                    {pick.stake && pick.moneyline != null
-                      ? `to win ${formatMoney(pickProfit(pick.stake, pick.moneyline))}`
-                      : "record only"}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+      <OpenPicks picks={open} />
 
-      {settled.length > 0 ? <Settled picks={settled} /> : null}
+      {settled.length > 0 ? <SettledPicks picks={settled} /> : null}
     </div>
   );
 }
 
-function Settled({ picks }: { picks: UserPick[] }) {
-  const [shown, setShown] = useState(SETTLED_PAGE);
+/** W/L tiles for the last 20 graded picks, newest on the right. */
+function RecentForm({ picks }: { picks: UserPick[] }) {
+  const form = recentForm(picks);
+  const size = form.picks.length;
+  if (size === 0) return null;
   return (
-    <section>
-      <h2 className="type-module border-b border-rule-strong pb-2">Settled</h2>
-      <ul>
-        {picks.slice(0, shown).map((pick) => (
+    <section
+      aria-label="Recent form"
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-rule pb-3"
+    >
+      <span className="type-caption">Last {size}</span>
+      <ol className="flex flex-wrap gap-1">
+        {form.picks.map((pick) => (
           <li
             key={pick.game_id}
-            className="flex items-baseline gap-[var(--ct-space-3)] border-b border-rule py-3"
-            data-testid="settled-pick"
+            data-testid="form-tile"
+            title={`${formatShortDate(pick.game_date)}: ${pickLabel(pick)}`}
+            className={cn(
+              "grid size-6 place-items-center text-[var(--ct-fs-meta)] font-semibold",
+              pick.result === "won"
+                ? "bg-primary text-primary-foreground"
+                : "bg-destructive/10 text-destructive"
+            )}
           >
-            {/* A letter as well as a colour, so the result does not rest on hue. */}
-            <span
-              className={cn(
-                "w-4 shrink-0 text-[var(--ct-fs-meta)] font-semibold",
-                pick.result === "won" && "text-primary",
-                pick.result === "lost" && "text-destructive",
-                pick.result === "void" && "text-ink-3"
-              )}
-              title={pick.result === "won" ? "Won" : pick.result === "lost" ? "Lost" : "Void"}
-            >
-              {pick.result === "won" ? "W" : pick.result === "lost" ? "L" : "–"}
-            </span>
-            <span className="font-medium">
-              <PickGameLink pick={pick} />
-            </span>
-            <span className="type-caption">{finalScore(pick)}</span>
-            {pick.result === "won" && pick.is_upset ? (
-              <span
-                className="type-eyebrow tracking-normal text-primary"
-                data-testid="called-upset"
-              >
-                Called the upset
-              </span>
-            ) : null}
-            <span className="type-caption tabular ml-auto w-14 text-right">
-              {pick.stake ? formatMoney(pick.stake) : "–"}
-            </span>
-            <span
-              className={cn(
-                "tabular w-20 text-right",
-                (pick.profit ?? 0) > 0 && "text-primary",
-                (pick.profit ?? 0) < 0 && "text-destructive"
-              )}
-            >
-              {pick.profit == null ? "–" : formatSignedMoney(pick.profit)}
-            </span>
+            {pick.result === "won" ? "W" : "L"}
           </li>
         ))}
-      </ul>
-      {picks.length > shown ? (
-        <button
-          type="button"
-          className="btn-ghost mt-3"
-          onClick={() => setShown((current) => current + SETTLED_PAGE)}
-        >
-          Show {Math.min(SETTLED_PAGE, picks.length - shown)} more
-        </button>
-      ) : null}
+      </ol>
+      <span className="text-sm text-ink-2">
+        {form.wins}–{form.losses} over the last {size}
+        {form.trend ? ` · ${form.trend}` : ""}
+      </span>
     </section>
   );
 }
 
-/** A pick's label, linking to its game unless the game has left the schedule. */
-function PickGameLink({ pick }: { pick: UserPick }) {
-  if (pick.result === "void") return <>{pickLabel(pick)}</>;
+function OpenPicks({ picks }: { picks: UserPick[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const { timezone } = useProfile();
   return (
-    <Link href={`/games/${pick.game_id}`} className="hover:text-primary hover:underline">
-      {pickLabel(pick)}
-    </Link>
+    <section>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-rule-strong pb-2">
+        <h2 className="type-module">Open</h2>
+        {picks.length === 0 ? (
+          <p className="type-caption">Nothing open. Picks lock when a game tips.</p>
+        ) : (
+          <>
+            <p className="text-sm text-ink-2">{openSummary(picks, timezone)}</p>
+            <button
+              type="button"
+              aria-expanded={expanded}
+              className="text-sm text-primary"
+              onClick={() => setExpanded((current) => !current)}
+            >
+              {expanded ? "Hide" : "Show"} <span aria-hidden>{expanded ? "▲" : "▼"}</span>
+            </button>
+          </>
+        )}
+        <Link href="/schedule" className="ml-auto text-sm text-primary">
+          Schedule →
+        </Link>
+      </div>
+      {expanded ? (
+        <ul>
+          {picks.map((pick) => {
+            const tip = formatGameTime(pick.game_date, pick.start_time_et, timezone);
+            return (
+              <li
+                key={pick.game_id}
+                className="flex items-center gap-[var(--ct-space-4)] border-b border-rule py-3"
+                data-testid="open-pick"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">
+                    <PickGameLink pick={pick} />
+                  </p>
+                  <p className="type-caption mt-0.5">
+                    {tip.date}
+                    {tip.zone ? ` · ${tip.time} ${tip.zone}` : ""}
+                  </p>
+                </div>
+                <span className="tabular w-14 text-right">
+                  {pick.stake ? formatMoney(pick.stake) : "–"}
+                </span>
+                <span className="type-caption w-24 text-right whitespace-nowrap">
+                  {pick.stake && pick.moneyline != null
+                    ? `to win ${formatMoney(pickProfit(pick.stake, pick.moneyline))}`
+                    : "record only"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </section>
   );
 }

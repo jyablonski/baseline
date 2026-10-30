@@ -12,21 +12,6 @@ SELECT_MODEL_ARTIFACT = text(
     """
 )
 
-UPDATE_MODEL_CHAMPION = text(
-    """
-    UPDATE source.model_artifacts
-    SET is_champion = FALSE
-    """
-)
-
-SET_MODEL_CHAMPION = text(
-    """
-    UPDATE source.model_artifacts
-    SET is_champion = TRUE
-    WHERE model_version = :model_version
-    """
-)
-
 UPSERT_MODEL_ARTIFACT = text(
     """
     INSERT INTO source.model_artifacts (

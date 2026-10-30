@@ -92,7 +92,8 @@ def test_injury_sql_orders_notable_and_ruled_out_first() -> None:
     assert "FROM gold.fct_game_injuries" in sql
     assert "fct_game_injuries.is_notable DESC" in sql
     assert "WHEN 'Out For Season' THEN 1" in sql
-    # The schedule chip is notable players ruled out, never Day To Day.
+    # The Injuries cell is key players Out or Day To Day; only Out turns it red.
     schedule = str(LIST_SCHEDULE)
-    assert "fct_game_injuries.injury_status IN ('Out', 'Out For Season')" in schedule
-    assert "AS home_notable_out" in schedule
+    assert "IN ('Out', 'Out For Season', 'Day To Day')" in schedule
+    assert "AS has_key_injury" in schedule
+    assert "AS key_players_out" in schedule

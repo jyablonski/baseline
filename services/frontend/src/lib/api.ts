@@ -41,6 +41,8 @@ import type {
   PlayerSeasonStats,
   PlayerSummary,
   PlayerValue,
+  CalibrationBucket,
+  PredictionGame,
   PredictionScorecard,
   SearchPlayersParams,
   SeasonInfo,
@@ -471,6 +473,12 @@ export const api = {
     asData<PredictionScorecard>(
       await fetchApi(`/api/v1/predictions/scorecard${buildQuery({ season: params.season })}`)
     ),
+
+  getPredictionCalibration: async () =>
+    asData<CalibrationBucket[]>(await fetchApi("/api/v1/predictions/calibration")),
+
+  listPredictionGames: async (params: { limit?: number; offset?: number } = {}) =>
+    asPaginated<PredictionGame>(await fetchApi(`/api/v1/predictions/games${buildQuery(params)}`)),
 
   listBiggestCollapses: async (params: NotablesParams = {}) =>
     asPaginated<GameCollapse>(await fetchApi(`/api/v1/games/collapses${notablesQuery(params)}`)),

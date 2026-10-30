@@ -373,3 +373,103 @@ export async function setAdminPipeline(
   }
   return ((await response.json()) as { data: PipelineGate }).data;
 }
+
+export type RegisteredModel = {
+  model_version: string;
+  model_name: string;
+  is_champion: boolean;
+  /** Null for a champion that predates the admin switch. */
+  promoted_at: string | null;
+  promoted_by: string | null;
+};
+
+export type ModelScorecardRow = {
+  season: string;
+  model_name: string;
+  model_version: string;
+  is_champion: boolean;
+  n: number;
+  logloss: number | null;
+  brier: number | null;
+  accuracy: number | null;
+  home_always_accuracy: number | null;
+  calibration_error: number | null;
+  market_n: number | null;
+  market_logloss: number | null;
+  market_brier: number | null;
+};
+
+export type ModelGame = {
+  game_id: string;
+  game_date: string;
+  home_team_abbreviation: string | null;
+  away_team_abbreviation: string | null;
+  home_won: boolean;
+  market_wp: number | null;
+  /** Home win probability by model version; a model that missed the game is absent. */
+  predictions: Record<string, number>;
+};
+
+export type ModelReview = {
+  season: string | null;
+  live_model_version: string | null;
+  /** What gold serves. Lags the live model until dbt rebuilds after a promotion. */
+  serving_model_version: string | null;
+  models: RegisteredModel[];
+  rows: ModelScorecardRow[];
+  games: ModelGame[];
+};
+
+export type ChampionChange = {
+  model_version: string;
+  promoted_at: string | null;
+  promoted_by: string | null;
+  rebuild_queued: boolean;
+};
+
+export async function fetchAdminModels(): Promise<ModelReview> {
+  const token = process.env.ADMIN_API_TOKEN;
+  if (!token) {
+    throw new AdminApiError("ADMIN_API_TOKEN is not set.", 503);
+  }
+  const response = await fetch(`${adminApiBase()}/api/v1/admin/models`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new AdminApiError(
+      `Admin API returned ${response.status} ${response.statusText}`,
+      response.status
+    );
+  }
+  return ((await response.json()) as { data: ModelReview }).data;
+}
+
+export async function promoteAdminModel(
+  modelVersion: string,
+  updatedBy: string,
+  queueRebuild: boolean
+): Promise<ChampionChange> {
+  const token = process.env.ADMIN_API_TOKEN;
+  if (!token) {
+    throw new AdminApiError("ADMIN_API_TOKEN is not set.", 503);
+  }
+  const response = await fetch(`${adminApiBase()}/api/v1/admin/models/champion`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model_version: modelVersion,
+      updated_by: updatedBy,
+      queue_rebuild: queueRebuild,
+    }),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { detail?: string } | null;
+    throw new AdminApiError(
+      body?.detail ?? `Admin API returned ${response.status} ${response.statusText}`,
+      response.status
+    );
+  }
+  return ((await response.json()) as { data: ChampionChange }).data;
+}

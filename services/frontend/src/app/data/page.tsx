@@ -11,12 +11,12 @@ import { useProfile } from "@/hooks/use-profile";
 import { api, queryErrorMessage } from "@/lib/api";
 import { CONTACT_EMAIL } from "@/lib/contact";
 import { formatNumber, formatProbability } from "@/lib/format";
-import { modelLabel } from "@/lib/predictions";
+import { latestSeason, MODEL_NOTES, modelLabel, usesInjuries } from "@/lib/predictions";
 import { formatInstant } from "@/lib/timezones";
 import type { ScorecardRow } from "@/lib/types";
 import { commitUrl, shortSha } from "@/lib/version";
 
-// Below this many graded games the scorecard gaps between models are mostly noise.
+// Below this many graded games the gaps on the scorecard are mostly noise.
 const SMALL_SAMPLE_GAMES = 100;
 
 const SOURCES = [
@@ -133,17 +133,10 @@ const SCORES = [
   },
 ];
 
-const MODEL_NOTES: Record<string, string> = {
-  "elo-v0": "Rating that moves after every result",
-  "elo-v1": "Adds margin of victory and a learned home edge",
-  "logit-v1": "Eleven pregame stats: form, rest, travel and more",
-};
-
 const LIMITS = [
   "Stats can lag up to a day; everything updates once each morning.",
   "Injury reports are a snapshot from the morning run and can change before tip-off.",
   "Odds are a bookmaker consensus from the morning run, not live or closing lines.",
-  "The model on the schedule does not know who is out tonight.",
   "Social metrics only see r/nba and the top comments of each post; fanbase counts include flaired comments only.",
   "Only the current season is loaded.",
   "Model numbers early in the season rest on very few games.",
@@ -285,8 +278,9 @@ export default function DataPage() {
         }
       >
         <p>
-          Each model gives a pregame chance for every game. After the game, its forecast is scored
-          against the result. Lower log loss, Brier and calibration error are better.
+          The model on the schedule gives a pregame chance for every game. After the game, its
+          forecast is scored against the result, beside the sportsbook and always picking home.
+          Lower log loss, Brier and calibration error are better.
         </p>
         <div className="mt-4">
           {scorecardQuery.isLoading ? (
@@ -317,15 +311,21 @@ export default function DataPage() {
         </dl>
         {gamesScored != null && gamesScored > 0 && gamesScored < SMALL_SAMPLE_GAMES ? (
           <p className="mt-3 text-sm text-ink-2">
-            {formatNumber(gamesScored)} games is too few to separate these models; differences this
-            early are mostly noise.
+            {formatNumber(gamesScored)} games is too few to read much into; differences this early
+            are mostly noise.
           </p>
         ) : null}
       </DataSection>
 
       <DataSection title="Known limits">
         <ul>
-          {LIMITS.map((limit) => (
+          {[
+            ...LIMITS,
+            // Elo v2 reads the injury report; the others do not.
+            ...(usesInjuries(scorecardQuery.data?.champion_model_version)
+              ? []
+              : ["The model on the schedule does not know who is out tonight."]),
+          ].map((limit) => (
             <li key={limit} className="border-b border-rule py-3">
               {limit}
             </li>
@@ -439,14 +439,6 @@ function MetricNote({ term, children }: { term: string; children: React.ReactNod
 }
 
 /** Only the current season is loaded, but the scorecard is keyed by season: show the newest. */
-function latestSeason(rows: ScorecardRow[]) {
-  const season = rows.reduce<string | null>(
-    (latest, row) => (latest == null || row.season > latest ? row.season : latest),
-    null
-  );
-  return rows.filter((row) => row.season === season);
-}
-
 function refreshParts(value: string | null | undefined, timezone: string | null | undefined) {
   if (!value) return null;
   const parsed = new Date(value);

@@ -285,9 +285,68 @@ function account(request, path, body) {
   return [404, { detail: "Not found." }];
 }
 
+let liveModel = "elo-v1";
+
+function modelReview() {
+  const row = (version, logloss) => ({
+    season: "2026-27",
+    model_name: "elo",
+    model_version: version,
+    is_champion: version === liveModel,
+    n: 2,
+    logloss,
+    brier: 0.2,
+    accuracy: 0.5,
+    home_always_accuracy: 0.5,
+    calibration_error: 0.1,
+    market_n: 2,
+    market_logloss: 0.6,
+    market_brier: 0.2,
+  });
+  return {
+    season: "2026-27",
+    live_model_version: liveModel,
+    serving_model_version: "elo-v1",
+    models: ["elo-v1", "elo-v2"].map((version) => ({
+      model_version: version,
+      model_name: "elo",
+      is_champion: version === liveModel,
+      promoted_at: null,
+      promoted_by: null,
+    })),
+    rows: [row("elo-v1", 0.62), row("elo-v2", 0.61)],
+    games: [
+      {
+        game_id: "00000000-0000-4000-8000-000000000001",
+        game_date: "2026-10-29",
+        home_team_abbreviation: "POR",
+        away_team_abbreviation: "MEM",
+        home_won: false,
+        market_wp: 0.4,
+        predictions: { "elo-v1": 0.38, "elo-v2": 0.35 },
+      },
+    ],
+  };
+}
+
 function admin(request, path, body) {
   if (bearer(request) !== ADMIN_TOKEN) return [401, { detail: "Invalid credentials." }];
   if (path === "/health") return [200, { data: HEALTH }];
+  if (path === "/models") return [200, { data: modelReview() }];
+  if (path === "/models/champion" && request.method === "PUT") {
+    liveModel = body.model_version;
+    return [
+      200,
+      {
+        data: {
+          model_version: liveModel,
+          promoted_at: new Date().toISOString(),
+          promoted_by: body.updated_by,
+          rebuild_queued: Boolean(body.queue_rebuild),
+        },
+      },
+    ];
+  }
   if (path === "/flags" && request.method === "GET") return [200, flagRows()];
   if (path.startsWith("/flags/") && request.method === "PUT") {
     const flag = flags.get(decodeURIComponent(path.slice("/flags/".length)));
@@ -303,6 +362,7 @@ function admin(request, path, body) {
 function control(path, body) {
   if (path === "/reset") {
     for (const flag of flags.values()) Object.assign(flag, { enabled: true, updated_by: null });
+    liveModel = "elo-v1";
     users.clear();
     subjects.clear();
     requests.length = 0;

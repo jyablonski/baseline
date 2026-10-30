@@ -17,4 +17,8 @@ sources:
           - name: trained_at
             description: When the artifact was fit.
           - name: is_champion
-            description: True for the model fct_game_predictions surfaces; elo-v0 is used when none is set.
+            description: True for the model fct_game_predictions surfaces, set from /admin; elo-v0 is used when none is set.
+          - name: promoted_at
+            description: When this model was last promoted to champion. Null for one that predates the admin switch.
+          - name: promoted_by
+            description: Who promoted it, for audit only.

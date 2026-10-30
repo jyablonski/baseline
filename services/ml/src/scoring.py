@@ -51,8 +51,6 @@ from models import GamePrediction
 from queries.artifacts import (
     REGISTER_MODEL,
     SELECT_MODEL_ARTIFACT,
-    SET_MODEL_CHAMPION,
-    UPDATE_MODEL_CHAMPION,
     UPSERT_MODEL_ARTIFACT,
 )
 from queries.evaluations import UPSERT_MODEL_EVALUATION
@@ -310,7 +308,7 @@ def snapshot_elo(*, trained_at: datetime | None = None) -> dict[str, Any]:
 
 
 def register_elo_models(session: Session) -> None:
-    """Registry rows so CHAMPION_MODEL_VERSION can promote elo-v1 or elo-v2. Elo has no artifact."""
+    """Registry rows so /admin can promote elo-v1 or elo-v2. Elo has no artifact."""
     for version, name in (
         (ELO_V1_MODEL_VERSION, ELO_V1_MODEL_NAME),
         (ELO_V2_MODEL_VERSION, ELO_V2_MODEL_NAME),
@@ -324,29 +322,6 @@ def register_elo_models(session: Session) -> None:
                 "trained_at": datetime.now(),
             },
         )
-
-
-def set_champion_model(session: Session, model_version: str) -> None:
-    """Apply the configured champion, failing if its registry row is absent."""
-    available = (
-        session.execute(
-            SELECT_MODEL_ARTIFACT,
-            {"model_version": model_version},
-        )
-        .mappings()
-        .first()
-    )
-    if not isinstance(available, Mapping):
-        raise ValueError(f"configured champion model is not registered: {model_version}")
-    model_name = available.get("model_name")
-    if model_name == LOGIT_MODEL_NAME:
-        artifact = available.get("artifact")
-        if not isinstance(artifact, Mapping) or not _is_valid_logit_artifact(artifact):
-            raise ValueError(f"configured champion model has an invalid artifact: {model_version}")
-    if model_name not in {MODEL_NAME, LOGIT_MODEL_NAME}:
-        raise ValueError(f"configured champion model has an unsupported name: {model_name}")
-    session.execute(UPDATE_MODEL_CHAMPION)
-    session.execute(SET_MODEL_CHAMPION, {"model_version": model_version})
 
 
 def train_model(
@@ -498,7 +473,6 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
                 )
             )
         register_elo_models(session)
-        set_champion_model(session, settings.champion_model_version)
         session.execute(DELETE_PREDICTIONS_BEYOND_HORIZON, {"through_date": through_date})
         session.execute(
             DELETE_COLD_START_PREDICTIONS,

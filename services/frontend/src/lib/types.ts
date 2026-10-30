@@ -100,6 +100,9 @@ export type GameInjury = Omit<PlayerInjury, "team_abbreviation"> & {
   snapshot_date: string;
   /** Once the game is Final, whether they logged minutes; null before. */
   played: boolean | null;
+  /** Season averages; null for a player with no games this season. */
+  ppg?: number | null;
+  apg?: number | null;
 };
 
 export type GameLogEntry = {
@@ -519,9 +522,13 @@ export type ScheduledGame = {
   home_spread?: number | null;
   odds_bookmaker_count?: number | null;
   odds_updated_at?: string | null;
-  /** Notable players ruled out on the game's injury report, by name. */
-  home_notable_out?: string[];
-  away_notable_out?: string[];
+  /** The game's injury report in numbers: ruled out, and everyone else listed. */
+  injuries_out?: number;
+  injuries_listed?: number;
+  /** A key player is Out or Day To Day, which fills the schedule's Injuries cell. */
+  has_key_injury?: boolean;
+  /** Key players ruled out; any at all turns that cell red. */
+  key_players_out?: number;
 };
 
 /** One game in any state, for the game page. */
@@ -574,6 +581,25 @@ export type ScorecardRow = {
 export type PredictionScorecard = {
   champion_model_version?: string | null;
   rows: ScorecardRow[];
+};
+
+/** How often home teams won, by what the live model said. */
+export type CalibrationBucket = {
+  bucket: string;
+  predicted: number;
+  actual: number;
+  n: number;
+};
+
+/** One graded game from the live model. */
+export type PredictionGame = {
+  game_id: string;
+  game_date: string;
+  home_team_abbreviation: string | null;
+  away_team_abbreviation: string | null;
+  /** Home win probability, 0 to 1. */
+  model_wp: number;
+  home_won: boolean;
 };
 
 export type ListScheduleParams = {

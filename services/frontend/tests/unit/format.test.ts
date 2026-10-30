@@ -5,6 +5,8 @@ import {
   formatArenaLine,
   formatBirthDate,
   formatDate,
+  formatShortDate,
+  formatShortDateET,
   formatGamesBack,
   formatMoneyline,
   formatNumber,
@@ -214,5 +216,17 @@ describe("odds and probability formatters", () => {
     expect(formatSpread(4)).toBe("+4.0");
     expect(formatSpread(0)).toBe("PK");
     expect(formatSpread(undefined)).toBe("—");
+  });
+});
+
+describe("short dates", () => {
+  it("drops the year from a game date", () => {
+    expect(formatShortDate("2026-10-29")).toBe("Oct 29");
+    expect(formatShortDate(null)).toBe("—");
+  });
+
+  it("reads a moment on the Eastern calendar", () => {
+    // 9 PM Eastern on the 20th is already the 21st in UTC.
+    expect(formatShortDateET("2026-10-21T01:00:00Z")).toBe("Oct 20");
   });
 });

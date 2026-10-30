@@ -37,6 +37,8 @@ models:
         description: True inside either rank cutoff.
         data_tests:
           - not_null
+      - name: is_key
+        description: Notable, or within the league's top injury_key_league_rank by average game score. Decides the schedule's Injuries column; never a model input.
     data_tests:
       - dbt_expectations.expect_compound_columns_to_be_unique:
           arguments:

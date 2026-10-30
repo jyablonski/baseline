@@ -1,6 +1,6 @@
 -- Seeded gold mart rows for API/MCP integration tests (no dbt required).
 
-TRUNCATE gold.fct_game_flow, gold.fct_transaction_participants, gold.fct_transactions, gold.fct_game_upsets, gold.fct_game_injuries, gold.fct_player_injuries, gold.fct_daily_highlights, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
+TRUNCATE gold.fct_game_flow, gold.fct_transaction_participants, gold.fct_transactions, gold.fct_game_upsets, gold.fct_game_injuries, gold.fct_player_injuries, gold.fct_daily_highlights, gold.fct_prediction_results, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
          gold.fct_standings, gold.fct_player_mvp_scores, gold.fct_player_season_stats, gold.fct_player_game_logs,
          gold.fct_team_game_results, gold.fct_games_schedule, gold.dim_players, gold.dim_teams
          RESTART IDENTITY CASCADE;
@@ -197,6 +197,17 @@ INSERT INTO gold.fct_prediction_scorecard (
     ('2024-25', 'logit', 'logit-v1', 1200, 0.64, 0.225, 0.655, 0.55, 0.025, 900, 0.62, 0.21),
     ('2023-24', 'elo', 'elo-v0', 1230, 0.66, 0.235, 0.63, 0.54, 0.04, NULL, NULL, NULL);
 
+-- Two graded games for the live model, a shadow model that missed one, and an
+-- older season that the live reads must leave out.
+INSERT INTO gold.fct_prediction_results (
+    game_id, model_name, model_version, model_wp, market_wp, season, game_date,
+    home_team_abbreviation, away_team_abbreviation, home_won
+) VALUES
+    ('00000000-0000-4000-8000-000000000201', 'elo', 'elo-v0', 0.65, 0.6, '2024-25', '2024-10-22', 'GSW', 'LAC', TRUE),
+    ('00000000-0000-4000-8000-000000000201', 'logit', 'logit-v1', 0.72, 0.6, '2024-25', '2024-10-22', 'GSW', 'LAC', TRUE),
+    ('00000000-0000-4000-8000-000000000203', 'elo', 'elo-v0', 0.35, NULL, '2024-25', '2024-10-25', 'LAC', 'GSW', FALSE),
+    ('00000000-0000-4000-8000-000000000202', 'elo', 'elo-v0', 0.55, NULL, '2023-24', '2024-04-01', 'CHI', 'GSW', TRUE);
+
 INSERT INTO gold.fct_standings (
     team_id, abbreviation, team_name, season, season_type, as_of_date,
     conference, division, conference_rank, division_rank,
@@ -222,17 +233,17 @@ INSERT INTO gold.fct_player_injuries (
 
 INSERT INTO gold.fct_game_injuries (
     game_id, game_date, season, team_id, side, player_id, player_name, injury_status,
-    injury_detail, description, update_date, snapshot_date, is_notable, played
+    injury_detail, description, update_date, snapshot_date, is_notable, is_key, played
 ) VALUES
     ('00000000-0000-4000-8000-000000000201', '2024-10-22', '2024-25', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'away',
      '00000000-0000-4000-8000-000000000102', 'Kawhi Leonard', 'Out', 'Knee', 'Out (Knee) - Soreness',
-     '2024-10-21', '2024-10-22', TRUE, FALSE),
+     '2024-10-21', '2024-10-22', TRUE, TRUE, FALSE),
     ('00000000-0000-4000-8000-000000000204', CURRENT_DATE + 14, '2024-25', '7bf8726a-a852-452d-b81f-14839127c5fb', 'home',
      '00000000-0000-4000-8000-000000000101', 'Stephen Curry', 'Out', 'Ankle', 'Out (Ankle) - Left ankle sprain',
-     CURRENT_DATE - 1, CURRENT_DATE, TRUE, NULL),
+     CURRENT_DATE - 1, CURRENT_DATE, TRUE, TRUE, NULL),
     ('00000000-0000-4000-8000-000000000204', CURRENT_DATE + 14, '2024-25', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 'away',
      '00000000-0000-4000-8000-000000000102', 'Kawhi Leonard', 'Day To Day', 'Knee', 'Day To Day (Knee) - Soreness',
-     CURRENT_DATE - 2, CURRENT_DATE, TRUE, NULL);
+     CURRENT_DATE - 2, CURRENT_DATE, TRUE, TRUE, NULL);
 
 -- GAME_THREE: LAC came back from 15 down in Q3 and won in overtime, the
 -- closest finish. GAME_ONE: GSW came back from 8. GAME_TWO: wire to wire, with

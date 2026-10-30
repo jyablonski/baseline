@@ -86,7 +86,7 @@ describe("players directory", () => {
         team_id: undefined,
         season: "2025-26",
         sort: "mvp",
-        limit: 25,
+        limit: 10,
         offset: 0,
       });
     });

@@ -3,9 +3,10 @@ import Link from "next/link";
 import { ADMIN_TABS, adminTabHref, type AdminTab, type ReviewItem } from "@/lib/admin-status";
 import { cn } from "@/lib/utils";
 
-const TAB_LABEL: Record<AdminTab, string> = {
+export const TAB_LABEL: Record<AdminTab, string> = {
   overview: "Overview",
   pipeline: "Pipeline",
+  models: "Models",
   infrastructure: "Infrastructure",
   settings: "Settings",
 };

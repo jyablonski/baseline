@@ -405,9 +405,8 @@ def _pregame_records(game: str) -> str:
     """
 
 
-# Notable players ruled out, per side, for the injury chip on schedule rows and
-# upsets. Day To Day is left off on purpose: a chip for every doubt means
-# nothing. :game_id narrows it to one game for GET_GAME; NULL means all.
+# Notable players ruled out, per side, for upsets. Day To Day is left off on
+# purpose: a game decided without someone is the point, not a doubt.
 NOTABLE_ABSENCES_CTE = """
     notable_absences AS (
         SELECT
@@ -421,6 +420,33 @@ NOTABLE_ABSENCES_CTE = """
             fct_game_injuries.is_notable
             AND fct_game_injuries.injury_status IN ('Out', 'Out For Season')
             AND (CAST(:game_id AS uuid) IS NULL OR fct_game_injuries.game_id = :game_id)
+        GROUP BY fct_game_injuries.game_id
+    )"""
+
+
+# Each game's report in numbers, for the schedule's Injuries column. Nearly every
+# game has someone listed, so a cell only fills for a key player, Day To Day
+# included. :game_id narrows it to one game for GET_GAME; NULL means all.
+GAME_INJURY_COUNTS_CTE = """
+    game_injury_counts AS (
+        SELECT
+            fct_game_injuries.game_id,
+            count(*) FILTER (
+                WHERE fct_game_injuries.injury_status IN ('Out', 'Out For Season')
+            )::integer AS injuries_out,
+            count(*) FILTER (
+                WHERE fct_game_injuries.injury_status NOT IN ('Out', 'Out For Season')
+            )::integer AS injuries_listed,
+            bool_or(
+                fct_game_injuries.is_key
+                AND fct_game_injuries.injury_status IN ('Out', 'Out For Season', 'Day To Day')
+            ) AS has_key_injury,
+            count(*) FILTER (
+                WHERE fct_game_injuries.is_key
+                    AND fct_game_injuries.injury_status IN ('Out', 'Out For Season')
+            )::integer AS key_players_out
+        FROM gold.fct_game_injuries
+        WHERE CAST(:game_id AS uuid) IS NULL OR fct_game_injuries.game_id = :game_id
         GROUP BY fct_game_injuries.game_id
     )"""
 
@@ -469,7 +495,7 @@ SCHEDULE_CTES = f"""
         GROUP BY fct_game_odds.game_id
     ),
 
-{NOTABLE_ABSENCES_CTE}
+{GAME_INJURY_COUNTS_CTE}
 """
 
 SCHEDULE_COLUMNS = """
@@ -518,8 +544,10 @@ SCHEDULE_COLUMNS = """
         moneyline_odds.odds_bookmaker_count,
         moneyline_odds.odds_updated_at,
         spread_odds.home_spread,
-        coalesce(notable_absences.home_notable_out, ARRAY[]::text[]) AS home_notable_out,
-        coalesce(notable_absences.away_notable_out, ARRAY[]::text[]) AS away_notable_out
+        coalesce(game_injury_counts.injuries_out, 0) AS injuries_out,
+        coalesce(game_injury_counts.injuries_listed, 0) AS injuries_listed,
+        coalesce(game_injury_counts.has_key_injury, FALSE) AS has_key_injury,
+        coalesce(game_injury_counts.key_players_out, 0) AS key_players_out
 """
 
 SCHEDULE_JOINS = """
@@ -532,8 +560,8 @@ SCHEDULE_JOINS = """
         ON moneyline_odds.game_id = fct_games_schedule.game_id
     LEFT JOIN spread_odds
         ON spread_odds.game_id = fct_games_schedule.game_id
-    LEFT JOIN notable_absences
-        ON notable_absences.game_id = fct_games_schedule.game_id
+    LEFT JOIN game_injury_counts
+        ON game_injury_counts.game_id = fct_games_schedule.game_id
 """
 
 LIST_SCHEDULE = text(

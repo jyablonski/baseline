@@ -45,3 +45,5 @@ class ModelArtifact(Base):
     artifact: Mapped[dict] = mapped_column(JSONB, nullable=False)
     trained_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     is_champion: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    promoted_by: Mapped[str | None] = mapped_column(String(100))

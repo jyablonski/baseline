@@ -323,3 +323,14 @@ def test_pipeline_switch_refuses_a_change_to_nothing() -> None:
         headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.unit
+def test_models_routes_need_the_admin_token() -> None:
+    assert _client(ADMIN_TOKEN).get("/api/v1/admin/models").status_code == 401
+    assert (
+        _client(ADMIN_TOKEN)
+        .put("/api/v1/admin/models/champion", json={"model_version": "a", "updated_by": "b"})
+        .status_code
+        == 401
+    )

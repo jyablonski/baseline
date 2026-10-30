@@ -200,12 +200,17 @@ test("game page recaps a final with the model's call and no regular-season headl
   await expect(page.getByRole("heading", { name: "Who wins?" })).toHaveCount(0);
 });
 
-test("schedule flags a notable absence and the game page lists the report", async ({ page }) => {
+test("schedule opens the injury report and the game page lists it", async ({ page }) => {
   // /schedule asks from today's Eastern date, so pin before the fixtures' Oct 22 slate.
   await page.clock.setFixedTime(new Date("2026-10-20T16:00:00Z"));
   await mockApi(page);
   await page.goto("/schedule");
-  await expect(page.getByTestId("notable-out")).toHaveText("GSW: Stephen Curry out");
+  const field = page.getByTestId("injury-field");
+  await expect(field).toHaveText(/1 listed/);
+  await field.click();
+  const popup = page.getByRole("dialog", { name: /Injury report/ });
+  await expect(popup).toContainText("Morning report");
+  await expect(popup.getByRole("link", { name: "Full report →" })).toBeVisible();
 
   await page.goto("/games/0022500999");
   const report = page.getByTestId("injury-report");

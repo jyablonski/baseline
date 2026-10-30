@@ -6,6 +6,8 @@ import {
   enqueueAdminJob,
   fetchAdminFlags,
   fetchAdminHealth,
+  fetchAdminModels,
+  promoteAdminModel,
   setAdminFlag,
   setAdminPipeline,
   isJobType,
@@ -317,5 +319,68 @@ describe("setAdminPipeline", () => {
     await expect(setAdminPipeline("enabled", true, "me")).rejects.toMatchObject({
       message: "Admin API returned 502 Bad Gateway",
     });
+  });
+});
+
+describe("admin models", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("fails closed without a token", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchAdminModels()).rejects.toMatchObject({ status: 503 });
+    await expect(promoteAdminModel("elo-v2", "me", true)).rejects.toMatchObject({ status: 503 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reads the review with the bearer token and never caches it", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "secret");
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { season: "2026-27" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchAdminModels()).resolves.toEqual({ season: "2026-27" });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/api\/v1\/admin\/models$/);
+    expect(init).toMatchObject({
+      cache: "no-store",
+      headers: { Authorization: "Bearer secret" },
+    });
+  });
+
+  it("promotes with the operator and whether to rebuild", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "secret");
+    const change = { model_version: "elo-v2", rebuild_queued: true };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: change }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(promoteAdminModel("elo-v2", "me", true)).resolves.toEqual(change);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/models\/champion$/);
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body)).toEqual({
+      model_version: "elo-v2",
+      updated_by: "me",
+      queue_rebuild: true,
+    });
+  });
+
+  it("passes on the API's reason for refusing a promotion", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "secret");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ detail: "No predictions." }, 409, "Conflict"))
+    );
+    await expect(promoteAdminModel("logit-v1", "me", true)).rejects.toMatchObject({
+      message: "No predictions.",
+      status: 409,
+    });
+  });
+
+  it("reports a failed read", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "secret");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, 500, "Server Error")));
+    await expect(fetchAdminModels()).rejects.toMatchObject({ status: 500 });
   });
 });

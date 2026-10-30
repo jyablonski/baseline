@@ -64,6 +64,10 @@ models:
         description: Notable in int_player_notability in the game's season or the one before.
         data_tests:
           - not_null
+      - name: is_key
+        description: Key in int_player_notability in the game's season or the one before. Wider than is_notable; decides the schedule's Injuries column.
+        data_tests:
+          - not_null
       - name: played
         description: Once the game is Final, whether the player logged minutes; null before.
     data_tests:

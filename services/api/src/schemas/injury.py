@@ -39,3 +39,6 @@ class GameInjury(BaseModel):
     is_notable: bool
     # Once the game is Final, whether they logged minutes; null before.
     played: bool | None = None
+    # Season averages; null for a player with no games this season.
+    ppg: float | None = None
+    apg: float | None = None

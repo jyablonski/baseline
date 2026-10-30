@@ -8,14 +8,27 @@ gated by GitHub OAuth, so the token never reaches a browser.
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from dependencies import get_admin_repository, get_flags_repository, require_admin_token
+from dependencies import (
+    get_admin_repository,
+    get_flags_repository,
+    get_predictions_repository,
+    require_admin_token,
+)
 from repositories.admin import AdminRepository, JobAlreadyPendingError
 from repositories.flags import FlagsRepository
+from repositories.predictions import (
+    ModelNotScoredError,
+    PredictionsRepository,
+    UnknownModelError,
+)
 from schemas import (
     AdminHealth,
     AdminJob,
+    ChampionChange,
+    ChampionUpdate,
     ItemResponse,
     JobRequest,
+    ModelReview,
     PipelineGate,
     PipelineGateUpdate,
     PipelineRun,
@@ -109,3 +122,47 @@ def set_admin_flag(
     if flag is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown feature flag.")
     return ItemResponse(data=FeatureFlag.model_validate(flag))
+
+
+@router.get("/models", response_model=ItemResponse[ModelReview])
+def get_admin_models(
+    repo: PredictionsRepository = Depends(get_predictions_repository),
+) -> ItemResponse[ModelReview]:
+    """Every model's scorecard and per-game calls, champion and shadow."""
+    return ItemResponse(data=ModelReview.model_validate(repo.get_model_review()))
+
+
+@router.put("/models/champion", response_model=ItemResponse[ChampionChange])
+def set_admin_champion(
+    request: ChampionUpdate,
+    repo: PredictionsRepository = Depends(get_predictions_repository),
+    admin: AdminRepository = Depends(get_admin_repository),
+) -> ItemResponse[ChampionChange]:
+    """Choose the model the product shows, then queue the dbt rebuild that surfaces it.
+
+    The registry row is the only record of this choice: the ML job scores every
+    model and never touches it. The schedule keeps the old model until gold is
+    rebuilt, so a busy queue is reported rather than treated as a failure.
+    """
+    try:
+        row, changed = repo.set_champion(request.model_version, promoted_by=request.updated_by)
+    except UnknownModelError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown model.") from exc
+    except ModelNotScoredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This model has no predictions for the coming games, so there is nothing to show.",
+        ) from exc
+
+    rebuild_queued = False
+    if changed and request.queue_rebuild:
+        try:
+            admin.enqueue_job(
+                "dbt",
+                requested_by=request.updated_by,
+                detail=f"Promoted {request.model_version}",
+            )
+            rebuild_queued = True
+        except JobAlreadyPendingError:
+            pass
+    return ItemResponse(data=ChampionChange(**row, rebuild_queued=rebuild_queued))
