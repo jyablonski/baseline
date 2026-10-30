@@ -143,7 +143,7 @@ const LIMITS = [
   "Stats can lag up to a day; everything updates once each morning.",
   "Injury reports are a snapshot from the morning run and can change before tip-off.",
   "Odds are a bookmaker consensus from the morning run, not live or closing lines.",
-  "The win models do not know who is playing tonight, so injuries and rest are their biggest blind spot.",
+  "The model on the schedule does not know who is out tonight.",
   "Social metrics only see r/nba and the top comments of each post; fanbase counts include flaired comments only.",
   "Only the current season is loaded.",
   "Model numbers early in the season rest on very few games.",
