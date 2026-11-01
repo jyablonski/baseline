@@ -15,6 +15,7 @@ from queries.predictions import (
     INSERT_GAME_PREDICTION,
     SELECT_LIVE_PREDICTED_GAMES,
 )
+from queries.value import SELECT_VALUE_GAMES
 
 __all__ = [
     "DELETE_COLD_START_PREDICTIONS",
@@ -28,6 +29,7 @@ __all__ = [
     "SELECT_MODEL_ARTIFACT",
     "SELECT_REGULAR_SEASON_FINALS",
     "SELECT_UPCOMING_GAMES",
+    "SELECT_VALUE_GAMES",
     "UPSERT_MODEL_ARTIFACT",
     "UPSERT_MODEL_EVALUATION",
 ]

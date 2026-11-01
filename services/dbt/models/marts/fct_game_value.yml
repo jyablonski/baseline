@@ -1,0 +1,116 @@
+version: 2
+
+models:
+  - name: fct_game_value
+    description: >
+      Each model's view of each game against the moneyline, scheduled or Final,
+      for every model rather than just the champion, so shadow models can be
+      compared on the same games. The value side is whichever team has the
+      higher expected profit at the consensus price, vig included, so every
+      game has one even when it is a bad bet. is_value_pick applies the
+      value_* vars in dbt_project.yml, and because those apply to the whole
+      table, changing a var re-flags past games: only games after the change
+      are a fair test of it. No consumer but `make ml-value` yet.
+    config:
+      meta:
+        grain: One row per game per model, for games with both a pregame prediction and a captured moneyline.
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["game_id", "model_version"]
+    columns:
+      - name: game_id
+        description: Baseline game UUID.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_games_schedule')
+                field: game_id
+      - name: model_version
+        description: Model that made the prediction, champion or shadow.
+        data_tests:
+          - not_null
+      - name: is_champion
+        description: True when this is the model the product shows.
+        data_tests:
+          - not_null
+      - name: is_backfilled
+        description: True for a walk-forward replay rather than a number published before the game.
+        data_tests:
+          - not_null
+      - name: game_status
+        description: Schedule status of the game.
+        data_tests:
+          - not_null
+      - name: min_team_games
+        description: Regular Season Finals the less-experienced team had played before this game. 0 for a playoff game.
+        data_tests:
+          - not_null
+      - name: home_model_wp
+        description: The model's pregame home win probability.
+        data_tests:
+          - not_null
+      - name: home_market_wp
+        description: Bookmaker-average de-vigged home win probability.
+        data_tests:
+          - not_null
+      - name: value_location
+        description: Side with the higher expected profit at the consensus price.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["home", "away"]
+      - name: value_model_wp
+        description: The model's win probability for the value side.
+      - name: value_market_wp
+        description: De-vigged market win probability for the value side.
+      - name: value_implied_wp
+        description: Consensus win probability for the value side with the vig left in. The break-even rate.
+      - name: value_decimal_odds
+        description: Decimal payout of the consensus price, stake included.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                strictly: true
+      - name: value_best_moneyline
+        description: Best American price for the value side across bookmakers. Reporting only; grading uses the consensus.
+      - name: edge_wp
+        description: value_model_wp minus value_market_wp. Ignores the vig; expected_value does not.
+        data_tests:
+          - not_null
+      - name: expected_value
+        description: Expected profit per unit staked at the consensus price if the model is right. Ranks the picks.
+        data_tests:
+          - not_null
+      - name: is_market_underdog
+        description: The value side is the market underdog. False for a pick'em.
+        data_tests:
+          - not_null
+      - name: model_favors_underdog
+        description: The value side is the market underdog and the model has it above 50%.
+        data_tests:
+          - not_null
+      - name: is_value_pick
+        description: Passes the value_* vars in dbt_project.yml.
+        data_tests:
+          - not_null
+      - name: value_rank
+        description: Order among one model's picks on one date, best expected value first. Null unless is_value_pick.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_null:
+              arguments:
+                row_condition: "not is_value_pick"
+          - not_null:
+              config:
+                where: "is_value_pick"
+      - name: value_won
+        description: Whether the value side won. Null until the game is Final.
+      - name: unit_profit
+        description: Profit on a one-unit bet at the consensus price. Null until the game is Final.
+        data_tests:
+          - not_null:
+              config:
+                where: "value_won is not null"

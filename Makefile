@@ -175,6 +175,11 @@ prod-ml-snapshot: ## Persist Elo ratings in production so they survive deleting 
 	$(MAKE) prod-pull-tools
 	COMPOSE="$(COMPOSE_PROD)" $(MAKE) ml-snapshot
 
+prod-ml-value: ## Production read-only value report (MODEL=, SINCE=, LIVE_ONLY=1 as for ml-value)
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-ml-value requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
+	$(MAKE) prod-pull-tools
+	COMPOSE="$(COMPOSE_PROD)" $(MAKE) ml-value
+
 # Drains source.admin_jobs. Runs on the host (cron/systemd), never in a
 # container: executing `make` needs the Docker socket, which the API must not
 # have. See docs/operations.md.
@@ -363,6 +368,10 @@ ml-snapshot: ## Persist Elo v0/v1 ratings so they survive deleting the seasons b
 
 ml-eval: ## Expanding-window logit v1 metrics against the Elo and always-home baselines
 	$(COMPOSE_RUN_TOOLS) ml python -m main eval-logit
+
+ml-value: ## Read-only report on the model's edge against the moneyline (MODEL=elo-v2, SINCE=2026-12-01, LIVE_ONLY=1)
+	$(COMPOSE_RUN_TOOLS) ml python -m main value-report $(if $(MODEL),--model $(MODEL),) \
+		$(if $(SINCE),--since $(SINCE),) $(if $(filter 1,$(LIVE_ONLY)),--live-only,)
 
 # fct_prediction_scorecard reads the source table directly, so `stg_game_predictions+`
 # (what `ml` rebuilds) would miss it; select everything downstream of the source.

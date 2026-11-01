@@ -101,7 +101,7 @@ exposures:
     label: Pregame win probability job
     type: ml
     maturity: medium
-    description: services/ml Elo and logit scoring. Reads features, schedule, results, and odds, and writes source.game_predictions, which feeds back in through stg_game_predictions.
+    description: services/ml Elo and logit scoring. Reads features, schedule, results, and odds, and writes source.game_predictions, which feeds back in through stg_game_predictions. The read-only value report reads fct_game_value.
     owner:
       name: jyablonski
     depends_on:
@@ -109,3 +109,5 @@ exposures:
       - ref('int_game_features')
       - ref('fct_team_game_results')
       - ref('fct_games_schedule')
+      - ref('fct_game_value')
+      - ref('fct_game_injury_scores')

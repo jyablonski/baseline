@@ -127,9 +127,15 @@ def test_score_writes_elo_and_logit_when_artifact_exists(monkeypatch: pytest.Mon
         lambda _session, _model, rows, _conflict: captured.extend(rows) or len(rows),
     )
     result = scoring.score_and_persist(as_of=datetime(2024, 10, 20, 12, 0, 0))
-    assert result["written"] == 4
-    assert {row["model_version"] for row in captured} == {"elo-v0", "elo-v1", "elo-v2", "logit-v1"}
-    assert result["model_versions"] == ["elo-v0", "elo-v1", "elo-v2", "logit-v1"]
+    assert result["written"] == 5
+    assert {row["model_version"] for row in captured} == {
+        "elo-v0",
+        "elo-v1",
+        "elo-v2",
+        "elo-v3",
+        "logit-v1",
+    }
+    assert result["model_versions"] == ["elo-v0", "elo-v1", "elo-v2", "elo-v3", "logit-v1"]
 
 
 @pytest.mark.unit
@@ -169,7 +175,7 @@ def test_score_writes_no_logit_row_before_cold_start_ends(
     )
     scoring.score_and_persist(as_of=datetime(2024, 10, 20, 12, 0, 0))
     # Nine games behind each team: the Elos score it, logit waits.
-    assert {row["model_version"] for row in captured} == {"elo-v0", "elo-v1", "elo-v2"}
+    assert {row["model_version"] for row in captured} == {"elo-v0", "elo-v1", "elo-v2", "elo-v3"}
     # Earlier cold-start logit rows are cleared too.
     session.execute.assert_any_call(
         DELETE_COLD_START_PREDICTIONS,
@@ -195,10 +201,11 @@ def test_load_game_contexts() -> None:
             "away_back_to_back": False,
             "home_notable_out": 2,
             "away_notable_out": 0,
+            "injury_score_diff": 12.5,
         }
     ]
     assert scoring.load_game_contexts(session) == {
-        UUID(int=7): GameContext(home_back_to_back=True, home_notable_out=2)
+        UUID(int=7): GameContext(home_back_to_back=True, home_notable_out=2, injury_score_diff=12.5)
     }
     assert session.execute.call_args.args == (SELECT_GAME_CONTEXT, {"recent_days": 14})
     # Recency reads only games before this one, never the game being predicted.

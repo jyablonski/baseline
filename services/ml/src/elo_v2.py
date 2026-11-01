@@ -22,7 +22,7 @@ the games it is graded on, which keeps `make ml-backfill` an honest replay.
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -49,6 +49,7 @@ class GameContext:
     away_back_to_back: bool = False
     home_notable_out: int = 0
     away_notable_out: int = 0
+    injury_score_diff: float = 0.0
 
 
 def features(base_prob: float, context: GameContext) -> Features:
@@ -58,6 +59,9 @@ def features(base_prob: float, context: GameContext) -> Features:
         float(context.home_back_to_back) - float(context.away_back_to_back),
         float(context.home_notable_out - context.away_notable_out),
     )
+
+
+FeatureFn = Callable[[float, GameContext], Features]
 
 
 def predict(weights: Weights, values: Features) -> float:
@@ -115,6 +119,8 @@ def walk_forward(
     games: Sequence[GameRow],
     base_probs: Sequence[float],
     contexts: Mapping[UUID, GameContext],
+    *,
+    feature_fn: FeatureFn = features,
 ) -> tuple[list[float], Weights]:
     """Predict each game from a layer fit on earlier dates, then learn from it.
 
@@ -136,7 +142,7 @@ def walk_forward(
         while day_end < len(games) and games[day_end].game_date == game_date:
             day_end += 1
         for game, base_prob in zip(games[index:day_end], base_probs[index:day_end], strict=True):
-            values = features(base_prob, contexts.get(game.game_id, GameContext()))
+            values = feature_fn(base_prob, contexts.get(game.game_id, GameContext()))
             preds.append(predict(weights, values))
             if game.home_won is not None:
                 samples.append((values, 1 if game.home_won else 0))
@@ -151,8 +157,10 @@ def score_games(
     base_probs: Sequence[float],
     contexts: Mapping[UUID, GameContext],
     weights: Weights,
+    *,
+    feature_fn: FeatureFn = features,
 ) -> list[float]:
     return [
-        predict(weights, features(base_prob, contexts.get(game.game_id, GameContext())))
+        predict(weights, feature_fn(base_prob, contexts.get(game.game_id, GameContext())))
         for game, base_prob in zip(games, base_probs, strict=True)
     ]

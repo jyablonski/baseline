@@ -2,7 +2,7 @@
 
 One-shot jobs on Compose profile `tools`: not always-on services, not a betting product.
 
-Four models score every game. **Elo v1** is the champion shown in production; **Elo v0**, **Elo v2** and **logit v1** run in shadow. `source.model_artifacts.is_champion` picks which one `gold.fct_game_predictions` surfaces. Promote from Admin › Models: it updates that row and queues a `dbt` job, and the schedule switches when the rebuild finishes, so promotion and rollback never need a backfill. The ml job scores every model and never changes the choice. A fresh database starts on Elo v0 (the migration seeds it).Plan and promotion criteria: `docs/plans/ml-v2.md`.
+Five models score every game. **Elo v1** is the champion shown in production; **Elo v0**, **Elo v2**, **Elo v3** and **logit v1** run in shadow. `source.model_artifacts.is_champion` picks which one `gold.fct_game_predictions` surfaces. Promote from Admin › Models: it updates that row and queues a `dbt` job, and the schedule switches when the rebuild finishes, so promotion and rollback never need a backfill. The ml job scores every model and never changes the choice. A fresh database starts on Elo v0 (the migration seeds it).Plan and promotion criteria: `docs/plans/ml-v2.md`.
 
 ## The models in plain English
 
@@ -38,7 +38,9 @@ No training, no player data: just a running score of who beat whom, and how unex
 
 Before each day's games it re-learns all three from that season's earlier results only. It starts the season as plain Elo v1 and needs a couple of hundred games before the corrections carry much weight, so the first few weeks look like v1.
 
-**Logit v1 (logistic regression, shadow).** A standard statistics model that weighs 11 pregame facts: point differential, win %, last-10 form, rest days, travel distance, time zones crossed, and head-to-head record. It learns each fact's weight from past games, then a correction step keeps its percentages honest. Until both teams have 10 games of history it makes no prediction at all, so its scorecard row only counts games it actually called.
+**Elo v3 (shadow).** Elo v2 with a better injury input. Elo v2 counts notable players ruled out; Elo v3 adds up the production of everyone on the morning report who has been playing lately, so losing a star costs more than losing a bench player, and Day To Day players count for 70%. Everything else matches Elo v2, so any gap between them comes from that one input.
+
+**Logit v1 (logistic regression, shadow). A standard statistics model that weighs 11 pregame facts: point differential, win %, last-10 form, rest days, travel distance, time zones crossed, and head-to-head record. It learns each fact's weight from past games, then a correction step keeps its percentages honest. Until both teams have 10 games of history it makes no prediction at all, so its scorecard row only counts games it actually called.
 
 ### Side by side
 
@@ -69,6 +71,8 @@ Elo v1 is the most accurate. Logit v1 is the best calibrated (its 70% means abou
 
 **Elo v2** (`src/elo_v2.py`, `model_version=elo-v2`) keeps Elo v1's ratings and puts a three-weight logistic layer on its pregame probability: `sigmoid(a · logit(v1) + b · back_to_back_diff + c · notable_out_diff)`, both differences home minus away. Back-to-back is one day of rest in `silver.int_game_features`; notable out counts `fct_game_injuries` rows that are `is_notable` and `Out` / `Out For Season`, the same rule as the schedule's injury chip, but only while the absence is new: the player must have logged minutes in the `RECENT_ABSENCE_DAYS` (14) before the game (`SELECT_GAME_CONTEXT`). A longer absence is already in the team's rating, so counting it would charge the team twice. Before each game date the weights are refit on the earlier Finals by Newton's method, with a Gaussian prior at (1, 0, 0) (plain Elo v1) of strength `PRIOR_STRENGTH` = 20. Nothing is fitted to the game being predicted, so `make ml-backfill` is a fair replay of what it would have published. Two caveats on that replay: a game with no injury snapshot (before the history began, or a missed scrape older than two days) counts as nobody out, and `is_notable` ranks players on the season's average game score to date, not as of that game, so a player who became a star later in the season reads as notable for earlier games too. Ratings still update on Elo v1's expectation, so v2 never changes v1's numbers. Promote it like v1: Admin › Models and a re-run.
 
+**Elo v3** (`src/elo_v3.py`, `model_version=elo-v3`) is Elo v2's layer with one input swapped: `sigmoid(a · logit(v1) + b · back_to_back_diff + c · injury_score_diff / 10)`. `injury_score_diff` comes from `gold.fct_game_injury_scores` ([data.md](data.md) under Injuries) and is built only from games before the one scored, so it avoids the `is_notable` caveat above. The fit, the prior and the replay rules are Elo v2's, so a game with no report counts as healthy, and the first week of a season scores 0 for everyone. It has the morning report's blind spot too. Promote it the same way, but add it to `MODEL_NOTES` and `usesInjuries` in `services/frontend/src/lib/predictions.ts` first.
+
 Playoffs are excluded from training and holdout. Odds are ingested daily but are **not** a feature of any model; they are only the `market_wp` reference.
 
 ## Running it
@@ -96,7 +100,7 @@ docker compose --profile tools run --rm --no-deps ml python -m main score
 
 ### Keeping models without their history
 
-Elo is refit from the loaded Finals on every run, so deleting a season would otherwise reset every team to 1500. `make ml-snapshot` (production: `make prod-ml-snapshot`) stores both Elos' end state in `source.model_artifacts` (`elo-v0`: ratings; `elo-v1`: ratings, games played this season, and the home win tally), with the season, date, and game count it runs through. Logit's artifact from `make ml-train` already persists. Elo v2 needs no snapshot: it reads Elo v1's, and its layer is relearned from the loaded Finals, starting from plain Elo v1 when there are none.
+Elo is refit from the loaded Finals on every run, so deleting a season would otherwise reset every team to 1500. `make ml-snapshot` (production: `make prod-ml-snapshot`) stores both Elos' end state in `source.model_artifacts` (`elo-v0`: ratings; `elo-v1`: ratings, games played this season, and the home win tally), with the season, date, and game count it runs through. Logit's artifact from `make ml-train` already persists. Elo v2 and v3 need no snapshot: they read Elo v1's, and their layers are relearned from the loaded Finals, starting from plain Elo v1 when there are none.
 
 - **Order:** load the season, `make dbt`, `make ml-train`, `make ml-snapshot`, then delete the season and rebuild.
 - **Used only when needed.** While every game behind a snapshot is still loaded, `score` and `backfill` walk the full history as before and ignore it. Once those games are gone they resume from the snapshot and walk only Finals dated after it, so the next season still starts from regressed ratings.
@@ -108,7 +112,7 @@ Elo is refit from the loaded Finals on every run, so deleting a season would oth
 `make ml-backfill` (production: `make prod-ml-backfill`) writes each loaded Regular Season Final's walk-forward pregame WP, stamped at midnight of game day, then rebuilds everything downstream of `source.game_predictions` so the scorecard grades it.
 
 - **`SEASON=2025-26`** limits what is written. Ratings still carry over from every loaded season; with no prior season, every team starts at 1500 and early months grade poorly.
-- **Elo only by default** (seconds): v0, v1 and v2. `LOGIT=1` adds logit via `eval-logit`'s blocks: refit before each 50-game block, no stored artifact, no row for the first block or for cold-start games. Refits cost ~2 minutes a season and grow faster than linearly; blocks outside `SEASON` are skipped.
+- **Elo only by default** (seconds): v0, v1, v2 and v3. `LOGIT=1` adds logit via `eval-logit`'s blocks: refit before each 50-game block, no stored artifact, no row for the first block or for cold-start games. Refits cost ~2 minutes a season and grow faster than linearly; blocks outside `SEASON` are skipped.
 - **Live predictions win.** A game with a real pregame prediction for a model version is skipped for that version, so the scorecard never grades a replay over what was published. That makes the production target safe: it only fills gaps, such as a new shadow model's history. It also means a change to a model's behaviour needs a new `model_version`: replaying under the old name leaves every live row in place.
 - **Idempotent:** upserts on `(game_id, model_version)`. `market_wp` is attached only where retained odds exist.
 
@@ -120,6 +124,26 @@ Elo is refit from the loaded Finals on every run, so deleting a season would oth
 - two-book h2h and spread odds for the first week (`odds_event_id` `demo-…`)
 
 Only the games and odds are fake; win % and scorecard are real model output. Rerun to roll the schedule forward. `make seed-demo-clean` removes the demo rows and rebuilds gold; backfilled predictions on real games stay.
+
+## Value against the moneyline
+
+`gold.fct_game_value` compares every model to the line on every game, and `make ml-value` (production: `make prod-ml-value`) grades it. The report is read-only and manual; nothing in the product reads either yet.
+
+- **Value side:** the team with the higher expected profit at the consensus price, vig included. Every game has one, even a bad bet. `edge_wp` is model minus de-vigged market; `expected_value` is model WP over the vigged price, minus 1, and ranks the picks.
+- **Picks:** `is_value_pick` applies the `value_*` vars in `dbt_project.yml`: edge between `value_min_edge` and `value_max_edge`, positive expected value, `value_min_team_games` for both teams, `value_min_bookmakers`, and market underdogs only while `value_underdog_only` is set. `model_favors_underdog` is the stricter old rule, the model above 50% on the underdog.
+- **Grading:** `unit_profit` is one unit at the consensus price, not the best price, because nobody holds every book. `value_best_moneyline` is reporting only.
+
+To tune, run the report, change the vars, rebuild with `make dbt`, and use `SINCE=<date of the change>` from then on. The vars apply to the whole table, so a change re-flags past games: the games that suggested a threshold cannot also prove it. `MODEL=elo-v2` details a shadow model, and `LIVE_ONLY=1` drops backfilled replays, which never existed before the game they grade.
+
+Read the report in this order:
+
+1. **Slope.** Fits `logit(win) = logit(market) + b * (logit(model) - logit(market))` over every graded game. Near 0, the market already holds what the model knows; near 1, the model should replace the market. It uses every game, so it answers sooner than ROI.
+2. **By edge.** A real edge earns more as it grows. Flat or falling means the big gaps are model misses.
+3. **Sweep and out of sample.** The best of 171 rules always looks good on the games that chose it. The out-of-sample block picks a rule on the earlier dates and grades it on the later ones, and that is the number to trust.
+
+ROI noise is about 1 / sqrt(n) per unit staked, so telling a 5% edge from zero takes around 1,000 bets, more than one season of picks. The line is the morning one and `source.game_odds` keeps only the latest row per event, so closing line value, the usual faster signal, cannot be measured. It would need a pre-tip scrape that keeps history.
+
+As of 2026-11-01, Elo v1 on 88 games: log loss 0.622 against the market's 0.569, slope -0.23 (standard error 0.40), and no swept rule with 20 or more bets was profitable. That is early-season Elo, which cannot see the offseason.
 
 ## Current surface and gaps
 

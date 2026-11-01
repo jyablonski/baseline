@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: int_game_moneylines
+    description: >
+      Bookmaker consensus of each game's retained h2h line, scheduled or Final.
+      With one morning scrape this is a morning line, not a true close. The
+      shared definition behind fct_game_upsets and fct_game_value.
+    config:
+      meta:
+        grain: One row per game with a captured pregame moneyline.
+    columns:
+      - name: game_id
+        description: Baseline game UUID.
+        data_tests:
+          - not_null
+          - unique
+      - name: home_market_wp
+        description: Bookmaker-average de-vigged home win probability.
+        data_tests:
+          - not_null
+      - name: home_implied_wp
+        description: Bookmaker-average home win probability with the vig left in. Prices a bet at the consensus.
+      - name: away_implied_wp
+        description: Bookmaker-average away win probability with the vig left in. Prices a bet at the consensus.
+      - name: home_best_moneyline
+        description: Best (highest) home price offered across bookmakers.
+      - name: away_best_moneyline
+        description: Best (highest) away price offered across bookmakers.
+      - name: bookmaker_count
+        description: Distinct bookmakers averaged into the line.
+      - name: commence_time
+        description: Earliest tip-off any bookmaker reported.
+      - name: line_scraped_at
+        description: When the newest row in the consensus was scraped.
