@@ -1,0 +1,55 @@
+version: 2
+
+models:
+  - name: fct_game_injury_scores
+    description: >
+      Everyone missing from each game rolled into one pregame number per side:
+      the summed average production of each listed player who has been playing
+      recently, weighted by how likely their status is to keep them out. Reads
+      only what was known before the game, from the same morning report as
+      fct_game_injuries, so late scratches are still missed. Elo v3 reads it.
+      A game missing from this table had no report, which is unknown rather
+      than a healthy game. Knobs are the injury_score_* vars.
+    config:
+      meta:
+        grain: One row per game with at least one player on its injury report.
+    columns:
+      - name: game_id
+        description: Baseline game UUID.
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('fct_games_schedule')
+                field: game_id
+      - name: snapshot_date
+        description: Injury report the game was scored from.
+        data_tests:
+          - not_null
+      - name: home_players_counted
+        description: Home players contributing to the score. Fewer than listed, because long absences and players with too few games don't count.
+        data_tests:
+          - not_null
+      - name: away_players_counted
+        description: Away players contributing to the score. Fewer than listed, because long absences and players with too few games don't count.
+        data_tests:
+          - not_null
+      - name: home_injury_score
+        description: Production the home team is expected to be missing, in mvp_box_score points per game.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+      - name: away_injury_score
+        description: Production the away team is expected to be missing, in mvp_box_score points per game.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+      - name: injury_score_diff
+        description: Home score minus away score. Positive means the home team is the more depleted side.
+        data_tests:
+          - not_null

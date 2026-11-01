@@ -332,7 +332,10 @@ INSERT INTO source.game_predictions (
     ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', '2024-10-26 12:00:00', 'elo', 'elo-v0',
      '7bf8726a-a852-452d-b81f-14839127c5fb', 'a96f53b4-0f5c-4cb6-8b88-21ba05224cae', 0.62, 0.58, NOW()),
     ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', '2024-10-24 12:00:00', 'elo', 'elo-v0',
-     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '7bf8726a-a852-452d-b81f-14839127c5fb', 0.47, 0.51, NOW());
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '7bf8726a-a852-452d-b81f-14839127c5fb', 0.47, 0.51, NOW()),
+    -- A shadow model's replay: midnight as_of, and it likes the underdog outright.
+    ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', '2024-10-25 00:00:00', 'elo', 'elo-v1',
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '7bf8726a-a852-452d-b81f-14839127c5fb', 0.55, 0.37, NOW());
 
 INSERT INTO source.reddit_posts (
     reddit_id, subreddit, title, author, score, num_comments, created_utc,

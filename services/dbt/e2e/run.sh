@@ -80,6 +80,7 @@ DECLARE
   cup_log_type text;
   position_check text;
   upset_check text;
+  value_check text;
   national_tv_check text;
   highlight_check text;
   back_to_back_check text;
@@ -501,6 +502,27 @@ BEGIN
     RAISE EXCEPTION 'unexpected game upsets: %', upset_check;
   END IF;
 
+  -- LAC at home on 10/25 for both models, the favorite GSW on the unplayed 10/27
+  -- game. The priced side pays the vig, so ev is below model / market - 1. The
+  -- seed is too short for the games gate, so nothing is a pick here.
+  SELECT string_agg(
+           game_date || ' ' || model_version || ' ' || value_team_abbreviation ||
+           ' edge=' || round(edge_wp::numeric, 2) || ' ev=' || round(expected_value::numeric, 2) ||
+           ' dog=' || is_market_underdog || ' fav=' || model_favors_underdog ||
+           ' champ=' || is_champion || ' replay=' || is_backfilled ||
+           ' pick=' || is_value_pick || ' won=' || coalesce(value_won::text, '-') ||
+           ' profit=' || coalesce(round(unit_profit::numeric, 2)::text, '-'),
+           ' | ' ORDER BY game_date, model_version)
+  INTO value_check
+  FROM gold.fct_game_value;
+  IF value_check IS DISTINCT FROM
+       '2024-10-25 elo-v0 LAC edge=0.10 ev=0.22 dog=true fav=false champ=true replay=false pick=false won=true profit=1.60'
+       ' | 2024-10-25 elo-v1 LAC edge=0.18 ev=0.43 dog=true fav=true champ=false replay=true pick=false won=true profit=1.60'
+       ' | 2024-10-27 elo-v0 GSW edge=0.04 ev=0.03 dog=false fav=false champ=true replay=false pick=false won=- profit=-'
+  THEN
+    RAISE EXCEPTION 'unexpected game value: %', value_check;
+  END IF;
+
   -- Each game's lead highlight. The seed is too short for season highs or
   -- streaks, so most games fall back to their top performer; Kawhi's 50-point
   -- Cup final and the playoff game with two 30-point scorers do not.
@@ -528,4 +550,47 @@ BEGIN
 END $$;
 SQL
 
+echo "==> asserting nobody scores before they have enough games"
+GATED="$("${PSQL[@]}" -Atc "SELECT sum(home_players_counted + away_players_counted) FROM gold.fct_game_injury_scores")"
+if [ "$GATED" != "0" ]; then
+  echo "expected no counted players with the default games gate, got: $GATED" >&2
+  exit 1
+fi
+
+echo "==> asserting value picks with the games and book gates opened"
+uv run dbt run --profiles-dir . --select fct_game_value fct_game_injury_scores \
+  --vars '{value_min_team_games: 0, value_min_bookmakers: 1, injury_score_min_games: 1}'
+PICKS="$("${PSQL[@]}" -Atc "
+  SELECT string_agg(game_date || ' ' || model_version || ' rank=' || value_rank, ' | ' ORDER BY game_date, model_version)
+  FROM gold.fct_game_value
+  WHERE is_value_pick")"
+if [ "$PICKS" != "2024-10-25 elo-v0 rank=1 | 2024-10-25 elo-v1 rank=1" ]; then
+  echo "unexpected value picks: $PICKS" >&2
+  exit 1
+fi
+
+echo "==> asserting injury scores with the games gate opened"
+SCORES="$("${PSQL[@]}" -Atc "
+  SELECT string_agg(
+    game_date || ' home=' || round(home_injury_score::numeric, 2) || '/' || home_players_counted ||
+    ' away=' || round(away_injury_score::numeric, 2) || '/' || away_players_counted ||
+    ' diff=' || round(injury_score_diff::numeric, 2),
+    ' | ' ORDER BY game_date)
+  FROM gold.fct_game_injury_scores")"
+if [ "$SCORES" != "2024-10-25 home=16.35/1 away=17.85/1 diff=-1.51 | 2024-10-30 home=24.30/1 away=0.00/0 diff=24.30" ]; then
+  echo "unexpected injury scores: $SCORES" >&2
+  exit 1
+fi
+
+echo "==> asserting a player out longer than the window stops counting"
+uv run dbt run --profiles-dir . --select fct_game_injury_scores \
+  --vars '{injury_score_min_games: 1, injury_score_recent_days: 4}'
+LONG_ABSENCE="$("${PSQL[@]}" -Atc "
+  SELECT round(home_injury_score::numeric, 2) || '/' || home_players_counted
+  FROM gold.fct_game_injury_scores
+  WHERE game_date = '2024-10-30'")"
+if [ "$LONG_ABSENCE" != "0.00/0" ]; then
+  echo "unexpected long absence score: $LONG_ABSENCE" >&2
+  exit 1
+fi
 echo "==> dbt e2e passed"

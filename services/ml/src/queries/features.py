@@ -39,7 +39,8 @@ SELECT_GAME_FEATURES = text(
 # meaning the player logged minutes in the :recent_days before the game: by the
 # time it is older the team's rating has absorbed it, and counting it again
 # would charge the team twice. A game before the injury history began has no
-# report and reads as zero out.
+# report and reads as zero out. Elo v3 reads injury_score_diff instead, which
+# reads as zero the same way.
 SELECT_GAME_CONTEXT = text(
     """
     WITH notable_out AS (
@@ -68,10 +69,13 @@ SELECT_GAME_CONTEXT = text(
         coalesce(int_game_features.home_rest_days = 1, false) AS home_back_to_back,
         coalesce(int_game_features.away_rest_days = 1, false) AS away_back_to_back,
         coalesce(notable_out.home_notable_out, 0) AS home_notable_out,
-        coalesce(notable_out.away_notable_out, 0) AS away_notable_out
+        coalesce(notable_out.away_notable_out, 0) AS away_notable_out,
+        coalesce(fct_game_injury_scores.injury_score_diff, 0) AS injury_score_diff
     FROM silver.int_game_features
     LEFT JOIN notable_out
         ON int_game_features.game_id = notable_out.game_id
+    LEFT JOIN gold.fct_game_injury_scores
+        ON int_game_features.game_id = fct_game_injury_scores.game_id
     WHERE int_game_features.season_type = 'Regular Season'
     """
 )

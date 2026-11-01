@@ -1,6 +1,6 @@
 # MCP
 
-`services/mcp` exposes NBA analytics as MCP tools for LLM hosts like Claude Desktop, so an agent can query the warehouse without writing SQL.
+`services/mcp` exposes NBA analytics as MCP tools for developers, so an agent can query the warehouse without writing SQL.
 
 It is a FastMCP server over the Cube semantic layer. Ask and the signed-in chat use the same named operations — see [ask.md](ask.md).
 
@@ -8,7 +8,7 @@ It is a FastMCP server over the Cube semantic layer. Ask and the signed-in chat 
 
 The tools are not defined in `services/mcp`. They live in `lib/baseline-analytics` (`baseline_analytics.tools`): one `ToolSpec` per tool, with its name, description, JSON-schema parameters, and handler. Two things read that list:
 
-- **The MCP server** registers every entry with FastMCP, for outside clients such as Claude Desktop.
+- **The MCP server** registers every entry with FastMCP, for outside clients such as Claude Code.
 - **The API's LLM adapter** (`services/api/src/services/nlp/llm_tools.py`) sends the same entries to the model as function tools, for `/chat` and for `/ask` when `NLP_BACKEND=llm`. Chat withholds `get_reddit_posts`.
 
 The API does not call the MCP server, and the model provider is never handed the MCP URL. The API runs each tool itself, in-process, so it can cap the rows the model sees, cap tool rounds, and show the rows under the answer. Both surfaces go through the same `CubeAnalytics` operations and the same Cube client in the same package, so a tool or filter added once reaches both.

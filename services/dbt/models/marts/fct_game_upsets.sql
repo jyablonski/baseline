@@ -1,5 +1,5 @@
-with odds as (
-    select * from {{ ref('stg_game_odds') }}
+with consensus_lines as (
+    select * from {{ ref('int_game_moneylines') }}
 ),
 
 results as (
@@ -8,25 +8,6 @@ results as (
 
 predictions as (
     select * from {{ ref('fct_game_predictions') }}
-),
-
--- source.game_odds keeps the last pregame line per event x book x market, so
--- every row for a Final game is already its closing-ish line.
-consensus_lines as (
-    select
-        odds.game_id,
-        avg(odds.home_market_wp) as home_market_wp,
-        max(odds.home_price) as home_best_moneyline,
-        max(odds.away_price) as away_best_moneyline,
-        count(distinct odds.bookmaker)::integer as bookmaker_count,
-        min(odds.commence_time) as commence_time,
-        max(odds.scraped_at) as line_scraped_at
-    from odds
-    where
-        odds.market = 'h2h'
-        and odds.game_id is not null
-        and odds.home_market_wp is not null
-    group by odds.game_id
 ),
 
 lined_games as (

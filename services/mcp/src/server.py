@@ -1,10 +1,5 @@
 """NBA Analytics MCP server.
 
-Claude Desktop (claude_desktop_config.json):
-  command: uv
-  args: ["--directory", "/path/to/nba-platform/services/mcp", "run", "src/server.py"]
-  env: {"CUBE_API_URL": "http://localhost:4000", "CUBEJS_API_SECRET": "your-cube-secret"}
-
 Production Compose sets MCP_TRANSPORT=streamable-http and serves /mcp on port 8000
 inside the container. HTTP clients must send Authorization: Bearer $MCP_API_TOKEN.
 """

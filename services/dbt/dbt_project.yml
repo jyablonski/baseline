@@ -82,6 +82,25 @@ vars:
   # says nothing about a game a month away. Mirrored by UPCOMING_REPORT_DAYS in
   # services/frontend/src/components/games/game-injuries.tsx: change both.
   injury_upcoming_days: 7
+  # Injury score knobs (fct_game_injury_scores). Share of a player's production
+  # counted when Day To Day: they sat about 7 times in 10 in early 2026-27.
+  injury_score_day_to_day_weight: 0.7
+  # Games this season before a player counts, and how recently they must have
+  # played: a longer absence is already in the team's results.
+  injury_score_min_games: 3
+  injury_score_recent_days: 14
+
+  # Value pick knobs (fct_game_value). Starting guesses, not fitted values:
+  # `make ml-value` shows what the results support, and a change re-flags past
+  # games, so only games after it are a fair test.
+  value_min_edge: 0.05
+  # A gap wider than this is more likely a model miss (stale ratings, an injury
+  # it can't see) than a market miss.
+  value_max_edge: 0.20
+  # Elo starts the season on last year's ratings and misses the offseason.
+  value_min_team_games: 10
+  value_min_bookmakers: 3
+  value_underdog_only: true
 
 models:
   nba_analytics:

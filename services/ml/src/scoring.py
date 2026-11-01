@@ -13,6 +13,10 @@ from elo_v2 import MODEL_VERSION as ELO_V2_MODEL_VERSION
 from elo_v2 import RECENT_ABSENCE_DAYS, GameContext
 from elo_v2 import score_games as score_games_v2
 from elo_v2 import walk_forward as walk_forward_v2
+from elo_v3 import MODEL_NAME as ELO_V3_MODEL_NAME
+from elo_v3 import MODEL_VERSION as ELO_V3_MODEL_VERSION
+from elo_v3 import score_games as score_games_v3
+from elo_v3 import walk_forward as walk_forward_v3
 from logit import (
     FEATURE_NAMES,
     FeatureRow,
@@ -122,6 +126,7 @@ def load_game_contexts(session: Session) -> dict[UUID, GameContext]:
             away_back_to_back=bool(row["away_back_to_back"]),
             home_notable_out=int(row["home_notable_out"]),
             away_notable_out=int(row["away_notable_out"]),
+            injury_score_diff=float(row["injury_score_diff"]),
         )
         for row in rows
     }
@@ -308,10 +313,11 @@ def snapshot_elo(*, trained_at: datetime | None = None) -> dict[str, Any]:
 
 
 def register_elo_models(session: Session) -> None:
-    """Registry rows so /admin can promote elo-v1 or elo-v2. Elo has no artifact."""
+    """Registry rows so /admin can promote any Elo past v0. Elo has no artifact."""
     for version, name in (
         (ELO_V1_MODEL_VERSION, ELO_V1_MODEL_NAME),
         (ELO_V2_MODEL_VERSION, ELO_V2_MODEL_NAME),
+        (ELO_V3_MODEL_VERSION, ELO_V3_MODEL_NAME),
     ):
         session.execute(
             REGISTER_MODEL,
@@ -452,6 +458,17 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
                 model_version=ELO_V2_MODEL_VERSION,
             )
         )
+        _v3_preds, v3_weights = walk_forward_v3(v1_games, v1_preds, contexts)
+        rows.extend(
+            build_prediction_rows(
+                upcoming,
+                score_games_v3(upcoming, v1_probs, contexts, v3_weights),
+                market,
+                as_of=scored_at,
+                model_name=ELO_V3_MODEL_NAME,
+                model_version=ELO_V3_MODEL_VERSION,
+            )
+        )
         logit_version = settings.logit_model_version or DEFAULT_LOGIT_MODEL_VERSION
         logit_artifact = load_model_artifact(session, logit_version)
         if logit_artifact is not None:
@@ -493,7 +510,12 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
         "written": written,
         "model_name": MODEL_NAME,
         "model_version": MODEL_VERSION,
-        "model_versions": [MODEL_VERSION, ELO_V1_MODEL_VERSION, ELO_V2_MODEL_VERSION]
+        "model_versions": [
+            MODEL_VERSION,
+            ELO_V1_MODEL_VERSION,
+            ELO_V2_MODEL_VERSION,
+            ELO_V3_MODEL_VERSION,
+        ]
         + ([logit_version] if logit_artifact is not None else []),
         "as_of": scored_at.isoformat(),
     }
@@ -554,7 +576,7 @@ def build_backfill_rows(
     Both Elos walk every loaded season so ratings carry over (regressed) into
     the target one, starting from a stored snapshot when the seasons behind it
     are no longer loaded. Elo v2 layers on Elo v1's walk with each game's
-    `contexts`. Logit is opt-in because it refits per 50-game block (the same
+    `contexts`, and Elo v3 likewise. Logit is opt-in because it refits per 50-game block (the same
     blocks as `eval-logit`), which is by far the slow part; cold-start games and
     those in the first block (nothing to train on) get no logit row. Any (game,
     model_version) in `live` already has a real pregame prediction and is left
@@ -563,6 +585,7 @@ def build_backfill_rows(
     v0_games, v0_probs, _ratings = walk_elo_v0(history, v0_seed)
     v1_games, v1_probs, _state = walk_elo_v1(history, v1_seed)
     v2_probs, _weights = walk_forward_v2(v1_games, v1_probs, contexts or {})
+    v3_probs, _v3_weights = walk_forward_v3(v1_games, v1_probs, contexts or {})
     rows = [
         *build_graded_rows(
             list(zip(v0_games, v0_probs, strict=True)),
@@ -585,6 +608,14 @@ def build_backfill_rows(
             market_wp,
             model_name=ELO_V2_MODEL_NAME,
             model_version=ELO_V2_MODEL_VERSION,
+            season=season,
+            scraped_at=scraped_at,
+        ),
+        *build_graded_rows(
+            list(zip(v1_games, v3_probs, strict=True)),
+            market_wp,
+            model_name=ELO_V3_MODEL_NAME,
+            model_version=ELO_V3_MODEL_VERSION,
             season=season,
             scraped_at=scraped_at,
         ),

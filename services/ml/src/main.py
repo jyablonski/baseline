@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 import click
+from value import value_report
 
 from scoring import (
     backfill_and_persist,
@@ -101,6 +103,29 @@ def snapshot_elo_cmd() -> None:
     click.echo(f"games={result['games']}")
     click.echo(f"teams={result['teams']}")
     click.echo(f"trained_at={result['trained_at']}")
+
+
+@cli.command("value-report")
+@click.option("--model", default=None, help="Model version to detail; default the champion.")
+@click.option("--min-bets", default=20, show_default=True, help="Fewest bets for a swept rule.")
+@click.option(
+    "--since",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    default=None,
+    help="Only games on or after this date: the day the thresholds last changed.",
+)
+@click.option("--live-only", is_flag=True, help="Drop backfilled replays.")
+def value_report_cmd(
+    model: str | None, min_bets: int, since: datetime | None, live_only: bool
+) -> None:
+    """Grade the model's edge against the moneyline. Reads gold, writes nothing."""
+    lines = value_report(
+        model=model,
+        min_bets=min_bets,
+        since=since.date() if since else None,
+        live_only=live_only,
+    )
+    click.echo("\n".join(lines))
 
 
 def main() -> None:
