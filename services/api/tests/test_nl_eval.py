@@ -134,17 +134,38 @@ class FakeCubeAnalytics:
             },
         }
 
-    def get_team_flow(self, team_abbreviation: str, season: str | None = None) -> dict:
+    def get_team_flow(
+        self, team_abbreviation: str, season: str | None = None, min_margin: int | None = None
+    ) -> dict:
         team = self.find_team(team_abbreviation)
-        return {
+        flow = {
             "abbreviation": team_abbreviation,
             "team_name": team["team_name"] if team else None,
             "games": 82,
+            "min_margin": 10,
             "blown_leads": 3,
             "biggest_lead_blown": 21,
             "comeback_wins": 2,
             "biggest_comeback": 17,
             "filters_applied": {"team_abbreviation": team_abbreviation, "season": season},
+        }
+        if min_margin is None:
+            return flow
+        comebacks = [
+            {
+                "game_date": "2026-10-25",
+                "opponent_abbreviation": "UTA",
+                "location": "home",
+                "margin": 17,
+            },
+        ]
+        return {
+            **flow,
+            "min_margin": min_margin,
+            "blown_leads": 0,
+            "comeback_wins": len(comebacks),
+            "blown_lead_games": [],
+            "comeback_games": comebacks,
         }
 
     def list_standings(
@@ -710,6 +731,73 @@ def test_blown_leads_family() -> None:
     assert response.data[0]["blown_leads"] == 3
     assert response.data[0]["biggest_lead_blown"] == 21
     assert response.sql is not None and "team_game_flow" in response.sql
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "question",
+    [
+        "How many leads have the Lakers comeback from?",
+        "Lakers comebacks",
+        "Have the Lakers come back from 15 down?",
+        "Did the Lakers rally from a 20 point deficit?",
+        "Lakers biggest deficit overcome",
+    ],
+)
+def test_comeback_questions_reach_the_flow_family(question: str) -> None:
+    engine = NaturalLanguageQueryService(FakeCubeAnalytics())
+    assert engine.classify(question) == "blown_leads"
+
+
+@pytest.mark.unit
+def test_come_back_home_is_not_a_comeback() -> None:
+    engine = NaturalLanguageQueryService(FakeCubeAnalytics())
+    assert engine.classify("When do the Lakers come back home?") == "refuse"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("question", "margin"),
+    [
+        ("Lakers comebacks from 15 or more", 15),
+        ("Have the Lakers blown a lead by 20?", 20),
+        ("Lakers blown 25+ point leads", 25),
+        ("Lakers comebacks from 18 down", 18),
+        ("Have the Lakers blown a 12-point lead?", 12),
+        ("Have the Lakers come back from more than 15 down?", 16),
+        ("Lakers blown leads over 20", 21),
+        ("Lakers blown leads in 2025-26", None),
+        ("Lakers blown leads", None),
+    ],
+)
+def test_flow_margin_extraction(question: str, margin: int | None) -> None:
+    from services.nl_query import _extract_flow_margin
+
+    assert _extract_flow_margin(question) == margin
+
+
+@pytest.mark.unit
+def test_comeback_answer_leads_with_comebacks_at_the_asked_margin() -> None:
+    engine = NaturalLanguageQueryService(FakeCubeAnalytics())
+    response = engine.answer("How many times have the Lakers come back from 15 or more?")
+    assert response.answer.startswith(
+        "The Lakers won 1 game after trailing by 15 or more (17 vs UTA on Oct 25)"
+    )
+    assert "They blew 0 leads of 15 or more" in response.answer
+    assert response.value == "1 game"
+    assert response.data[0]["min_margin"] == 15
+    assert response.sql is not None and "min_margin=15" in response.sql
+    assert "How many leads have the Lakers blown?" in response.follow_ups
+
+
+@pytest.mark.unit
+def test_comeback_answer_without_a_margin_uses_ten() -> None:
+    engine = NaturalLanguageQueryService(FakeCubeAnalytics())
+    response = engine.answer("How many leads have the Lakers comeback from?")
+    assert response.answer.startswith(
+        "The Lakers won 2 games after trailing by 10 or more, the largest from 17 down."
+    )
+    assert "blew 3 double-digit leads" in response.answer
 
 
 @pytest.mark.unit

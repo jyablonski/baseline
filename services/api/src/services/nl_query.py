@@ -8,6 +8,7 @@ is a Cube member plus one intent — not a new gold SQL string.
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
 
 from baseline_analytics.errors import CubeError
@@ -152,12 +153,28 @@ _PAYROLL = re.compile(r"\bpayroll\b", re.IGNORECASE)
 # The last two alternatives catch the split phrasing "how many leads have the
 # Lakers blown", where the noun and the participle are not adjacent.
 _BLOWN_LEADS = re.compile(
-    r"\b(blown\s+leads?|blew\s+(?:a\s+|the\s+)?lead|collapses?|"
-    r"comeback\s+wins?|came\s+back|choked)\b"
+    r"\b(blown\s+leads?|blew\s+(?:a\s+|the\s+)?lead|collapses?|choked)\b"
     r"|\bleads?\b[^?.]*\bblown\b"
     r"|\bblown\b[^?.]*\bleads?\b",
     re.IGNORECASE,
 )
+# Comeback phrasing, routed to the same flow family; it decides which side of
+# the answer leads. "come back home" is about the schedule, not a deficit.
+_COMEBACK = re.compile(
+    r"\b(?:comebacks?|come\s+back(?!\s+home)|came\s+back|coming\s+back|"
+    r"rall(?:y|ied|ies)\s+from|overc[ao]me|erased?\s+(?:a\s+)?(?:\d+\s*-?\s*point\s+)?deficits?|"
+    r"(?:biggest|largest)\s+deficits?)\b",
+    re.IGNORECASE,
+)
+# "by 15", "of 20", "from 18 down", "15+", "20 or more", "a 15-point lead"; "more
+# than 15" / "over 15" mean 16 or more. Two digits at most and a word boundary,
+# so "2025-26" never reads as a margin.
+_FLOW_MARGIN = re.compile(
+    r"\b(?:(more\s+than|over)|by|of|from|at\s+least)\s+(\d{1,2})\b(?!\s*-\s*\d)"
+    r"|\b(\d{1,2})(?:\s*\+|\s*-?\s*(?:points?|pts?)\b|\s+or\s+more\b|\s+down\b)",
+    re.IGNORECASE,
+)
+_MAX_FLOW_MARGIN = 60
 _SEASON_STATS = re.compile(
     r"("
     r"(?:ppg|rpg|apg|points?\s+per\s+game|rebounds?\s+per\s+game|assists?\s+per\s+game)"
@@ -222,10 +239,10 @@ _NOT_CITIES = frozenset({"home", "road", "the road"})
 _CAPABILITY = (
     "I can answer back-to-back questions, player compares, "
     "team win percentage filtered by arena city, team head-to-head records, "
-    "blown leads, salary/payroll snapshots, "
+    "blown leads and comebacks, salary/payroll snapshots, "
     "standings, win streaks, and per-season averages "
     "(e.g. Kawhi B2Bs, LeBron vs Curry, Warriors in Chicago, Blazers vs Lakers, "
-    "Lakers blown leads, "
+    "Lakers blown leads, Celtics comebacks from 15+, "
     "Curry salary, Warriors payroll, who leads the West, longest win streak, "
     "Curry PPG by season). "
 )
@@ -292,6 +309,7 @@ _FLOW_ASK_KEYS = (
     "abbreviation",
     "team_name",
     "games",
+    "min_margin",
     "blown_leads",
     "biggest_lead_blown",
     "comeback_wins",
@@ -399,7 +417,7 @@ class NaturalLanguageQueryService:
                 return "team_h2h"
             if _COMPARE.search(text):
                 return "compare"
-        if _BLOWN_LEADS.search(text):
+        if _BLOWN_LEADS.search(text) or _COMEBACK.search(text):
             return "blown_leads"
         if _WIN_PCT.search(text) or (
             self._extract_team_abbr(text)
@@ -1051,7 +1069,8 @@ class NaturalLanguageQueryService:
         abbr = self._extract_team_abbr(question)
         if not abbr:
             return self._missing_team(
-                question, "Name a team to see its blown leads, e.g. 'Lakers blown leads'."
+                question,
+                "Name a team to see its blown leads and comebacks, e.g. 'Lakers blown leads'.",
             )
         team = self.cube.find_team(abbr)
         if team is None:
@@ -1061,42 +1080,51 @@ class NaturalLanguageQueryService:
                 sql=None,
             )
         season = self._resolve_season(question, header_season)
-        flow = self.cube.get_team_flow(abbr, season=season)
+        min_margin = _extract_flow_margin(question)
+        flow = self.cube.get_team_flow(abbr, season=season, min_margin=min_margin)
         season_label = f" in {season}" if season else ""
         full_name = str(flow.get("team_name") or team.get("team_name") or abbr)
         name = _short_team_name(full_name)
-        entities = self._entities(("team", full_name), ("topic", "Blown leads"))
+        wants_comebacks = bool(_COMEBACK.search(question)) and not _BLOWN_LEADS.search(question)
+        topic = "Comebacks" if wants_comebacks else "Blown leads"
+        entities = self._entities(("team", full_name), ("topic", topic))
+        other_topic = (
+            f"How many leads have the {name} blown?"
+            if wants_comebacks
+            else f"{name} comebacks from 15 or more"
+        )
         follow_ups = self._team_follow_ups(
-            name, abbr, [f"{name} record", f"{name} record at home", f"{name} payroll"]
+            name, abbr, [other_topic, f"{name} record", f"{name} record at home"]
+        )
+        sql = f"cube:team_game_flow team={abbr} season={season!r}" + (
+            f" min_margin={min_margin}" if min_margin is not None else ""
         )
         if not flow.get("games"):
             return QueryResponse(
                 answer=f"The {name} haven't played a game yet{season_label}.",
                 data=[],
-                sql=f"cube:team_game_flow team={abbr} season={season!r}",
+                sql=sql,
                 entities=entities,
                 follow_ups=follow_ups,
             )
-        blown = flow["blown_leads"]
-        biggest = flow.get("biggest_lead_blown")
-        # A "blown lead" is a loss after leading by 10+, so the biggest one is
-        # only worth quoting when there was at least one.
-        biggest_label = f", the largest {biggest} points" if blown and biggest else ""
-        value = f"{blown} double-digit lead{'' if blown == 1 else 's'}"
-        answer = (
-            f"The {name} blew {value}{season_label}{biggest_label}. "
-            f"They won {flow['comeback_wins']} game"
-            f"{'' if flow['comeback_wins'] == 1 else 's'} after trailing by 10 or more"
-        )
-        if flow.get("comeback_wins") and flow.get("biggest_comeback"):
-            answer += f", the largest from {flow['biggest_comeback']} down"
+        margin = int(flow.get("min_margin") or 10)
+        blown_line = _blown_line(flow, margin)
+        comeback_line = _comeback_line(flow, margin)
+        if wants_comebacks:
+            answer = f"The {name} {comeback_line}{season_label}. They {blown_line}"
+            count = flow["comeback_wins"]
+            value = f"{count} game{'' if count == 1 else 's'}"
+        else:
+            answer = f"The {name} {blown_line}{season_label}. They {comeback_line}"
+            count = flow["blown_leads"]
+            value = _leads_phrase(count, margin)
         answer += f", across {flow['games']} games."
         payload = self._ask_row(flow, _FLOW_ASK_KEYS)
         return QueryResponse(
             answer=answer,
             value=value,
             data=[payload],
-            sql=f"cube:team_game_flow team={abbr} season={season!r}",
+            sql=sql,
             entities=entities,
             follow_ups=follow_ups,
             show_data=False,
@@ -1359,3 +1387,63 @@ class NaturalLanguageQueryService:
             follow_ups=follow_ups,
             show_data=False,
         )
+
+
+def _extract_flow_margin(question: str) -> int | None:
+    """The point margin a flow question names, or None for the default 10."""
+    match = _FLOW_MARGIN.search(question)
+    if not match:
+        return None
+    margin = int(match.group(2) or match.group(3)) + (1 if match.group(1) else 0)
+    return margin if 1 <= margin <= _MAX_FLOW_MARGIN else None
+
+
+def _leads_phrase(count: int, margin: int) -> str:
+    """'3 double-digit leads' at the default margin, '1 lead of 15 or more' otherwise."""
+    noun = "lead" if count == 1 else "leads"
+    return f"{count} double-digit {noun}" if margin == 10 else f"{count} {noun} of {margin} or more"
+
+
+def _flow_game_list(games: list[dict[str, Any]], limit: int = 3) -> str:
+    """'22 vs UTA on Oct 25, 16 @ BOS on Nov 1' for the biggest few games."""
+    parts = []
+    for game in games[:limit]:
+        where = "vs" if game.get("location") == "home" else "@"
+        when = _short_game_date(game.get("game_date"))
+        parts.append(
+            f"{game['margin']} {where} {game.get('opponent_abbreviation') or '?'}"
+            + (f" on {when}" if when else "")
+        )
+    return ", ".join(parts)
+
+
+def _short_game_date(value: Any) -> str | None:
+    if not value:
+        return None
+    try:
+        parsed = date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+    return f"{parsed:%b} {parsed.day}"
+
+
+def _blown_line(flow: dict[str, Any], margin: int) -> str:
+    count = flow["blown_leads"]
+    line = f"blew {_leads_phrase(count, margin)}"
+    games = flow.get("blown_lead_games")
+    if count and games:
+        line += f" ({_flow_game_list(games)})"
+    elif count and flow.get("biggest_lead_blown"):
+        line += f", the largest {flow['biggest_lead_blown']} points"
+    return line
+
+
+def _comeback_line(flow: dict[str, Any], margin: int) -> str:
+    count = flow["comeback_wins"]
+    line = f"won {count} game{'' if count == 1 else 's'} after trailing by {margin} or more"
+    games = flow.get("comeback_games")
+    if count and games:
+        line += f" ({_flow_game_list(games)})"
+    elif count and flow.get("biggest_comeback"):
+        line += f", the largest from {flow['biggest_comeback']} down"
+    return line

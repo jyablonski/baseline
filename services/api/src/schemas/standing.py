@@ -25,6 +25,11 @@ class StandingRow(BaseModel):
     streak: str | None = None
     last_10: str | None = None
     record_source: str | None = None
+    # Season ratings from fct_team_stat_splits; null until the team has a game
+    # with the rebound split, or for a season other than the current one.
+    offensive_rating: float | None = None
+    defensive_rating: float | None = None
+    net_rating: float | None = None
 
 
 class StandingSummary(BaseModel):

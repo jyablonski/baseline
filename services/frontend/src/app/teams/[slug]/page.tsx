@@ -2,22 +2,28 @@
 
 import { Suspense, useEffect } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
-import { InjuryList } from "@/components/injuries/injury-list";
 import { CapPosition } from "@/components/teams/cap-position";
 import { SeasonCalendar } from "@/components/teams/season-calendar";
+import { TeamOverview } from "@/components/teams/team-overview";
+import { TeamRoster } from "@/components/teams/team-roster";
+import { TeamStats } from "@/components/teams/team-stats";
+import { TeamTabs } from "@/components/teams/team-tabs";
 import { TransactionList } from "@/components/transactions/transaction-list";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamLogo } from "@/components/team-logo";
 import { useProfile } from "@/hooks/use-profile";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
-import { slugifyName, teamHref, withSeason } from "@/lib/nav";
-import { formatGamesBack, formatOrdinal, formatRecord, formatRecordWithWinPct } from "@/lib/format";
-import { lastTenFromGames, showsPlayIn, showsPlayoffs, streakFromGames } from "@/lib/team-form";
-import type { PlayerInjury, TeamSeasonGame } from "@/lib/types";
+import { slugifyName, teamHref } from "@/lib/nav";
+import { formatOrdinal, formatRecord, formatWeekdayDate, isoDateET } from "@/lib/format";
+import { isOut, lastGames, nextGame, parseTeamTab, teamTabHref } from "@/lib/team-page";
+import { showsPlayIn, showsPlayoffs, streakFromGames } from "@/lib/team-form";
+import { formatGameTime } from "@/lib/timezones";
+import type { TeamSeasonGame } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export default function TeamProfilePage() {
   return (
@@ -30,6 +36,9 @@ export default function TeamProfilePage() {
 function TeamProfile() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tab = parseTeamTab(searchParams.get("tab"));
   const routeSlug = params.slug;
   const { season, isLoading: seasonsLoading } = useSeason();
   const { timezone } = useProfile();
@@ -53,32 +62,32 @@ function TeamProfile() {
 
   useEffect(() => {
     if (team && routeSlug !== slugifyName(team.team_name)) {
-      router.replace(withSeason(teamHref(team.team_name), season));
+      router.replace(
+        teamTabHref(teamHref(team.team_name), new URLSearchParams(season ? { season } : {}), tab)
+      );
     }
-  }, [routeSlug, router, season, team]);
+  }, [routeSlug, router, season, tab, team]);
 
   const seasonGamesQuery = useQuery({
     queryKey: ["team", teamId, "season-games", season],
     queryFn: () => api.getTeamSeasonGames(teamId, { season: season || undefined }),
     enabled: Boolean(teamId) && !seasonsLoading,
   });
+  // Always loaded: the Roster badge counts who is out, whichever tab is open.
   const injuriesQuery = useQuery({
     queryKey: ["team", teamId, "injuries"],
     queryFn: () => api.listInjuries({ team_id: teamId }),
     enabled: Boolean(teamId),
   });
-  const standing = team?.standing;
-  const headerSeason = team?.record_season;
-  const needsForm = Boolean(headerSeason && (!standing?.last_10 || !standing?.streak));
-  const formQuery = useQuery({
-    queryKey: ["team", teamId, "form", headerSeason],
-    queryFn: () =>
-      api.getTeamGames(teamId, {
-        season: headerSeason ?? undefined,
-        season_type: "Regular Season",
-        limit: 10,
-      }),
-    enabled: Boolean(teamId) && needsForm,
+  const statsQuery = useQuery({
+    queryKey: ["team", teamId, "stats"],
+    queryFn: () => api.getTeamStats(teamId),
+    enabled: Boolean(teamId) && (tab === "overview" || tab === "stats"),
+  });
+  const rosterQuery = useQuery({
+    queryKey: ["team", teamId, "roster"],
+    queryFn: () => api.getTeamRoster(teamId),
+    enabled: Boolean(teamId) && tab === "roster",
   });
 
   if (teamsQuery.isLoading) {
@@ -105,30 +114,29 @@ function TeamProfile() {
     );
   }
 
+  const standing = team.standing;
   const headerRecord = team.season_record;
-  const last10 = standing?.last_10 || lastTenFromGames(formQuery.data?.data ?? []);
-  const streak = standing?.streak || streakFromGames(formQuery.data?.data ?? []);
-  const hasSeasonGames = (team.season_record?.games ?? 0) > 0;
+  const seasonGames = seasonGamesQuery.data?.data ?? [];
+  const regularSeasonGames = seasonGames.filter(
+    (game) => (game.season_type ?? "Regular Season") === "Regular Season"
+  );
+  const streak =
+    standing?.streak || streakFromGames(lastGames(regularSeasonGames, regularSeasonGames.length));
+  const hasSeasonGames = (headerRecord?.games ?? 0) > 0;
   const rankLine =
     hasSeasonGames && standing?.conference_rank != null
       ? `${formatOrdinal(standing.conference_rank)} in ${standing.conference}`
       : null;
-  const gamesBack = hasSeasonGames ? formatGamesBack(standing?.games_back) : "—";
-  const rsSubline = [
-    headerRecord?.games != null ? `${headerRecord.games} games` : null,
-    rankLine,
-    gamesBack !== "—" ? gamesBack : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  // TeamRecord.games is optional; a missing count reads as zero so the KPI hides.
+  // TeamRecord.games is optional; a missing count reads as zero so the item hides.
   const playInGames = team.play_in_record?.games ?? 0;
   const playoffGames = team.playoff_record?.games ?? 0;
-  const seasonGames = seasonGamesQuery.data?.data ?? [];
+  const upcoming = nextGame(seasonGames, isoDateET());
+  const injuries = injuriesQuery.data?.data;
+  const outCount = (injuries ?? []).filter(isOut).length;
+  const seasonStats = statsQuery.data?.data.find((row) => row.split === "season") ?? null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <p className="text-xs text-muted-foreground">
         <Link href="/teams" className="hover:text-foreground">
           Teams
@@ -137,162 +145,170 @@ function TeamProfile() {
         {team.team_name}
       </p>
 
-      <div className="flex flex-wrap items-start justify-between gap-6">
-        <div>
-          <h1 className="type-entity flex items-center gap-3">
-            <TeamLogo teamId={team.team_id} abbreviation={team.abbreviation} size={36} />
-            <span>{team.team_name}</span>
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {[
-              team.abbreviation,
-              team.conference,
-              [team.arena_name, team.city].filter(Boolean).join(", ") || null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
+      <div className="flex flex-wrap items-end justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <TeamLogo teamId={team.team_id} abbreviation={team.abbreviation} size={56} />
+          <div>
+            <h1 className="type-entity">{team.team_name}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {[
+                team.abbreviation,
+                team.conference,
+                [team.arena_name, team.city].filter(Boolean).join(", ") || null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
         </div>
         <dl
           data-testid="team-season-kpis"
-          className="flex flex-wrap items-start justify-end gap-x-2 gap-y-4"
+          className="flex flex-wrap items-baseline justify-end gap-y-2 text-sm text-ink-2"
         >
-          <SeasonKpi
-            testId="team-kpi-regular-season"
-            label={`${headerSeason || "Season"} Regular Season`}
-            value={
-              headerRecord
-                ? formatRecordWithWinPct(
-                    headerRecord.wins,
-                    headerRecord.losses,
-                    headerRecord.win_pct
-                  )
-                : "—"
-            }
-            subtext={rsSubline}
-          />
+          <HeaderItem
+            testId="team-kpi-record"
+            label={[team.record_season, "Regular Season record"].filter(Boolean).join(" ")}
+          >
+            <span className="text-2xl font-semibold text-foreground tabular">
+              {headerRecord ? formatRecord(headerRecord.wins, headerRecord.losses) : "—"}
+            </span>
+            {rankLine ? <span className="ml-2">{rankLine}</span> : null}
+          </HeaderItem>
           {showsPlayIn(playInGames, seasonGames) ? (
-            <SeasonKpi
-              testId="team-kpi-play-in"
-              label="Play-in"
-              value={
-                team.play_in_record && playInGames > 0
+            <HeaderItem testId="team-kpi-play-in" label="Play-in record">
+              Play-in{" "}
+              <span className="font-semibold text-foreground tabular">
+                {team.play_in_record && playInGames > 0
                   ? formatRecord(team.play_in_record.wins, team.play_in_record.losses)
-                  : "—"
-              }
-              subtext={playInGames > 0 ? `${playInGames} GP` : null}
-            />
+                  : "—"}
+              </span>
+            </HeaderItem>
           ) : null}
-          {showsPlayoffs(headerSeason, playoffGames, seasonGames) ? (
-            <SeasonKpi
-              testId="team-kpi-playoffs"
-              label="Playoffs"
-              value={
-                team.playoff_record && playoffGames > 0
+          {showsPlayoffs(team.record_season, playoffGames, seasonGames) ? (
+            <HeaderItem testId="team-kpi-playoffs" label="Playoff record">
+              Playoffs{" "}
+              <span className="font-semibold text-foreground tabular">
+                {team.playoff_record && playoffGames > 0
                   ? formatRecord(team.playoff_record.wins, team.playoff_record.losses)
-                  : "—"
-              }
-              subtext={playoffGames > 0 ? `${playoffGames} GP` : null}
-            />
+                  : "—"}
+              </span>
+            </HeaderItem>
           ) : null}
-          <SeasonKpi
-            testId="team-kpi-last-10"
-            label="Last 10"
-            value={last10 ?? "—"}
-            subtext={streak ? `Streak ${streak}` : null}
-          />
+          {streak ? (
+            <HeaderItem testId="team-kpi-streak" label="Streak">
+              Streak{" "}
+              <span
+                className={cn(
+                  "font-semibold",
+                  streak.startsWith("W") ? "text-primary" : "text-destructive"
+                )}
+              >
+                {streak}
+              </span>
+            </HeaderItem>
+          ) : null}
+          {upcoming ? (
+            <HeaderItem testId="team-kpi-next" label="Next game">
+              <NextGame game={upcoming} timezone={timezone} />
+            </HeaderItem>
+          ) : null}
         </dl>
       </div>
 
-      <CapPosition team={team} />
+      <TeamTabs active={tab} pathname={pathname} params={searchParams} outCount={outCount} />
 
-      <TeamInjuries
-        injuries={injuriesQuery.data?.data}
-        isLoading={injuriesQuery.isLoading}
-        error={injuriesQuery.error}
-      />
+      {tab === "overview" ? (
+        <TeamOverview
+          seasonStats={seasonStats}
+          games={seasonGames}
+          injuries={injuries}
+          injuriesLoading={injuriesQuery.isLoading}
+          injuriesError={injuriesQuery.error}
+          scheduleHref={teamTabHref(pathname, searchParams, "schedule")}
+          rosterHref={teamTabHref(pathname, searchParams, "roster")}
+        />
+      ) : null}
 
-      <section>
-        <h2 className="type-module mb-3">
-          {seasonGamesTitle(season, seasonGamesQuery.data?.data)}
-        </h2>
-        {seasonGamesQuery.isLoading ? (
+      {tab === "stats" ? (
+        statsQuery.isLoading ? (
+          <LoadingState label="Loading stats…" />
+        ) : statsQuery.isError ? (
+          <ErrorState message={queryErrorMessage(statsQuery.error)} />
+        ) : (
+          <TeamStats splits={statsQuery.data?.data ?? []} />
+        )
+      ) : null}
+
+      {tab === "roster" ? (
+        rosterQuery.isLoading ? (
+          <LoadingState label="Loading roster…" />
+        ) : rosterQuery.isError ? (
+          <ErrorState message={queryErrorMessage(rosterQuery.error)} />
+        ) : (
+          <TeamRoster
+            players={rosterQuery.data?.data ?? []}
+            injuries={injuries ?? []}
+            abbreviation={team.abbreviation}
+          />
+        )
+      ) : null}
+
+      {tab === "schedule" ? (
+        seasonGamesQuery.isLoading ? (
           <LoadingState label="Loading season…" />
         ) : seasonGamesQuery.isError ? (
           <ErrorState message={queryErrorMessage(seasonGamesQuery.error)} />
-        ) : (seasonGamesQuery.data?.data ?? []).length === 0 ? (
+        ) : seasonGames.length === 0 ? (
           <EmptyState message="No games on the schedule for this season yet." />
         ) : (
-          <SeasonCalendar
-            key={`${teamId}-${season}`}
-            games={seasonGamesQuery.data?.data ?? []}
-            timezone={timezone}
-          />
-        )}
-      </section>
+          <SeasonCalendar key={`${teamId}-${season}`} games={seasonGames} timezone={timezone} />
+        )
+      ) : null}
 
-      <TransactionList
-        title="Recent moves"
-        filter={{ team_abbreviation: team.abbreviation }}
-        emptyMessage="No moves on file for this team."
-      />
+      {tab === "cap" ? <CapPosition team={team} /> : null}
+
+      {tab === "moves" ? (
+        <TransactionList
+          title="Recent moves"
+          filter={{ team_abbreviation: team.abbreviation }}
+          emptyMessage="No moves on file for this team."
+        />
+      ) : null}
     </div>
   );
 }
 
-/** "2026-27 season · 3–1", the record counted from the games' own results. */
-function seasonGamesTitle(season: string, games: TeamSeasonGame[] | undefined) {
-  const label = `${games?.[0]?.season ?? season} season`;
-  if (!games) return label;
-  const wins = games.filter((game) => game.result === "W").length;
-  const losses = games.filter((game) => game.result === "L").length;
-  return `${label} · ${formatRecord(wins, losses)}`;
-}
-
-function TeamInjuries({
-  injuries,
-  isLoading,
-  error,
-}: {
-  injuries: PlayerInjury[] | undefined;
-  isLoading: boolean;
-  error: unknown;
-}) {
-  return (
-    <section>
-      <h2 className="type-module border-b border-rule-strong pb-2">Injury report</h2>
-      {isLoading ? (
-        <LoadingState label="Loading injuries…" />
-      ) : error ? (
-        <ErrorState message={queryErrorMessage(error)} />
-      ) : !injuries || injuries.length === 0 ? (
-        <p className="py-3 text-sm text-ink-2">Nobody on the injury report.</p>
-      ) : (
-        <InjuryList injuries={injuries} />
-      )}
-    </section>
-  );
-}
-
-function SeasonKpi({
+function HeaderItem({
   label,
-  value,
-  subtext,
   testId,
+  children,
 }: {
   label: string;
-  value: string;
-  subtext?: string | null;
   testId: string;
+  children: React.ReactNode;
 }) {
   return (
     <div
       data-testid={testId}
-      className="min-w-[7.5rem] border-l border-border px-4 first:border-l-0 first:pl-0"
+      className="border-l border-border px-5 first:border-l-0 first:pl-0 last:pr-0"
     >
-      <dt className="text-[11px] tracking-wide text-muted-foreground uppercase">{label}</dt>
-      <dd className="mt-1 type-hero-stat tabular">{value}</dd>
-      {subtext ? <p className="mt-1 text-xs text-muted-foreground">{subtext}</p> : null}
+      <dt className="sr-only">{label}</dt>
+      <dd>{children}</dd>
     </div>
+  );
+}
+
+/** "Next vs MIN Wed, Nov 4, 7:30 PM ET". */
+function NextGame({ game, timezone }: { game: TeamSeasonGame; timezone: string | null }) {
+  const tip = formatGameTime(game.game_date, game.start_time_et, timezone);
+  return (
+    <Link href={`/games/${game.game_id}`} className="hover:underline">
+      Next{" "}
+      <span className="font-semibold text-primary">
+        {game.is_home ? "vs" : "@"} {game.opponent_abbreviation ?? "—"}
+      </span>{" "}
+      {formatWeekdayDate(game.game_date)}
+      {game.start_time_et ? `, ${tip.time}${tip.zone ? ` ${tip.zone}` : ""}` : ""}
+    </Link>
   );
 }

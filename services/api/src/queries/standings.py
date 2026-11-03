@@ -32,11 +32,19 @@ STANDINGS_SELECT = """
     fct_standings.streak,
     fct_standings.last_10,
     fct_standings.record_source,
-    fct_standings.playoff_seed
+    fct_standings.playoff_seed,
+    fct_team_stat_splits.offensive_rating,
+    fct_team_stat_splits.defensive_rating,
+    fct_team_stat_splits.net_rating
 """
 
 STANDINGS_FROM = f"""
     FROM gold.fct_standings
+    LEFT JOIN gold.fct_team_stat_splits
+        ON
+            fct_standings.team_id = fct_team_stat_splits.team_id
+            AND fct_standings.season = fct_team_stat_splits.season
+            AND fct_team_stat_splits.split = 'season'
     WHERE
         fct_standings.season = ({RESOLVED_SEASON})
         AND fct_standings.season_type = 'Regular Season'

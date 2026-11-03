@@ -7,6 +7,7 @@ import { TeamLogo } from "@/components/team-logo";
 import {
   defaultMonth,
   formatMonth,
+  formatMonthShort,
   monthGrid,
   seasonMonths,
   shiftMonth,
@@ -42,25 +43,29 @@ export function SeasonCalendar({
   return (
     <div data-testid="season-calendar">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <button
-          type="button"
-          className="btn-ghost"
-          disabled={index <= 0}
-          onClick={() => setMonth((current) => shiftMonth(current, -1))}
-        >
-          ← Prev
-        </button>
         <h3 className="type-module" aria-live="polite">
           {formatMonth(month)}
         </h3>
-        <button
-          type="button"
-          className="btn-ghost"
-          disabled={index === -1 || index >= months.length - 1}
-          onClick={() => setMonth((current) => shiftMonth(current, 1))}
-        >
-          Next →
-        </button>
+        <div className="flex border border-foreground" role="group" aria-label="Month">
+          <button
+            type="button"
+            aria-label="Previous month"
+            className="seg-btn normal-case hover:text-foreground disabled:opacity-40"
+            disabled={index <= 0}
+            onClick={() => setMonth((current) => shiftMonth(current, -1))}
+          >
+            ← {formatMonthShort(shiftMonth(month, -1))}
+          </button>
+          <button
+            type="button"
+            aria-label="Next month"
+            className="seg-btn border-l border-foreground normal-case hover:text-foreground disabled:opacity-40"
+            disabled={index === -1 || index >= months.length - 1}
+            onClick={() => setMonth((current) => shiftMonth(current, 1))}
+          >
+            {formatMonthShort(shiftMonth(month, 1))} →
+          </button>
+        </div>
       </div>
       <table className="w-full table-fixed border-collapse text-sm">
         <caption className="sr-only">{formatMonth(month)} games</caption>

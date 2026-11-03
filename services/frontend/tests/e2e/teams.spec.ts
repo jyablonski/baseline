@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_FAILURE_DETAIL, expectNo2010Range, mockApi } from "./helpers";
 
-test("teams directory to profile shows cap position", async ({ page }) => {
+test("teams directory to profile walks the team tabs", async ({ page }) => {
   await mockApi(page);
   await page.goto("/teams");
   await expect(page).toHaveTitle("Teams — Baseline");
@@ -15,15 +15,47 @@ test("teams directory to profile shows cap position", async ({ page }) => {
 
   await page.getByRole("link", { name: "GSW" }).click();
   await expect(page.getByRole("heading", { name: "Golden State Warriors" })).toBeVisible();
-  await expect(page.getByText("Cap position").first()).toBeVisible();
-  await expect(page.getByText("Regular Season")).toBeVisible();
+  const tabs = page.getByRole("navigation", { name: "Team sections" });
+  await expect(tabs.getByRole("link", { name: "Overview" })).toHaveAttribute(
+    "aria-current",
+    "page"
+  );
+  await expect(tabs.getByLabel("1 out")).toBeVisible();
+  await expect(page.getByTestId("team-ratings")).toContainText("Net rating");
+  await expect(page.getByTestId("team-ratings")).toContainText("+9.8");
+  await expect(page.getByTestId("injury-row")).toContainText("Out · Ankle");
 
+  await tabs.getByRole("link", { name: "Stats" }).click();
+  await expect(page).toHaveURL(/tab=stats/);
+  await expect(page.getByRole("row", { name: /Offensive rebound %/ })).toContainText("34.8%");
+  await page.getByRole("button", { name: "Last 10" }).click();
+  await expect(page.getByText(/· 10 games/)).toBeVisible();
+
+  await tabs.getByRole("link", { name: /Roster/ }).click();
+  const curry = page.getByTestId("roster-row");
+  await expect(curry).toContainText("Stephen Curry");
+  await expect(curry).toContainText("62.0%");
+  await expect(curry).toContainText("Out · Ankle");
+
+  await tabs.getByRole("link", { name: "Cap" }).click();
+  await expect(page.getByText("Cap position").first()).toBeVisible();
+
+  await tabs.getByRole("link", { name: "Moves" }).click();
   const moves = page.getByRole("region", { name: "Recent moves" });
   await expect(moves.getByText("Signed", { exact: true })).toBeVisible();
   await expect(moves.getByRole("link", { name: "Stephen Curry" })).toHaveAttribute(
     "href",
     "/players/stephen-curry"
   );
+});
+
+test("standings carry net rating", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/teams");
+  const west = page.getByRole("region", { name: "Western Conference" });
+  await expect(west.getByRole("columnheader", { name: "Net" })).toBeVisible();
+  const gsw = west.getByRole("row", { name: /GSW/ });
+  await expect(gsw.getByRole("cell", { name: "+9.8", exact: true })).toBeVisible();
 });
 
 test("teams page ranks both conferences without a 2010-11 range", async ({ page }) => {
@@ -70,18 +102,16 @@ test("teams directory surfaces the API failure instead of an empty grid", async 
 test("teams page lists streak and last-ten columns for both conferences", async ({ page }) => {
   await mockApi(page);
   await page.goto("/teams");
-  await expect(page.getByRole("columnheader", { name: "Streak" }).first()).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "L10" }).first()).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Strk" }).first()).toBeVisible();
   await expect(page.getByRole("cell", { name: "W5", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "L10" }).first()).toBeVisible();
   await expect(page.getByRole("cell", { name: "8-2", exact: true })).toBeVisible();
   await expectNo2010Range(page);
 });
 
-test("team profile opens on a season calendar whose games link to their pages", async ({
-  page,
-}) => {
+test("team schedule tab is a season calendar whose games link to their pages", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/teams/golden-state-warriors");
+  await page.goto("/teams/golden-state-warriors?tab=schedule");
   const calendar = page.getByTestId("season-calendar");
   await expect(calendar.getByRole("heading", { name: "April 2026" })).toBeVisible();
 
@@ -96,6 +126,6 @@ test("team profile opens on a season calendar whose games link to their pages", 
 test("team profile shows the calendar on a phone too", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page);
-  await page.goto("/teams/golden-state-warriors");
+  await page.goto("/teams/golden-state-warriors?tab=schedule");
   await expect(page.getByTestId("season-calendar")).toBeVisible();
 });

@@ -54,3 +54,79 @@ class TeamDetail(TeamSummary):
     play_in_record: TeamRecord | None = None
     playoff_record: TeamRecord | None = None
     standing: StandingSummary | None = None
+
+
+class TeamStatSplit(BaseModel):
+    """One split of a team's current Regular Season with league ranks (1 = best).
+
+    Possession-based stats (ratings, pace, rebound and turnover rates) count only
+    the games_with_possessions whose box scores carry the rebound split, and are
+    null, with a null rank, when there are none.
+    """
+
+    season: str
+    split: str
+    games: int
+    wins: int
+    losses: int
+    games_with_possessions: int
+    team_count: int
+    offensive_rating: float | None = None
+    offensive_rating_rank: int | None = None
+    defensive_rating: float | None = None
+    defensive_rating_rank: int | None = None
+    net_rating: float | None = None
+    net_rating_rank: int | None = None
+    pace: float | None = None
+    pace_rank: int | None = None
+    points_per_game: float | None = None
+    points_per_game_rank: int | None = None
+    opponent_points_per_game: float | None = None
+    opponent_points_per_game_rank: int | None = None
+    effective_fg_pct: float | None = None
+    effective_fg_pct_rank: int | None = None
+    opponent_effective_fg_pct: float | None = None
+    opponent_effective_fg_pct_rank: int | None = None
+    three_pointers_made_per_game: float | None = None
+    three_pointers_made_per_game_rank: int | None = None
+    three_point_pct: float | None = None
+    three_point_pct_rank: int | None = None
+    three_point_attempt_rate: float | None = None
+    three_point_attempt_rate_rank: int | None = None
+    free_throw_rate: float | None = None
+    free_throw_rate_rank: int | None = None
+    offensive_rebound_pct: float | None = None
+    offensive_rebound_pct_rank: int | None = None
+    defensive_rebound_pct: float | None = None
+    defensive_rebound_pct_rank: int | None = None
+    turnover_pct: float | None = None
+    turnover_pct_rank: int | None = None
+    opponent_turnover_pct: float | None = None
+    opponent_turnover_pct_rank: int | None = None
+    assist_rate: float | None = None
+    assist_rate_rank: int | None = None
+
+
+class RosterPlayer(BaseModel):
+    """A current player with per-game averages from this team's games this season.
+
+    Averages are null, and games_played 0, for a player yet to play for the team.
+    """
+
+    player_id: UUID
+    full_name: str
+    position: str | None = None
+    jersey_number: str | None = None
+    season: str | None = None
+    games_played: int
+    minutes: float | None = None
+    points: float | None = None
+    rebounds: float | None = None
+    assists: float | None = None
+    steals: float | None = None
+    blocks: float | None = None
+    turnovers: float | None = None
+    three_pointers_made: float | None = None
+    true_shooting_pct: float | None = None
+    plus_minus: float | None = None
+    game_score: float | None = None

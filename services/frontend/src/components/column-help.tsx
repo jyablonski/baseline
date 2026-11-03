@@ -44,3 +44,16 @@ export function GamesBackHeader() {
     </ColumnHelp>
   );
 }
+
+/** The standings Net heading: season net rating, per 100 possessions. */
+export function NetRatingHeader() {
+  return (
+    <ColumnHelp label="Net" title="Net rating" align="end" className="text-right">
+      <p>
+        Points scored minus points allowed per 100 possessions this season. It strips out pace, so
+        it says more about strength than point differential. Each team page breaks it into offense
+        and defense.
+      </p>
+    </ColumnHelp>
+  );
+}

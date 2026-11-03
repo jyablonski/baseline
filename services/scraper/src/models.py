@@ -121,6 +121,8 @@ class PlayerGameLog(Base):
     min: Mapped[float | None] = mapped_column(Float)
     pts: Mapped[int | None] = mapped_column(Integer)
     reb: Mapped[int | None] = mapped_column(Integer)
+    orb: Mapped[int | None] = mapped_column(Integer)
+    drb: Mapped[int | None] = mapped_column(Integer)
     ast: Mapped[int | None] = mapped_column(Integer)
     stl: Mapped[int | None] = mapped_column(Integer)
     blk: Mapped[int | None] = mapped_column(Integer)
@@ -134,6 +136,7 @@ class PlayerGameLog(Base):
     ftm: Mapped[int | None] = mapped_column(Integer)
     fta: Mapped[int | None] = mapped_column(Integer)
     ft_pct: Mapped[float | None] = mapped_column(Float)
+    pf: Mapped[int | None] = mapped_column(Integer)
     plus_minus: Mapped[int | None] = mapped_column(Integer)
     scraped_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()

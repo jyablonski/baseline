@@ -11,9 +11,11 @@ from schemas import (
     ItemResponse,
     PaginatedResponse,
     PaginationMeta,
+    RosterPlayer,
     StandingSummary,
     TeamDetail,
     TeamRecord,
+    TeamStatSplit,
     TeamSummary,
 )
 from schemas.game import TeamGameResult, TeamSeasonGame
@@ -165,6 +167,36 @@ def get_team_season_games(
         team_id, season=season, season_type=validate_season_type(season_type)
     )
     data = [TeamSeasonGame.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=len(data), offset=0),
+    )
+
+
+@router.get("/{team_id}/stats", response_model=PaginatedResponse[TeamStatSplit])
+def get_team_stats(
+    team_id: UUID,
+    repo: TeamsRepository = Depends(get_teams_repository),
+) -> PaginatedResponse[TeamStatSplit]:
+    """Current Regular Season splits (season, last_10, home, away) with league ranks."""
+    if repo.get_team(team_id) is None:
+        raise HTTPException(status_code=404, detail="Team not found")
+    data = [TeamStatSplit.model_validate(row) for row in repo.list_team_stat_splits(team_id)]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=len(data), offset=0),
+    )
+
+
+@router.get("/{team_id}/roster", response_model=PaginatedResponse[RosterPlayer])
+def get_team_roster(
+    team_id: UUID,
+    repo: TeamsRepository = Depends(get_teams_repository),
+) -> PaginatedResponse[RosterPlayer]:
+    """Current players with per-game averages for this team, most minutes first."""
+    if repo.get_team(team_id) is None:
+        raise HTTPException(status_code=404, detail="Team not found")
+    data = [RosterPlayer.model_validate(row) for row in repo.list_team_roster(team_id)]
     return PaginatedResponse(
         data=data,
         meta=PaginationMeta(total=len(data), limit=len(data), offset=0),

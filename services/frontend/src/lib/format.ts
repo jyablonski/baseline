@@ -87,6 +87,17 @@ export function formatShortDate(value: string | null | undefined) {
   });
 }
 
+/** "Mon, Nov 2" for a game date, which is already Eastern; the year is left out. */
+export function formatWeekdayDate(value: string | null | undefined) {
+  if (!value) return "—";
+  return new Date(`${value.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 /** "Oct 29" for a moment in time, read on the Eastern calendar like game dates. */
 export function formatShortDateET(value: string) {
   return new Date(value).toLocaleDateString("en-US", {
@@ -261,6 +272,12 @@ export function formatBirthDate(value: string | null | undefined) {
 export function formatGamesBack(value: number | null | undefined) {
   if (value == null || Number.isNaN(value) || value === 0) return "—";
   return `${value} GB`;
+}
+
+/** Games back without the unit, for a column already headed GB. */
+export function formatGamesBackShort(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value) || value === 0) return "—";
+  return String(value);
 }
 
 export function playerSubtitle(

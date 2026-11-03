@@ -535,6 +535,71 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         return json({ data: games, meta: { total: games.length, limit: games.length, offset: 0 } });
       }
 
+      if (url.includes("/teams/") && url.includes("/stats")) {
+        const metrics = {
+          offensive_rating: 118.4,
+          defensive_rating: 108.6,
+          net_rating: 9.8,
+          pace: 97.2,
+          points_per_game: 115.1,
+          opponent_points_per_game: 105.6,
+          effective_fg_pct: 0.551,
+          opponent_effective_fg_pct: 0.52,
+          three_pointers_made_per_game: 12.4,
+          three_point_pct: 0.362,
+          three_point_attempt_rate: 0.39,
+          free_throw_rate: 0.284,
+          offensive_rebound_pct: 0.348,
+          defensive_rebound_pct: 0.72,
+          turnover_pct: 0.139,
+          opponent_turnover_pct: 0.162,
+          assist_rate: 0.583,
+        };
+        const ranks = Object.fromEntries(
+          Object.keys(metrics).map((key, index) => [`${key}_rank`, index + 1])
+        );
+        const split = (name: string, games: number) => ({
+          season: "2025-26",
+          split: name,
+          games,
+          wins: Math.ceil(games * 0.6),
+          losses: games - Math.ceil(games * 0.6),
+          games_with_possessions: games,
+          team_count: 30,
+          ...metrics,
+          ...ranks,
+        });
+        const rows = empty ? [] : [split("season", 82), split("last_10", 10)];
+        return json({ data: rows, meta: { total: rows.length, limit: rows.length, offset: 0 } });
+      }
+
+      if (url.includes("/teams/") && url.includes("/roster")) {
+        const rows = empty
+          ? []
+          : [
+              {
+                player_id: "00000000-0000-4000-8000-000000000101",
+                full_name: "Stephen Curry",
+                position: "G",
+                jersey_number: "30",
+                season: "2025-26",
+                games_played: 70,
+                minutes: 32.4,
+                points: 26.4,
+                rebounds: 4.5,
+                assists: 6.1,
+                steals: 1.1,
+                blocks: 0.4,
+                turnovers: 2.9,
+                three_pointers_made: 4.6,
+                true_shooting_pct: 0.62,
+                plus_minus: 5.2,
+                game_score: 21.8,
+              },
+            ];
+        return json({ data: rows, meta: { total: rows.length, limit: rows.length, offset: 0 } });
+      }
+
       if (url.includes("/teams/") && url.includes("/games")) {
         return json({
           data: empty
@@ -680,6 +745,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                   games_back: 0,
                   streak: "W5",
                   last_10: "8-2",
+                  net_rating: 9.8,
                 },
                 {
                   team_id: 1610612741,

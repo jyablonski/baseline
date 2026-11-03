@@ -75,6 +75,11 @@ export function formatMonth(month: string) {
   });
 }
 
+/** "Oct" for "2026-10". */
+export function formatMonthShort(month: string) {
+  return utcDate(`${month}-01`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+}
+
 /** A real calendar date: "2026-02-30" parses, but rolls over to March. */
 function isCalendarDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;

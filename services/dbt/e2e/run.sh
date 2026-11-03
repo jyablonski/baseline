@@ -550,6 +550,24 @@ BEGIN
 END $$;
 SQL
 
+echo "==> asserting team stat splits"
+# GSW 10/22: 32 pts on 23 FGA, 1 ORB, 3 TOV, 4 FTA; LAC: 28 on 20, 2, 2, 6.
+# Possessions average (26.76 + 22.64) / 2 = 24.70. 10/25 has no split, so it
+# counts toward points per game only.
+SPLITS="$("${PSQL[@]}" -Atc "
+  SELECT string_agg(
+    abbreviation || ' ' || split || ' g=' || games || '/' || games_with_possessions ||
+    ' ortg=' || offensive_rating || ' drtg=' || defensive_rating ||
+    ' net=' || net_rating || ' #' || net_rating_rank || '/' || team_count || ' ppg=' || points_per_game,
+    ' | ' ORDER BY abbreviation)
+  FROM gold.fct_team_stat_splits
+  INNER JOIN gold.dim_teams USING (team_id)
+  WHERE split = 'season'")"
+if [ "$SPLITS" != "GSW season g=2/1 ortg=129.6 drtg=113.4 net=16.2 #1/2 ppg=30.5 | LAC season g=2/1 ortg=113.4 drtg=129.6 net=-16.2 #2/2 ppg=29.0" ]; then
+  echo "unexpected team stat splits: $SPLITS" >&2
+  exit 1
+fi
+
 echo "==> asserting nobody scores before they have enough games"
 GATED="$("${PSQL[@]}" -Atc "SELECT sum(home_players_counted + away_players_counted) FROM gold.fct_game_injury_scores")"
 if [ "$GATED" != "0" ]; then

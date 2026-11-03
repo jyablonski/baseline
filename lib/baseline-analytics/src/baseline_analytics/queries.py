@@ -1084,3 +1084,43 @@ def team_flow_query(
     }
     applied = {"team_abbreviation": team_abbreviation.upper(), "season": season}
     return query, applied
+
+
+TEAM_FLOW_GAME_DIMENSIONS = [
+    "team_game_flow.game_id",
+    "team_game_flow.game_date",
+    "team_game_flow.opponent_abbreviation",
+    "team_game_flow.location",
+    "team_game_flow.lead_blown",
+    "team_game_flow.comeback_from",
+]
+
+
+def team_flow_games_query(
+    team_abbreviation: str,
+    *,
+    min_margin: int,
+    season: str | None = None,
+) -> dict[str, Any]:
+    """One team's games where it blew, or came back from, at least min_margin.
+
+    The cube's blown_leads / comeback_wins measures are fixed at 10, so another
+    margin reads the qualifying games and counts them.
+    """
+    margin = str(min_margin)
+    filters: list[dict[str, Any]] = [
+        equals("team_game_flow.team_abbreviation", team_abbreviation.upper()),
+        {
+            "or": [
+                {"member": "team_game_flow.lead_blown", "operator": "gte", "values": [margin]},
+                {"member": "team_game_flow.comeback_from", "operator": "gte", "values": [margin]},
+            ]
+        },
+    ]
+    if season:
+        filters.append(equals("team_game_flow.season", season))
+    return {
+        "dimensions": list(TEAM_FLOW_GAME_DIMENSIONS),
+        "filters": filters,
+        "order": {"team_game_flow.game_date": "desc"},
+    }

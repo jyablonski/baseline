@@ -434,6 +434,36 @@ def test_team_season_games(integration_client) -> None:
 
 
 @pytest.mark.integration
+def test_team_stats(integration_client) -> None:
+    response = integration_client.get(f"/api/v1/teams/{TEAM_GSW}/stats")
+    assert response.status_code == 200
+    season, last_10 = response.json()["data"]
+    assert (season["split"], season["net_rating"], season["net_rating_rank"]) == ("season", 16.2, 1)
+    assert season["team_count"] == 2
+    assert season["effective_fg_pct"] == pytest.approx(0.563)
+    # No game in the split has the rebound split: possession stats are null, not zero.
+    assert (last_10["split"], last_10["games_with_possessions"]) == ("last_10", 0)
+    assert (last_10["offensive_rating"], last_10["offensive_rating_rank"]) == (None, None)
+    assert last_10["points_per_game"] == 30.5
+
+    missing = integration_client.get(f"/api/v1/teams/{MISSING_ID}/stats")
+    assert missing.status_code == 404
+
+
+@pytest.mark.integration
+def test_team_roster(integration_client) -> None:
+    response = integration_client.get(f"/api/v1/teams/{TEAM_GSW}/roster")
+    assert response.status_code == 200
+    (curry,) = response.json()["data"]
+    assert curry["player_id"] == PLAYER_CURRY
+    assert (curry["season"], curry["games_played"], curry["points"]) == ("2024-25", 2, 30.5)
+    assert (curry["rebounds"], curry["assists"], curry["three_pointers_made"]) == (4.5, 7.5, 5.5)
+    # 61 / (2 * (47 + 0.44 * 8)) = 0.604
+    assert curry["true_shooting_pct"] == pytest.approx(0.604)
+    assert (curry["plus_minus"], curry["game_score"]) == (3.5, 24.3)
+
+
+@pytest.mark.integration
 def test_injuries(integration_client) -> None:
     current = integration_client.get("/api/v1/injuries").json()["data"]
     assert [(row["player_name"], row["injury_status"]) for row in current] == [
@@ -705,6 +735,13 @@ def test_salary_payroll_and_standings(integration_client) -> None:
     assert rows[0]["games_back"] == 0
     assert rows[1]["abbreviation"] == "LAC"
     assert rows[1]["games_back"] == 1.5
+    # Season ratings joined from fct_team_stat_splits.
+    assert (rows[0]["offensive_rating"], rows[0]["defensive_rating"], rows[0]["net_rating"]) == (
+        129.6,
+        113.4,
+        16.2,
+    )
+    assert rows[1]["net_rating"] == -16.2
 
     team = integration_client.get(f"/api/v1/teams/{TEAM_GSW}")
     assert team.status_code == 200

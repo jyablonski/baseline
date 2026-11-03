@@ -62,7 +62,7 @@ Local `compose run` bind-mounts models and SQL, so YAML and SQL edits need no re
 
 **Staging** views mirror source tables one-to-one. **Intermediate** models do the real work — enriched game logs, contract and injury name matching, transaction participant resolution, play-by-play parsing and scoring.
 
-**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_player_mvp_scores`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`, `fct_reddit_entity_mentions`, `fct_reddit_flair`, `fct_transactions`, `fct_transaction_participants`, `fct_prediction_results`, `fct_prediction_scorecard` (per-model evaluation metrics; see [ml.md](ml.md)), `fct_game_upsets`, `fct_game_value`, `fct_game_injury_scores`, `fct_daily_highlights`, and the injury marts (all below).
+**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_player_mvp_scores`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`, `fct_reddit_entity_mentions`, `fct_reddit_flair`, `fct_transactions`, `fct_transaction_participants`, `fct_prediction_results`, `fct_prediction_scorecard` (per-model evaluation metrics; see [ml.md](ml.md)), `fct_game_upsets`, `fct_game_value`, `fct_game_injury_scores`, `fct_daily_highlights`, `fct_team_stat_splits`, and the injury marts (all below).
 
 Materialization is a real decision here — see `services/dbt/AGENTS.md` for the policy. Two things to know:
 
@@ -73,7 +73,7 @@ Materialization is a real decision here — see `services/dbt/AGENTS.md` for the
 
 A house metric, not an official award model. Knobs are the `mvp_*` vars in `services/dbt/dbt_project.yml`.
 
-- **Game level** (`fct_player_game_logs.mvp_box_score` / `mvp_game_score`): Hollinger's Game Score with the terms the logs carry — points, FG and FT efficiency, rebounds at a single 0.4 weight (no ORB/DRB split), assists, steals, blocks, turnovers; no foul term. A win scales it up by `mvp_win_weight` (0.2), a loss scales it down. A log with no minutes is a DNP and scores null.
+- **Game level** (`fct_player_game_logs.mvp_box_score` / `mvp_game_score`): Hollinger's Game Score with the terms the logs carry — points, FG and FT efficiency, rebounds at a single 0.4 weight (kept to one weight so logs scraped before the ORB/DRB split still score the same way), assists, steals, blocks, turnovers; no foul term. A win scales it up by `mvp_win_weight` (0.2), a loss scales it down. A log with no minutes is a DNP and scores null.
 - **Season level** (`fct_player_mvp_scores`, player × season × season type): average game score × availability multiplier, ranked per season and season type. Regular Season and Playoffs only — play-in and the Cup final are left out.
 - **Availability** compares games played to the games the player's latest team has played so far. The first 10% missed are free; past that the penalty ramps quadratically until 50% missed, where it caps at a quarter of the score.
 - **Served** by REST (players directory, profile, compare, game log), Cube (`player_mvp_scores`, plus `season_type` / `mvp_box_score` / `mvp_game_score` on `player_game_logs`), and MCP (`get_mvp_ladder`, `get_player_mvp_scores`).
@@ -144,6 +144,14 @@ The source is ESPN's public scoreboard JSON, the only thing taken from ESPN: nei
 ### Back-to-backs
 
 `fct_games_schedule.home_is_back_to_back` / `away_is_back_to_back` mark the second night of a back-to-back: that team's previous game in the season was the day before, by Eastern game date. The `*_last_night_*` columns describe that game (opponent abbreviation, whether the team was at home, both scores) and are null unless the flag is set; the scores also stay null while it is not Final. This is the one definition: the schedule and game endpoints serve the columns as they are, and `GET /api/v1/teams/{id}/season-games` reads the flag from the team's side. The UI shows a B2B badge beside the tired team on `/schedule` and in the game header (before the final), with last night's result in its popover. Home leaves it out to keep its slate to the matchup and national TV. It is not `fct_player_game_logs.is_back_to_back`, which is per player.
+
+### Team stats
+
+`fct_team_stat_splits` is one row per team per split of the current Regular Season: `season`, `last_10` (the newest ten games), `home` and `away`. It sums each side's player game logs into a team box score, so a game counts only when both teams' logs are in. Possessions are `FGA − OREB + TOV + 0.44 × FTA` averaged across both teams, so a team's offensive and defensive ratings share a denominator; pace is possessions per 48 minutes with overtime counted from team minutes. Ratings, pace, rebound rates and turnover rates use only games whose logs carry `orb` / `drb` (`games_with_possessions`); everything else uses every game. Each stat has a `_rank` within its split, 1 = best, ascending for the lower-is-better ones (defensive rating, opponent points and eFG%, turnover %); pace ranks fastest first and the UI shows it without a good/bad tone. A null stat has a null rank.
+
+`orb`, `drb` and `pf` arrived with migration 0028. The scraper treats a game as already loaded only once its logs have `orb`, so the next `scrape-all` (or `scrape-game-logs --season`) refetches every older game and fills them; until then those games drop out of the possession stats rather than skewing them, and the Stats tab says how many games the ratings cover.
+
+Served by REST only: `GET /api/v1/teams/{id}/stats` (Overview tiles and the Stats tab) and the three ratings on `GET /api/v1/standings` (the standings tables show Net). The roster tab's per-player numbers come from `fct_player_game_logs` directly (`GET /api/v1/teams/{id}/roster`).
 
 ## Serving
 

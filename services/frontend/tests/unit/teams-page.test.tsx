@@ -47,6 +47,7 @@ function standing(abbreviation: string, seed: number, conference = "East"): Stan
     games_back: seed === 1 ? 0 : (seed - 1) * 3,
     streak: seed === 1 ? "W5" : "L1",
     last_10: seed === 1 ? "8-2" : "5-5",
+    net_rating: seed === 1 ? 9.8 : seed === 2 ? -2.5 : null,
   } as StandingRow;
 }
 
@@ -79,7 +80,7 @@ describe("teams page", () => {
     const east = await screen.findByRole("region", { name: "Eastern Conference" });
     expect(listStandings).toHaveBeenCalledWith({ season: "2025-26" });
     expect(screen.getByRole("heading", { name: "Teams", level: 1 })).toBeInTheDocument();
-    for (const header of ["W-L", "Win %", "GB", "Streak", "L10"]) {
+    for (const header of ["W-L", "Win %", "GB", "Strk", "L10"]) {
       expect(within(east).getByRole("columnheader", { name: header })).toBeInTheDocument();
     }
     const order = within(east)
@@ -99,6 +100,19 @@ describe("teams page", () => {
     expect(
       within(screen.getByRole("region", { name: "Western Conference" })).getByText("OKC")
     ).toBeInTheDocument();
+  });
+
+  it("adds a net rating column", async () => {
+    renderPage();
+    const east = await screen.findByRole("region", { name: "Eastern Conference" });
+    expect(within(east).getByRole("button", { name: "Net" })).toBeInTheDocument();
+    const leader = within(east).getByText("DET Team").closest("tr") as HTMLElement;
+    expect(within(leader).getByText("+9.8")).toHaveClass("text-primary");
+    const second = within(east).getByText("BOS Team").closest("tr") as HTMLElement;
+    expect(within(second).getByText("-2.5")).toHaveClass("text-destructive");
+    // No rating yet reads as a dash, not zero.
+    const third = within(east).getByText("NYK Team").closest("tr") as HTMLElement;
+    expect(within(third).getAllByRole("cell").at(-1)).toHaveTextContent("—");
   });
 
   it("rules off the playoff and play-in seeds, and nothing under the last row", async () => {

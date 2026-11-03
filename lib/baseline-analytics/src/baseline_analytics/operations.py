@@ -34,6 +34,7 @@ from baseline_analytics.queries import (
     standings_seasons_query,
     team_by_abbreviation_query,
     team_contracts_query,
+    team_flow_games_query,
     team_flow_query,
     team_payroll_season_query,
     team_record_games_query,
@@ -277,22 +278,47 @@ class CubeAnalytics:
         self,
         team_abbreviation: str,
         season: str | None = None,
+        min_margin: int | None = None,
     ) -> dict[str, Any]:
+        """Blown leads and comeback wins, at 10+ points unless min_margin says otherwise.
+
+        With a margin, also lists the qualifying games biggest first
+        (blown_lead_games / comeback_games: date, opponent, location, margin).
+        """
         query, applied = team_flow_query(team_abbreviation, season=season)
         rows = self.client.load(query)
         row = rows[0] if rows else {}
         abbreviation = team_abbreviation.upper()
         team = self.find_team(abbreviation)
-        return {
+        flow: dict[str, Any] = {
             "abbreviation": abbreviation,
             "team_name": (team or {}).get("team_name"),
             "games": _as_int(row.get("games")) or 0,
+            "min_margin": DEFAULT_FLOW_MARGIN,
             "blown_leads": _as_int(row.get("blown_leads")) or 0,
             "biggest_lead_blown": _as_int(row.get("biggest_lead_blown")),
             "comeback_wins": _as_int(row.get("comeback_wins")) or 0,
             "biggest_comeback": _as_int(row.get("biggest_comeback")),
             "filters_applied": applied,
         }
+        if min_margin is None:
+            return flow
+        games = self.client.load(
+            team_flow_games_query(abbreviation, min_margin=min_margin, season=season)
+        )
+        blown = _flow_games(games, "lead_blown", min_margin)
+        comebacks = _flow_games(games, "comeback_from", min_margin)
+        flow.update(
+            {
+                "min_margin": min_margin,
+                "blown_leads": len(blown),
+                "comeback_wins": len(comebacks),
+                "blown_lead_games": blown,
+                "comeback_games": comebacks,
+                "filters_applied": {**applied, "min_margin": min_margin},
+            }
+        )
+        return flow
 
     def get_player_contract(
         self,
@@ -717,3 +743,27 @@ def _mvp_row(row: dict[str, Any]) -> dict[str, Any]:
         "losses": _as_int(row.get("losses")),
         "win_pct": _as_float(row.get("win_pct")),
     }
+
+
+# The cube's blown_leads / comeback_wins measures count 10+ point swings.
+DEFAULT_FLOW_MARGIN = 10
+
+
+def _flow_games(rows: list[dict[str, Any]], member: str, min_margin: int) -> list[dict[str, Any]]:
+    """Games where `member` (lead_blown or comeback_from) reached min_margin, biggest first."""
+    games = []
+    for row in rows:
+        margin = _as_int(row.get(member))
+        if margin is None or margin < min_margin:
+            continue
+        game_date = row.get("game_date")
+        games.append(
+            {
+                "game_id": row.get("game_id"),
+                "game_date": str(game_date)[:10] if game_date else None,
+                "opponent_abbreviation": row.get("opponent_abbreviation"),
+                "location": row.get("location"),
+                "margin": margin,
+            }
+        )
+    return sorted(games, key=lambda game: (-game["margin"], game["game_date"] or ""))

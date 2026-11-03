@@ -4,12 +4,17 @@ import { Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { TeamRatingsScatter } from "@/components/charts/team-ratings-scatter";
-import { GamesBackHeader } from "@/components/column-help";
+import { GamesBackHeader, NetRatingHeader } from "@/components/column-help";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamAbbrLink } from "@/components/team-logo";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
-import { formatGamesBack, formatRecord, formatWinPctPlain } from "@/lib/format";
+import {
+  formatGamesBackShort,
+  formatRecord,
+  formatSignedMargin,
+  formatWinPctPlain,
+} from "@/lib/format";
 import { teamHref, withSeason } from "@/lib/nav";
 import { conferenceStandings, standingsSeed } from "@/lib/team-form";
 import type { StandingRow } from "@/lib/types";
@@ -89,7 +94,11 @@ function ConferenceTable({
     <section aria-label={title}>
       <h2 className="type-eyebrow mb-3">{title}</h2>
       <div className="overflow-x-auto">
-        <table className="data-table data-table-compact">
+        <table
+          // Both conferences sit side by side from xl, so cells run tighter than
+          // the default table and a long name truncates rather than scrolling.
+          className="data-table data-table-compact [&_td]:px-2 [&_td]:whitespace-nowrap [&_td:first-child]:pl-0 [&_td:last-child]:pr-3 [&_th]:px-2 [&_th]:whitespace-nowrap [&_th:first-child]:pl-0 [&_th:last-child]:pr-3"
+        >
           <thead>
             <tr>
               <th>#</th>
@@ -97,8 +106,13 @@ function ConferenceTable({
               <th className="text-right">W-L</th>
               <th className="text-right">Win %</th>
               <GamesBackHeader />
-              <th>Streak</th>
+              <th>
+                <abbr title="Streak" className="no-underline">
+                  Strk
+                </abbr>
+              </th>
               <th className="text-right">L10</th>
+              <NetRatingHeader />
             </tr>
           </thead>
           <tbody>
@@ -123,16 +137,28 @@ function ConferenceTable({
                         abbreviation={row.abbreviation}
                         href={withSeason(teamHref(row.team_name), season)}
                       />
-                      <span className="hidden text-muted-foreground sm:inline">
+                      <span
+                        title={row.team_name}
+                        className="hidden max-w-[10.5rem] truncate text-muted-foreground sm:inline-block"
+                      >
                         {row.team_name}
                       </span>
                     </span>
                   </td>
                   <td className="tabular text-right">{formatRecord(row.wins, row.losses)}</td>
                   <td className="tabular text-right">{formatWinPctPlain(row.win_pct)}</td>
-                  <td className="tabular text-right">{formatGamesBack(row.games_back)}</td>
+                  <td className="tabular text-right">{formatGamesBackShort(row.games_back)}</td>
                   <td>{row.streak ?? "—"}</td>
                   <td className="tabular text-right">{row.last_10 ?? "—"}</td>
+                  <td
+                    className={cn(
+                      "tabular text-right font-medium",
+                      (row.net_rating ?? 0) > 0 && "text-primary",
+                      (row.net_rating ?? 0) < 0 && "text-destructive"
+                    )}
+                  >
+                    {formatSignedMargin(row.net_rating, 1)}
+                  </td>
                 </tr>
               );
             })}

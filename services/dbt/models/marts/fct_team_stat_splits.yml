@@ -1,0 +1,94 @@
+version: 2
+
+models:
+  - name: fct_team_stat_splits
+    description: >
+      Team box-score rates for the current season's Regular Season, summed from
+      player game logs, in four splits (season, last_10, home, away), each with a
+      league rank inside its split. Possession-based stats (ratings, pace, rebound
+      and turnover rates) use only games whose logs carry the offensive / defensive
+      rebound split, counted in games_with_possessions, and are null when there are
+      none. Served by REST (GET /api/v1/teams/{id}/stats and the standings ratings).
+    config:
+      meta:
+        grain: One row per team per stat split in the current Regular Season.
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["team_id", "split"]
+    columns:
+      - name: team_id
+        description: Baseline team UUID.
+        data_tests:
+          - not_null
+      - name: season
+        description: NBA season label, the newest with a Regular Season Final.
+        data_tests:
+          - not_null
+      - name: split
+        description: "season (every game), last_10 (newest 10), home, or away."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["season", "last_10", "home", "away"]
+                quote_values: true
+      - name: games
+        description: Games in the split.
+        data_tests:
+          - not_null
+      - name: wins
+        description: Wins in the split.
+      - name: losses
+        description: Losses in the split.
+      - name: games_with_possessions
+        description: Games whose logs carry the rebound split, the base of every possession-based stat.
+      - name: team_count
+        description: Teams with a row in this split, the denominator for every rank.
+      - name: offensive_rating
+        description: Points scored per 100 possessions.
+      - name: defensive_rating
+        description: Points allowed per 100 possessions; lower is better.
+      - name: net_rating
+        description: Offensive minus defensive rating.
+      - name: pace
+        description: Possessions per 48 minutes, overtime included.
+      - name: points_per_game
+        description: Points scored per game.
+      - name: opponent_points_per_game
+        description: Points allowed per game.
+      - name: effective_fg_pct
+        description: (FGM + 0.5 * 3PM) / FGA, 0-1.
+      - name: opponent_effective_fg_pct
+        description: Opponents' effective FG%, 0-1; lower is better.
+      - name: three_pointers_made_per_game
+        description: Threes made per game.
+      - name: three_point_pct
+        description: 3PM / 3PA, 0-1.
+      - name: three_point_attempt_rate
+        description: Share of field goal attempts that are threes, 0-1.
+      - name: free_throw_rate
+        description: FTA / FGA.
+      - name: offensive_rebound_pct
+        description: Share of available offensive rebounds grabbed, 0-1.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                row_condition: "offensive_rebound_pct is not null"
+      - name: defensive_rebound_pct
+        description: Share of available defensive rebounds grabbed, 0-1.
+      - name: turnover_pct
+        description: Turnovers per possession, 0-1; lower is better.
+      - name: opponent_turnover_pct
+        description: Opponent turnovers per possession, 0-1.
+      - name: assist_rate
+        description: Share of made field goals assisted, 0-1.
+      - name: net_rating_rank
+        description: League rank in this split, 1 = best. Every `<stat>_rank` column follows this rule and is null when the stat is.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 30
+                row_condition: "net_rating_rank is not null"

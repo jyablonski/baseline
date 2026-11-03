@@ -74,6 +74,13 @@ INSERT INTO source.player_game_logs (
     ('22222222-2222-4222-8222-222222222222', '99999999-9999-4999-8999-999999999999', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '2025-04-20', '2024-25', 'LAC @ GSW', 'L', 41.0,
      30, 10, 4, 3, 1, 2, 11, 21, 0.524, 2, 6, 0.333, 6, 7, 0.857, -2, NOW());
 
+-- Only the 10/22 game carries the rebound split, as if 10/25 were scraped before
+-- it existed: possession stats come from one game, per-game stats from both.
+UPDATE source.player_game_logs SET orb = 1, drb = 3, pf = 2
+WHERE player_id = '11111111-1111-4111-8111-111111111111' AND game_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+UPDATE source.player_game_logs SET orb = 2, drb = 6, pf = 3
+WHERE player_id = '22222222-2222-4222-8222-222222222222' AND game_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
 INSERT INTO source.player_contracts (
     player_id, team_id, player_name, player_name_normalized, season, salary,
     is_fully_guaranteed, remaining_guaranteed, player_age, source_url, scraped_at

@@ -1,6 +1,6 @@
 -- Seeded gold mart rows for API/MCP integration tests (no dbt required).
 
-TRUNCATE gold.fct_game_flow, gold.fct_transaction_participants, gold.fct_transactions, gold.fct_game_upsets, gold.fct_game_injuries, gold.fct_player_injuries, gold.fct_daily_highlights, gold.fct_prediction_results, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
+TRUNCATE gold.fct_team_stat_splits, gold.fct_game_flow, gold.fct_transaction_participants, gold.fct_transactions, gold.fct_game_upsets, gold.fct_game_injuries, gold.fct_player_injuries, gold.fct_daily_highlights, gold.fct_prediction_results, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
          gold.fct_standings, gold.fct_player_mvp_scores, gold.fct_player_season_stats, gold.fct_player_game_logs,
          gold.fct_team_game_results, gold.fct_games_schedule, gold.dim_players, gold.dim_teams
          RESTART IDENTITY CASCADE;
@@ -328,3 +328,13 @@ INSERT INTO gold.fct_transaction_participants (
      NULL, '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', NULL, 'external_id'),
     ('tx-signing', '2025-07-01', '2025-26', 'player', 'none', 'curryst01', 'Stephen Curry',
      '00000000-0000-4000-8000-000000000101', NULL, NULL, 'Stephen Curry', 'external_id');
+
+-- GSW and LAC splits; GSW also has last_10 with null possession stats, as if
+-- those games predate the rebound split.
+INSERT INTO gold.fct_team_stat_splits (
+    team_id, season, split, games, wins, losses, games_with_possessions, team_count,
+    offensive_rating, offensive_rating_rank, defensive_rating, defensive_rating_rank, net_rating, net_rating_rank, pace, pace_rank, points_per_game, points_per_game_rank, opponent_points_per_game, opponent_points_per_game_rank, effective_fg_pct, effective_fg_pct_rank, opponent_effective_fg_pct, opponent_effective_fg_pct_rank, three_pointers_made_per_game, three_pointers_made_per_game_rank, three_point_pct, three_point_pct_rank, three_point_attempt_rate, three_point_attempt_rate_rank, free_throw_rate, free_throw_rate_rank, offensive_rebound_pct, offensive_rebound_pct_rank, defensive_rebound_pct, defensive_rebound_pct_rank, turnover_pct, turnover_pct_rank, opponent_turnover_pct, opponent_turnover_pct_rank, assist_rate, assist_rate_rank
+) VALUES
+    ('7bf8726a-a852-452d-b81f-14839127c5fb', '2024-25', 'season', 2, 1, 1, 1, 2, 129.6, 1, 113.4, 1, 16.2, 1, 98.5, 1, 30.5, 1, 28.0, 1, 0.563, 1, 0.525, 1, 5.5, 1, 0.44, 1, 0.532, 1, 0.17, 1, 0.25, 1, 0.75, 1, 0.121, 2, 0.081, 2, 0.714, 1),
+    ('a79dabb2-26c5-443c-bbb4-cabdd8db5958', '2024-25', 'season', 2, 1, 1, 1, 2, 113.4, 2, 129.6, 2, -16.2, 2, 98.5, 1, 29.0, 2, 30.5, 2, 0.525, 2, 0.563, 2, 2.5, 2, 0.417, 2, 0.286, 2, 0.286, 1, 0.25, 1, 0.75, 1, 0.081, 1, 0.121, 1, 0.333, 2),
+    ('7bf8726a-a852-452d-b81f-14839127c5fb', '2024-25', 'last_10', 2, 1, 1, 0, 2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 30.5, 1, 28.0, 1, 0.563, 1, 0.525, 1, 5.5, 1, 0.44, 1, 0.532, 1, 0.17, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0.714, 1);
