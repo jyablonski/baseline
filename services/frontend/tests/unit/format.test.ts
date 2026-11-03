@@ -8,6 +8,7 @@ import {
   formatShortDate,
   formatShortDateET,
   formatGamesBack,
+  formatGamesBackShort,
   formatMoneyline,
   formatNumber,
   formatProbability,
@@ -98,6 +99,9 @@ describe("format helpers", () => {
     );
     expect(formatGamesBack(null)).toBe("—");
     expect(formatGamesBack(0)).toBe("—");
+    expect(formatGamesBackShort(1.5)).toBe("1.5");
+    expect(formatGamesBackShort(0)).toBe("—");
+    expect(formatGamesBackShort(null)).toBe("—");
     expect(formatGamesBack(1.5)).toBe("1.5 GB");
     expect(formatUsdCompact(null)).toBe("—");
     expect(formatUsdCompact(52_400_000)).toBe("$52.4M");

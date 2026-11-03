@@ -41,6 +41,7 @@ import type {
   PlayerSeasonStats,
   PlayerSummary,
   PlayerValue,
+  RosterPlayer,
   CalibrationBucket,
   PredictionGame,
   PredictionScorecard,
@@ -52,6 +53,7 @@ import type {
   TeamGamesParams,
   TeamRecord,
   TeamSeasonGame,
+  TeamStatSplit,
   TeamRecordParams,
   TeamSummary,
   WarehouseStatus,
@@ -392,6 +394,12 @@ export const api = {
     asPaginated<TeamSeasonGame>(
       await fetchApi(`/api/v1/teams/${id}/season-games${buildQuery({ season: params.season })}`)
     ),
+
+  getTeamStats: async (id: string) =>
+    asPaginated<TeamStatSplit>(await fetchApi(`/api/v1/teams/${id}/stats`)),
+
+  getTeamRoster: async (id: string) =>
+    asPaginated<RosterPlayer>(await fetchApi(`/api/v1/teams/${id}/roster`)),
 
   getTeamRecord: async (id: string, params: TeamRecordParams = {}) =>
     asData<TeamRecord>(

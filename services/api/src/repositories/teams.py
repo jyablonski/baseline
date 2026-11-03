@@ -10,7 +10,9 @@ from queries.teams import (
     LATEST_SEASON_FOR_TEAM,
     LIST_TEAM_GAMES,
     LIST_TEAM_GAMES_COUNT,
+    LIST_TEAM_ROSTER,
     LIST_TEAM_SEASON_GAMES,
+    LIST_TEAM_STAT_SPLITS,
     LIST_TEAMS,
     LIST_TEAMS_COUNT,
     TEAM_BY_ABBREVIATION,
@@ -143,4 +145,12 @@ class TeamsRepository:
             LIST_TEAM_SEASON_GAMES,
             {"team_id": team_id, "season": season, "season_type": season_type},
         )
+        return [dict(row._mapping) for row in rows]
+
+    def list_team_stat_splits(self, team_id: UUID) -> list[dict]:
+        rows = self.db.execute(LIST_TEAM_STAT_SPLITS, {"team_id": team_id})
+        return [dict(row._mapping) for row in rows]
+
+    def list_team_roster(self, team_id: UUID) -> list[dict]:
+        rows = self.db.execute(LIST_TEAM_ROSTER, {"team_id": team_id})
         return [dict(row._mapping) for row in rows]

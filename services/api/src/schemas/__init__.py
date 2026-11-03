@@ -67,7 +67,7 @@ from schemas.social import (
 )
 from schemas.standing import StandingRow, StandingSummary
 from schemas.status import WarehouseStatus
-from schemas.team import TeamDetail, TeamRecord, TeamSummary
+from schemas.team import RosterPlayer, TeamDetail, TeamRecord, TeamStatSplit, TeamSummary
 from schemas.transaction import Transaction
 
 
@@ -151,12 +151,14 @@ __all__ = [
     "SeasonListResponse",
     "SourceHealth",
     "Transaction",
+    "RosterPlayer",
     "StandingRow",
     "StandingSummary",
     "TableFreshness",
     "TeamDetail",
     "TeamGameResult",
     "TeamRecord",
+    "TeamStatSplit",
     "TeamSummary",
     "WarehouseStatus",
 ]

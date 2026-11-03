@@ -5,6 +5,7 @@ from ids import (
     GAME_ONE,
     GAME_TWO,
     MISSING_ID,
+    PLAYER_CURRY,
     TEAM_BOS,
     TEAM_CHI,
     TEAM_GSW,
@@ -626,3 +627,85 @@ def test_team_season_games_sql_reads_every_state_and_flags_back_to_backs() -> No
     assert "THEN fct_games_schedule.home_is_back_to_back" in sql
     assert "lag(" not in sql
     assert "THEN fct_game_predictions.model_wp" in sql
+
+
+@pytest.mark.unit
+def test_team_stats(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(rows=[_team_row()]),
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "season": "2024-25",
+                        "split": "season",
+                        "games": 8,
+                        "wins": 7,
+                        "losses": 1,
+                        "games_with_possessions": 8,
+                        "team_count": 30,
+                        "net_rating": 9.8,
+                        "net_rating_rank": 3,
+                        "pace": 97.2,
+                        "pace_rank": 24,
+                    }
+                )
+            ]
+        ),
+    ]
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}/stats")
+    assert response.status_code == 200
+    (row,) = response.json()["data"]
+    assert (row["net_rating"], row["net_rating_rank"], row["pace_rank"]) == (9.8, 3, 24)
+    assert row["offensive_rating"] is None
+    _, params = session.calls[-1]
+    assert str(params["team_id"]) == TEAM_GSW
+
+
+@pytest.mark.unit
+def test_team_stats_empty_and_missing(client, session, query_result) -> None:
+    session.queue = [query_result(rows=[_team_row()]), query_result([])]
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}/stats")
+    assert response.status_code == 200
+    assert response.json()["data"] == []
+
+    session.queue = [query_result(rows=[])]
+    assert client.get(f"/api/v1/teams/{MISSING_ID}/stats").status_code == 404
+
+
+@pytest.mark.unit
+def test_team_roster(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(rows=[_team_row()]),
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "player_id": PLAYER_CURRY,
+                        "full_name": "Stephen Curry",
+                        "position": "G",
+                        "season": "2024-25",
+                        "games_played": 2,
+                        "points": 30.5,
+                        "true_shooting_pct": 0.612,
+                    }
+                ),
+                mapping_row(
+                    {
+                        "player_id": MISSING_ID,
+                        "full_name": "Two Way",
+                        "season": "2024-25",
+                        "games_played": 0,
+                    }
+                ),
+            ]
+        ),
+    ]
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}/roster")
+    assert response.status_code == 200
+    curry, unplayed = response.json()["data"]
+    assert (curry["points"], curry["true_shooting_pct"]) == (30.5, 0.612)
+    assert (unplayed["games_played"], unplayed["points"]) == (0, None)
+
+    session.queue = [query_result(rows=[])]
+    assert client.get(f"/api/v1/teams/{MISSING_ID}/roster").status_code == 404

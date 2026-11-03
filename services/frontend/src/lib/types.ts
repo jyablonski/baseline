@@ -254,6 +254,8 @@ export type StandingRow = StandingSummary & {
   streak: string | null;
   last_10: string | null;
   record_source?: "official" | "games" | null;
+  /** Net points per 100 possessions this season; null before any game with the rebound split. */
+  net_rating?: number | null;
 };
 
 export type TeamDetail = TeamSummary & {
@@ -440,6 +442,83 @@ export type TeamSeasonGame = {
   win_probability?: number | null;
   /** Played the day before. */
   is_back_to_back: boolean;
+};
+
+/** Which slice of the current Regular Season a TeamStatSplit covers. */
+export type TeamStatSplitName = "season" | "last_10" | "home" | "away";
+
+/**
+ * One split of a team's current Regular Season, with league ranks (1 = best, so
+ * 1st in defensive rating is the fewest points allowed). Possession-based stats
+ * (ratings, pace, rebound and turnover rates) count only games_with_possessions
+ * and are null, with a null rank, when that is 0.
+ */
+export type TeamStatSplit = {
+  season: string;
+  split: TeamStatSplitName;
+  games: number;
+  wins: number;
+  losses: number;
+  games_with_possessions: number;
+  team_count: number;
+  offensive_rating: number | null;
+  offensive_rating_rank: number | null;
+  defensive_rating: number | null;
+  defensive_rating_rank: number | null;
+  net_rating: number | null;
+  net_rating_rank: number | null;
+  pace: number | null;
+  pace_rank: number | null;
+  points_per_game: number | null;
+  points_per_game_rank: number | null;
+  opponent_points_per_game: number | null;
+  opponent_points_per_game_rank: number | null;
+  effective_fg_pct: number | null;
+  effective_fg_pct_rank: number | null;
+  opponent_effective_fg_pct: number | null;
+  opponent_effective_fg_pct_rank: number | null;
+  three_pointers_made_per_game: number | null;
+  three_pointers_made_per_game_rank: number | null;
+  three_point_pct: number | null;
+  three_point_pct_rank: number | null;
+  three_point_attempt_rate: number | null;
+  three_point_attempt_rate_rank: number | null;
+  free_throw_rate: number | null;
+  free_throw_rate_rank: number | null;
+  offensive_rebound_pct: number | null;
+  offensive_rebound_pct_rank: number | null;
+  defensive_rebound_pct: number | null;
+  defensive_rebound_pct_rank: number | null;
+  turnover_pct: number | null;
+  turnover_pct_rank: number | null;
+  opponent_turnover_pct: number | null;
+  opponent_turnover_pct_rank: number | null;
+  assist_rate: number | null;
+  assist_rate_rank: number | null;
+};
+
+/** A current player with per-game averages from this team's Regular Season games. */
+export type RosterPlayer = {
+  player_id: string;
+  full_name: string;
+  position: string | null;
+  jersey_number: string | null;
+  season: string | null;
+  /** 0, with every average null, for a player yet to play for the team. */
+  games_played: number;
+  minutes: number | null;
+  points: number | null;
+  rebounds: number | null;
+  assists: number | null;
+  steals: number | null;
+  blocks: number | null;
+  turnovers: number | null;
+  three_pointers_made: number | null;
+  /** 0-1. */
+  true_shooting_pct: number | null;
+  plus_minus: number | null;
+  /** Average Game Score, the box-score value the MVP ladder uses. */
+  game_score: number | null;
 };
 
 export type TeamGamesParams = {

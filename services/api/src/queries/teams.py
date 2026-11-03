@@ -339,3 +339,132 @@ LIST_TEAM_SEASON_GAMES = text(
         team_games.game_id
     """
 )
+
+
+TEAM_STAT_METRICS = (
+    "offensive_rating",
+    "defensive_rating",
+    "net_rating",
+    "pace",
+    "points_per_game",
+    "opponent_points_per_game",
+    "effective_fg_pct",
+    "opponent_effective_fg_pct",
+    "three_pointers_made_per_game",
+    "three_point_pct",
+    "three_point_attempt_rate",
+    "free_throw_rate",
+    "offensive_rebound_pct",
+    "defensive_rebound_pct",
+    "turnover_pct",
+    "opponent_turnover_pct",
+    "assist_rate",
+)
+
+_TEAM_STAT_COLUMNS = ",\n        ".join(
+    f"fct_team_stat_splits.{metric},\n        fct_team_stat_splits.{metric}_rank"
+    for metric in TEAM_STAT_METRICS
+)
+
+# The mart holds only the current Regular Season, so there is no season to resolve.
+LIST_TEAM_STAT_SPLITS = text(
+    f"""
+    SELECT
+        fct_team_stat_splits.season,
+        fct_team_stat_splits.split,
+        fct_team_stat_splits.games,
+        fct_team_stat_splits.wins,
+        fct_team_stat_splits.losses,
+        fct_team_stat_splits.games_with_possessions,
+        fct_team_stat_splits.team_count,
+        {_TEAM_STAT_COLUMNS}
+    FROM gold.fct_team_stat_splits
+    WHERE fct_team_stat_splits.team_id = :team_id
+    ORDER BY
+        CASE fct_team_stat_splits.split
+            WHEN 'season' THEN 1
+            WHEN 'last_10' THEN 2
+            WHEN 'home' THEN 3
+            ELSE 4
+        END
+    """
+)
+
+# The current roster (players whose team is this one), each with per-game stats
+# from their Regular Season games for this team in the newest season. A player
+# traded in brings only the games played here; one yet to play (or with only
+# DNPs) has no team_logs row, so games_played is 0 and every average null.
+LIST_TEAM_ROSTER = text(
+    """
+    WITH latest_season AS (
+        SELECT max(fct_player_game_logs.season) AS season
+        FROM gold.fct_player_game_logs
+        WHERE fct_player_game_logs.season_type = 'Regular Season'
+    ),
+
+    team_logs AS (
+        SELECT
+            fct_player_game_logs.player_id,
+            count(*) AS games_played,
+            avg(fct_player_game_logs.minutes) AS minutes,
+            avg(fct_player_game_logs.points) AS points,
+            avg(fct_player_game_logs.rebounds) AS rebounds,
+            avg(fct_player_game_logs.assists) AS assists,
+            avg(fct_player_game_logs.steals) AS steals,
+            avg(fct_player_game_logs.blocks) AS blocks,
+            avg(fct_player_game_logs.turnovers) AS turnovers,
+            avg(fct_player_game_logs.three_pointers_made) AS three_pointers_made,
+            avg(fct_player_game_logs.plus_minus) AS plus_minus,
+            avg(fct_player_game_logs.mvp_box_score) AS game_score,
+            sum(fct_player_game_logs.points) AS total_points,
+            sum(fct_player_game_logs.field_goals_attempted) AS total_field_goals_attempted,
+            sum(fct_player_game_logs.free_throws_attempted) AS total_free_throws_attempted
+        FROM gold.fct_player_game_logs
+        INNER JOIN latest_season
+            ON fct_player_game_logs.season = latest_season.season
+        WHERE
+            fct_player_game_logs.team_id = :team_id
+            AND fct_player_game_logs.season_type = 'Regular Season'
+            -- A DNP is not a game played; it adds no points or shots either.
+            AND fct_player_game_logs.minutes > 0
+        GROUP BY fct_player_game_logs.player_id
+    )
+
+    SELECT
+        dim_players.player_id,
+        dim_players.full_name,
+        dim_players.position,
+        dim_players.jersey_number,
+        latest_season.season,
+        coalesce(team_logs.games_played, 0) AS games_played,
+        round(team_logs.minutes::numeric, 1) AS minutes,
+        round(team_logs.points::numeric, 1) AS points,
+        round(team_logs.rebounds::numeric, 1) AS rebounds,
+        round(team_logs.assists::numeric, 1) AS assists,
+        round(team_logs.steals::numeric, 1) AS steals,
+        round(team_logs.blocks::numeric, 1) AS blocks,
+        round(team_logs.turnovers::numeric, 1) AS turnovers,
+        round(team_logs.three_pointers_made::numeric, 1) AS three_pointers_made,
+        -- PTS / (2 * (FGA + 0.44 * FTA)); null without a shot attempt.
+        round(
+            team_logs.total_points
+            / nullif(
+                2 * (team_logs.total_field_goals_attempted + 0.44 * team_logs.total_free_throws_attempted),
+                0
+            ),
+            3
+        ) AS true_shooting_pct,
+        round(team_logs.plus_minus::numeric, 1) AS plus_minus,
+        round(team_logs.game_score::numeric, 1) AS game_score
+    FROM gold.dim_players
+    CROSS JOIN latest_season
+    LEFT JOIN team_logs
+        ON dim_players.player_id = team_logs.player_id
+    WHERE
+        dim_players.team_id = :team_id
+        AND dim_players.is_active
+    ORDER BY
+        team_logs.minutes DESC NULLS LAST,
+        dim_players.full_name
+    """
+)

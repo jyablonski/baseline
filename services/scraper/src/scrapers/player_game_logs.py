@@ -150,6 +150,8 @@ def parse_boxscore_html(
                     "min": parse_minutes(_visible_text(row, "mp")),
                     "pts": to_int(_text(row, "pts")),
                     "reb": to_int(_text(row, "trb")),
+                    "orb": to_int(_text(row, "orb")),
+                    "drb": to_int(_text(row, "drb")),
                     "ast": to_int(_text(row, "ast")),
                     "stl": to_int(_text(row, "stl")),
                     "blk": to_int(_text(row, "blk")),
@@ -163,6 +165,7 @@ def parse_boxscore_html(
                     "ftm": _made(_text(row, "ft")),
                     "fta": _attempted(_text(row, "ft")) or to_int(_text(row, "fta")),
                     "ft_pct": to_float(_text(row, "ft_pct")),
+                    "pf": to_int(_text(row, "pf")),
                     "plus_minus": to_int(_text(row, "plus_minus")),
                 }
             )
@@ -201,10 +204,16 @@ def _scrape_games(
         failed = 0
         existing_game_ids = set()
         if active_player_ids is None and external_ids:
+            # A game counts as loaded only once its logs carry the rebound split,
+            # so a season scraped before orb/drb existed is refetched by the next
+            # scrape-all rather than skipped.
             existing_game_ids = set(
                 session.scalars(
                     select(PlayerGameLog.game_id)
-                    .where(PlayerGameLog.game_id.in_(list(external_ids)))
+                    .where(
+                        PlayerGameLog.game_id.in_(list(external_ids)),
+                        PlayerGameLog.orb.is_not(None),
+                    )
                     .distinct()
                 ).all()
             )

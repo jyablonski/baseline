@@ -25,8 +25,10 @@ BOXSCORE_HTML = """
     <td data-stat="mp">36:30</td><td data-stat="fg" csk="8-12">8-12</td>
     <td data-stat="fg_pct" csk=".667">.667</td><td data-stat="fg3" csk="4-7">4-7</td>
     <td data-stat="ft" csk="5-5">5-5</td><td data-stat="pts">25</td>
+    <td data-stat="orb">1</td><td data-stat="drb">5</td>
     <td data-stat="trb">6</td><td data-stat="ast">8</td><td data-stat="stl">2</td>
-    <td data-stat="blk">1</td><td data-stat="tov">3</td><td data-stat="plus_minus">12</td>
+    <td data-stat="blk">1</td><td data-stat="tov">3</td><td data-stat="pf">4</td>
+    <td data-stat="plus_minus">12</td>
   </tr>
   <tr><th data-stat="player">Team Totals</th></tr>
 </tbody></table>
@@ -60,6 +62,9 @@ def test_parse_bref_boxscore_html() -> None:
     assert rows[0]["fga"] == 12
     assert rows[0]["fg3a"] == 7
     assert rows[0]["pts"] == 25
+    assert rows[0]["orb"] == 1
+    assert rows[0]["drb"] == 5
+    assert rows[0]["pf"] == 4
     assert boxscore_url("202410220GSW").endswith("/boxscores/202410220GSW.html")
 
 

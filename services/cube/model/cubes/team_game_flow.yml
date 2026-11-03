@@ -90,6 +90,16 @@ cubes:
         sql: result
         type: string
 
+      - name: lead_blown
+        description: Biggest lead this team held in this game if it lost, else 0.
+        sql: lead_blown
+        type: number
+
+      - name: comeback_from
+        description: Biggest deficit this team erased in this game if it won, else 0.
+        sql: comeback_from
+        type: number
+
       - name: went_to_overtime
         sql: went_to_overtime
         type: boolean

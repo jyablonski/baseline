@@ -13,6 +13,8 @@ select
     min as minutes,
     pts as points,
     reb as rebounds,
+    orb as offensive_rebounds,
+    drb as defensive_rebounds,
     ast as assists,
     stl as steals,
     blk as blocks,
@@ -26,6 +28,7 @@ select
     ftm as free_throws_made,
     fta as free_throws_attempted,
     ft_pct as free_throw_pct,
+    pf as personal_fouls,
     plus_minus,
     case
         when matchup like '% vs. %' then 'home'

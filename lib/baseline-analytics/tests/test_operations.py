@@ -782,3 +782,63 @@ def test_team_flow_reads_blown_leads_and_comebacks() -> None:
     assert flow["biggest_comeback"] is None
     assert flow["filters_applied"] == {"team_abbreviation": "GSW", "season": "2025-26"}
     assert client.queries[0]["filters"][1]["values"] == ["2025-26"]
+
+
+@pytest.mark.unit
+def test_team_flow_counts_games_at_a_chosen_margin() -> None:
+    client = ScriptedCubeClient(
+        [
+            [{"games": "20", "blown_leads": "1", "biggest_lead_blown": "18", "comeback_wins": "3"}],
+            [{"team_id": TEAM_GSW, "abbreviation": "GSW", "team_name": "Warriors"}],
+            [
+                {
+                    "game_id": "g1",
+                    "game_date": "2026-11-01T00:00:00.000",
+                    "opponent_abbreviation": "BOS",
+                    "location": "home",
+                    "lead_blown": "0",
+                    "comeback_from": "16",
+                },
+                {
+                    "game_id": "g2",
+                    "game_date": "2026-10-28T00:00:00.000",
+                    "opponent_abbreviation": "SAC",
+                    "location": "away",
+                    "lead_blown": "18",
+                    "comeback_from": "0",
+                },
+                {
+                    "game_id": "g3",
+                    "game_date": "2026-10-25T00:00:00.000",
+                    "opponent_abbreviation": "UTA",
+                    "location": "home",
+                    "lead_blown": "0",
+                    "comeback_from": "22",
+                },
+            ],
+        ]
+    )
+    flow = CubeAnalytics(client).get_team_flow("GSW", min_margin=15)
+    assert (flow["min_margin"], flow["blown_leads"], flow["comeback_wins"]) == (15, 1, 2)
+    # Biggest first, dates trimmed to the day.
+    assert [(game["game_date"], game["margin"]) for game in flow["comeback_games"]] == [
+        ("2026-10-25", 22),
+        ("2026-11-01", 16),
+    ]
+    assert flow["blown_lead_games"][0]["opponent_abbreviation"] == "SAC"
+    games_query = client.queries[-1]
+    assert games_query["filters"][1]["or"][0] == {
+        "member": "team_game_flow.lead_blown",
+        "operator": "gte",
+        "values": ["15"],
+    }
+    assert flow["filters_applied"]["min_margin"] == 15
+
+
+@pytest.mark.unit
+def test_team_flow_defaults_to_the_ten_point_measures() -> None:
+    client = ScriptedCubeClient([[{"games": "5"}], []])
+    flow = CubeAnalytics(client).get_team_flow("GSW")
+    assert (flow["min_margin"], flow["blown_leads"]) == (10, 0)
+    assert "comeback_games" not in flow
+    assert len(client.queries) == 2

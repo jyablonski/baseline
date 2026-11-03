@@ -24,7 +24,13 @@ export const ASK_SUGGESTIONS: { group: string; questions: string[] }[] = [
       "Compare LeBron James and Stephen Curry",
     ],
   },
-  { group: "Games", questions: ["How many leads have the Lakers blown?"] },
+  {
+    group: "Games",
+    questions: [
+      "How many leads have the Lakers blown?",
+      "Have the Celtics come back from 15 or more down?",
+    ],
+  },
   {
     group: "Standings",
     questions: ["Who leads the West?", "Which team has the longest win streak?"],

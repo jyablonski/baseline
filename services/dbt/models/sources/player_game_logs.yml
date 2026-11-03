@@ -29,6 +29,10 @@ sources:
             description: Points.
           - name: reb
             description: Total rebounds.
+          - name: orb
+            description: Offensive rebounds. Null on rows scraped before migration 0028 until the game is refetched.
+          - name: drb
+            description: Defensive rebounds. Null on rows scraped before migration 0028 until the game is refetched.
           - name: ast
             description: Assists.
           - name: stl
@@ -55,6 +59,8 @@ sources:
             description: Free throws attempted.
           - name: ft_pct
             description: Free throw percentage (0-1).
+          - name: pf
+            description: Personal fouls. Null on rows scraped before migration 0028 until the game is refetched.
           - name: plus_minus
             description: Plus-minus while on court.
           - name: scraped_at
