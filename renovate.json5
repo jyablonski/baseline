@@ -1,0 +1,72 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+    // One PR for every minor/patch/pin/digest update, across all managers.
+    "group:allNonMajor",
+    // Before 4am on the 1st of the month.
+    "schedule:monthly",
+  ],
+  timezone: "America/Los_Angeles",
+  minimumReleaseAge: "7 days",
+  // The default (timestamp-required) holds back forever any version whose registry reports no release date, which includes every ghcr.io image (uv) and some Docker Hub tags. npm and PyPI always report one, so the 7 days still applies to them.
+  minimumReleaseAgeBehaviour: "timestamp-optional",
+  dependencyDashboard: true,
+  // Off by default in Renovate. The ruff hook rev must move with ruff in pyproject.toml, so it belongs in the same group.
+  "pre-commit": {
+    enabled: true,
+  },
+  lockFileMaintenance: {
+    enabled: true,
+    // Same window as schedule:monthly above.
+    schedule: ["* 0-3 1 * *"],
+  },
+  // No Go modules today. These apply if one is added.
+  postUpdateOptions: ["gomodTidy", "gomodUpdateImportPaths"],
+  packageRules: [
+    {
+      // Majors wait for a tick on the Dependency Dashboard, one PR each, so one breaking upgrade can't hold back the rest. Ticking one opens its PR right away instead of waiting for the 1st.
+      matchUpdateTypes: ["major"],
+      dependencyDashboardApproval: true,
+      schedule: ["at any time"],
+    },
+    // Language toolchains are opt-in. Each needs its own groupName: approval is per branch, so a toolchain bump left in the monthly group would hold the whole group for approval.
+    {
+      // A new Python minor (3.14 → 3.15) is the toolchain change: .python-version, requires-python and the python base images. Patch releases of the image stay in the monthly group.
+      matchDepNames: ["python"],
+      matchUpdateTypes: ["major", "minor"],
+      groupName: "Python toolchain",
+      dependencyDashboardApproval: true,
+      schedule: ["at any time"],
+    },
+    {
+      // dbt is pinned to an older Python than the other services on purpose (AGENTS.md), so approving the Python toolchain must not move it.
+      matchDepNames: ["python"],
+      matchUpdateTypes: ["major", "minor"],
+      matchFileNames: ["services/dbt/**"],
+      groupName: "dbt Python toolchain",
+    },
+    {
+      // Node base image, CI node-version, engines and .nvmrc. @types/node tracks the Node major in the frontend image, so it moves with them.
+      matchDepNames: ["node", "@types/node"],
+      matchUpdateTypes: ["major"],
+      groupName: "Node toolchain",
+      dependencyDashboardApproval: true,
+      schedule: ["at any time"],
+    },
+    {
+      // go / toolchain directives in go.mod, at any update type. No Go modules today.
+      matchManagers: ["gomod"],
+      matchDepNames: ["go"],
+      groupName: "Go toolchain",
+      dependencyDashboardApproval: true,
+      schedule: ["at any time"],
+    },
+    {
+      // Compose image names for images this repo builds itself; not on any registry.
+      matchDatasources: ["docker"],
+      matchPackageNames: ["nba-*"],
+      enabled: false,
+    },
+  ],
+}

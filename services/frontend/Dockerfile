@@ -3,7 +3,7 @@
 # linux-arm64-musl. Do not pass --omit=optional (that drops the matching SWC
 # binary). Do not pin --platform=linux/amd64.
 
-FROM node:20.20.2-alpine AS deps
+FROM node:26.13.0-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 # Playwright e2e and unit tests are host-only (`make test-frontend-e2e`).
@@ -15,7 +15,7 @@ COPY package.json package-lock.json ./
 # because src/app/globals.css imports shadcn/tailwind.css.
 RUN npm ci --omit=dev
 
-FROM node:20.20.2-alpine AS builder
+FROM node:26.13.0-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
@@ -30,7 +30,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:20.20.2-alpine AS runtime
+FROM node:26.13.0-alpine AS runtime
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
@@ -46,7 +46,7 @@ COPY --from=builder /app/scripts/with-timestamps.mjs ./scripts/with-timestamps.m
 EXPOSE 3000
 CMD ["node", "scripts/with-timestamps.mjs", "node", "server.js"]
 
-FROM node:20.20.2-alpine AS development
+FROM node:26.13.0-alpine AS development
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
