@@ -28,7 +28,7 @@ jobs:
           python-version: "3.14"
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "26"
           cache: npm
           cache-dependency-path: services/frontend/package-lock.json
       - run: make quality
@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "26"
           cache: npm
           cache-dependency-path: services/frontend/package-lock.json
       - run: make test-frontend
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "26"
           cache: npm
           cache-dependency-path: services/frontend/package-lock.json
       # Playwright starts its own dev server on :3100 against a mocked API,
