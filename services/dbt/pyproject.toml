@@ -3,16 +3,16 @@ name = "nba-dbt"
 version = "0.1.0"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "dbt-core==1.12.3",
+    "dbt-core==1.12.6",
     "dbt-postgres==1.11.0",
 ]
 
 [dependency-groups]
 dev = [
-    "dbt-score==0.18.0",
-    "sqlfluff-templater-dbt==4.3.0",
-    "sqlfluff==4.3.0",
-    "ty==0.0.78",
+    "dbt-score==0.19.0",
+    "sqlfluff-templater-dbt==4.4.0",
+    "sqlfluff==4.4.0",
+    "ty==0.0.92",
 ]
 
 [tool.uv]
@@ -20,7 +20,7 @@ package = false
 default-groups = ["dev"]
 
 [build-system]
-requires = ["hatchling==1.32.0"]
+requires = ["hatchling==1.32.4"]
 build-backend = "hatchling.build"
 
 [tool.sqlfluff.core]

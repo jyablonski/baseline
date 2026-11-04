@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine
@@ -16,7 +16,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
 @contextmanager
-def get_session() -> Iterator[Session]:
+def get_session() -> Generator[Session]:
     session = SessionLocal()
     try:
         yield session

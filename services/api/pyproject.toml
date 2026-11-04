@@ -4,22 +4,22 @@ version = "0.1.0"
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "baseline-analytics",
-    "fastapi==0.141.1",
-    "uvicorn[standard]==0.52.4",
-    "sqlalchemy==2.0.52",
-    "psycopg2-binary==2.9.12",
-    "pydantic==2.13.5",
-    "pydantic-settings==2.15.0",
-    "python-dotenv==1.2.3",
+    "fastapi==0.162.0",
+    "uvicorn[standard]==0.54.0",
+    "sqlalchemy==2.0.57",
+    "psycopg2-binary==2.9.13",
+    "pydantic==2.14.1",
+    "pydantic-settings==2.16.1",
+    "python-dotenv==1.2.4",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx2==2.12.0",
+    "httpx2==2.16.0",
     "pytest-cov==7.1.0",
-    "pytest==9.1.1",
+    "pytest==9.2.0",
     "testcontainers[postgres]==4.15.0",
-    "ty==0.0.78",
+    "ty==0.0.92",
 ]
 
 [tool.uv]
@@ -30,7 +30,7 @@ package = false
 baseline-analytics = { path = "../../lib/baseline-analytics", editable = true }
 
 [build-system]
-requires = ["hatchling==1.32.0"]
+requires = ["hatchling==1.32.4"]
 build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]

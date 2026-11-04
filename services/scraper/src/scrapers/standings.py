@@ -32,7 +32,7 @@ def _tables(soup: BeautifulSoup) -> list[Tag]:
         return direct
     found: list[Tag] = []
     for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
-        if "standings" not in comment:  # ty: ignore[unsupported-operator]
+        if "standings" not in comment:
             continue
         nested = BeautifulSoup(str(comment), "html.parser")
         found.extend(
