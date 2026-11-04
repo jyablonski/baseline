@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.27.0
+# syntax=docker/dockerfile:1.28.0
 # node:*-alpine is multi-arch. Next 16 ships SWC for linux-x64-musl and
 # linux-arm64-musl. Do not pass --omit=optional (that drops the matching SWC
 # binary). Do not pin --platform=linux/amd64.
