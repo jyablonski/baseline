@@ -42,7 +42,7 @@ def _find_table(soup: BeautifulSoup) -> Tag | None:
     if isinstance(table, Tag):
         return table
     for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
-        if 'id="pbp"' not in comment and "id='pbp'" not in comment:  # ty: ignore[unsupported-operator]
+        if 'id="pbp"' not in comment and "id='pbp'" not in comment:
             continue
         nested = BeautifulSoup(str(comment), "html.parser")
         table = nested.find("table", id="pbp")
@@ -80,7 +80,7 @@ def _linked_identity(row: Tag) -> tuple[list[tuple[str, str]], str | None]:
     players: list[tuple[str, str]] = []
     team_abbreviation: str | None = None
     for link in row.find_all("a"):
-        href = str(link.get("href") or "")  # ty: ignore[unresolved-attribute]
+        href = str(link.get("href") or "")
         player = re.search(r"/players/[a-z]/([a-z0-9]+)\.html", href, re.IGNORECASE)
         if player:
             name = link.get_text(" ", strip=True)
@@ -121,7 +121,7 @@ def parse_play_by_play_html(
             period = int(match.group(1)) if match else period
             continue
         cells = row.find_all(["th", "td"], recursive=False)
-        live_layout = not any(cell.get("data-stat") for cell in cells)  # ty: ignore[unresolved-attribute]
+        live_layout = not any(cell.get("data-stat") for cell in cells)
         team: str | None = None
         if live_layout:
             if not cells or cells[0].get_text(" ", strip=True).casefold() == "time":
@@ -131,9 +131,9 @@ def parse_play_by_play_html(
                 candidates = [
                     (cells[1], away_bref_abbreviation),
                     (cells[5], home_bref_abbreviation),
-                ]  # ty: ignore[invalid-assignment]
+                ]
             elif len(cells) >= 2:
-                candidates = [(cells[1], None)]  # ty: ignore[invalid-assignment]
+                candidates = [(cells[1], None)]
             descriptions = [cell.get_text(" ", strip=True) for cell, _ in candidates]
             description = " | ".join(text for text in descriptions if text)
             for cell, candidate_team in candidates:

@@ -52,7 +52,7 @@ def _find_roster_table(soup: BeautifulSoup) -> Tag | None:
     if isinstance(table, Tag):
         return table
     for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
-        if 'id="roster"' not in comment and "id='roster'" not in comment:  # ty: ignore[unsupported-operator]
+        if 'id="roster"' not in comment and "id='roster'" not in comment:
             continue
         nested = BeautifulSoup(str(comment), "html.parser")
         table = nested.find("table", id=ROSTER_TABLE_ID)
@@ -66,8 +66,8 @@ def _find_player_directory_table(soup: BeautifulSoup) -> Tag | None:
     if isinstance(table, Tag):
         return table
     for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
-        if f'id="{PLAYER_DIRECTORY_TABLE_ID}"' not in comment and (  # ty: ignore[unsupported-operator]
-            f"id='{PLAYER_DIRECTORY_TABLE_ID}'" not in comment  # ty: ignore[unsupported-operator]
+        if f'id="{PLAYER_DIRECTORY_TABLE_ID}"' not in comment and (
+            f"id='{PLAYER_DIRECTORY_TABLE_ID}'" not in comment
         ):
             continue
         nested = BeautifulSoup(str(comment), "html.parser")

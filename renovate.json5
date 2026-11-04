@@ -68,5 +68,10 @@
       matchPackageNames: ["nba-*"],
       enabled: false,
     },
+    {
+      // SQLAlchemy 2.1 makes `postgresql://` mean psycopg 3, and the services ship psycopg2. Lift this cap in the PR that moves them to psycopg 3, after the integration suites pass on it.
+      matchPackageNames: ["sqlalchemy"],
+      allowedVersions: "<2.1",
+    },
   ],
 }

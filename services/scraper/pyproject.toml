@@ -3,7 +3,7 @@ name = "nba-scraper"
 version = "0.1.0"
 requires-python = ">=3.14,<3.15"
 dependencies = [
-    "sqlalchemy==2.1.6",
+    "sqlalchemy==2.0.57",
     "psycopg2-binary==2.9.13",
     "python-dotenv==1.2.4",
     "tenacity==9.2.1",
@@ -54,9 +54,6 @@ markers = [
 
 # Anchors ty to this service so it does not walk up and type-check the whole
 # repo against this venv. Mirrors the `src` entry in pytest's pythonpath.
-# The `# ty: ignore` comments in src/scrapers are BeautifulSoup stub
-# imprecision: find_all/find are typed as returning PageElement, but the
-# parsers only reach them on Tag. Not runtime bugs.
 [tool.ty.environment]
 extra-paths = ["src"]
 

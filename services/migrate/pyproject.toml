@@ -5,7 +5,7 @@ description = "Alembic migrations for the Postgres source schema"
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "alembic==1.20.1",
-    "sqlalchemy==2.1.6",
+    "sqlalchemy==2.0.57",
     "psycopg2-binary==2.9.13",
     "python-dotenv==1.2.4",
 ]
