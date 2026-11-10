@@ -595,6 +595,8 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                 true_shooting_pct: 0.62,
                 plus_minus: 5.2,
                 game_score: 21.8,
+                mvp_score: 20.4,
+                mvp_rank: 9,
               },
             ];
         return json({ data: rows, meta: { total: rows.length, limit: rows.length, offset: 0 } });

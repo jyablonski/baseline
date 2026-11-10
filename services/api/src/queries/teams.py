@@ -428,6 +428,19 @@ LIST_TEAM_ROSTER = text(
             -- A DNP is not a game played; it adds no points or shots either.
             AND fct_player_game_logs.minutes > 0
         GROUP BY fct_player_game_logs.player_id
+    ),
+
+    -- League-wide, across every team the player has played for this season,
+    -- unlike the per-game averages, which count only games for this team.
+    regular_season_mvp AS (
+        SELECT
+            fct_player_mvp_scores.player_id,
+            fct_player_mvp_scores.mvp_score,
+            fct_player_mvp_scores.mvp_rank
+        FROM gold.fct_player_mvp_scores
+        INNER JOIN latest_season
+            ON fct_player_mvp_scores.season = latest_season.season
+        WHERE fct_player_mvp_scores.season_type = 'Regular Season'
     )
 
     SELECT
@@ -455,11 +468,15 @@ LIST_TEAM_ROSTER = text(
             3
         ) AS true_shooting_pct,
         round(team_logs.plus_minus::numeric, 1) AS plus_minus,
-        round(team_logs.game_score::numeric, 1) AS game_score
+        round(team_logs.game_score::numeric, 1) AS game_score,
+        regular_season_mvp.mvp_score,
+        regular_season_mvp.mvp_rank
     FROM gold.dim_players
     CROSS JOIN latest_season
     LEFT JOIN team_logs
         ON dim_players.player_id = team_logs.player_id
+    LEFT JOIN regular_season_mvp
+        ON dim_players.player_id = regular_season_mvp.player_id
     WHERE
         dim_players.team_id = :team_id
         AND dim_players.is_active

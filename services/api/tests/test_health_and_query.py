@@ -163,6 +163,12 @@ def test_query_rejects_empty_question(client) -> None:
 
 
 @pytest.mark.unit
+def test_query_rejects_an_overlong_question(client) -> None:
+    response = client.post("/api/v1/query", json={"question": "Lakers record " * 40})
+    assert response.status_code == 422
+
+
+@pytest.mark.unit
 def test_query_cube_down_is_clear(client, cube_analytics) -> None:
     from baseline_analytics.errors import CubeUnavailableError
 

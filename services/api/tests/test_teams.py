@@ -688,6 +688,8 @@ def test_team_roster(client, session, mapping_row, query_result) -> None:
                         "games_played": 2,
                         "points": 30.5,
                         "true_shooting_pct": 0.612,
+                        "mvp_score": 22.5,
+                        "mvp_rank": 2,
                     }
                 ),
                 mapping_row(
@@ -705,7 +707,8 @@ def test_team_roster(client, session, mapping_row, query_result) -> None:
     assert response.status_code == 200
     curry, unplayed = response.json()["data"]
     assert (curry["points"], curry["true_shooting_pct"]) == (30.5, 0.612)
-    assert (unplayed["games_played"], unplayed["points"]) == (0, None)
+    assert (curry["mvp_score"], curry["mvp_rank"]) == (22.5, 2)
+    assert (unplayed["games_played"], unplayed["points"], unplayed["mvp_score"]) == (0, None, None)
 
     session.queue = [query_result(rows=[])]
     assert client.get(f"/api/v1/teams/{MISSING_ID}/roster").status_code == 404

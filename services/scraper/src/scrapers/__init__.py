@@ -13,7 +13,9 @@ from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponen
 
 BREF_BASE_URL = "https://www.basketball-reference.com"
 BREF_REQUEST_TIMEOUT = 60
-BREF_REQUEST_DELAY_SECONDS = 3.0
+# Basketball-Reference allows 20 requests a minute; 3s between request starts sat
+# exactly on it. 4s (15/min) leaves headroom for clock skew and their own count.
+BREF_REQUEST_DELAY_SECONDS = 4.0
 BREF_PROVIDER = "basketball-reference"
 BREF_HEADERS = {
     "User-Agent": "Baseline/1.0 (+https://baseline.jyablonski.dev; respectful research client)",
@@ -23,19 +25,39 @@ BREF_HEADERS = {
 }
 
 _last_bref_request_at = 0.0
+# Set by the first 429. BRef answers a rate-limit breach with a block of up to an
+# hour, and every request made during it can extend the block, so the rest of
+# this process sends none. Each scrape is its own process, so the next run
+# (hourly catch-up, or tomorrow's daily) tries again.
+_bref_rate_limited_url: str | None = None
 
 
 class BrefHTTPError(RuntimeError):
-    def __init__(self, status: int, url: str) -> None:
+    def __init__(self, status: int, url: str, *, message: str | None = None) -> None:
         self.status = int(status)
         self.url = url
-        super().__init__(f"Basketball-Reference HTTP {status} for {url}")
+        super().__init__(message or f"Basketball-Reference HTTP {status} for {url}")
+
+
+class BrefRateLimitedError(BrefHTTPError):
+    """BRef returned 429 in this process; no further request is sent to it."""
+
+    def __init__(self, url: str, *, first_url: str) -> None:
+        super().__init__(
+            429,
+            url,
+            message=(
+                f"Basketball-Reference rate limit hit (first 429 for {first_url}); "
+                f"skipped {url} for the rest of this run"
+            ),
+        )
 
 
 def _is_retryable(exc: BaseException) -> bool:
     if isinstance(exc, (KeyboardInterrupt, SystemExit, ValueError)):
         return False
-    return not (isinstance(exc, BrefHTTPError) and 400 <= exc.status < 500 and exc.status != 429)
+    # A 429 is never retried: retrying inside the block only lengthens it.
+    return not (isinstance(exc, BrefHTTPError) and 400 <= exc.status < 500)
 
 
 def bref_rate_limit() -> None:
@@ -54,9 +76,15 @@ def bref_rate_limit() -> None:
     reraise=True,
 )
 def bref_get(url: str, *, get: Callable[..., Any] | None = None) -> str:
+    global _bref_rate_limited_url
+    if _bref_rate_limited_url is not None:
+        raise BrefRateLimitedError(url, first_url=_bref_rate_limited_url)
     bref_rate_limit()
     response = (get or requests.get)(url, headers=BREF_HEADERS, timeout=BREF_REQUEST_TIMEOUT)
     status = getattr(response, "status_code", None)
+    if status is not None and int(status) == 429:
+        _bref_rate_limited_url = url
+        raise BrefRateLimitedError(url, first_url=url)
     if status is not None and int(status) >= 400:
         raise BrefHTTPError(int(status), url)
     # BRef pages are UTF-8 but do not always declare a charset; requests then falls

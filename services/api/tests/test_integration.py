@@ -461,6 +461,8 @@ def test_team_roster(integration_client) -> None:
     # 61 / (2 * (47 + 0.44 * 8)) = 0.604
     assert curry["true_shooting_pct"] == pytest.approx(0.604)
     assert (curry["plus_minus"], curry["game_score"]) == (3.5, 24.3)
+    # The Regular Season ladder, not the seeded Playoffs row (35.2, rank 1).
+    assert (curry["mvp_score"], curry["mvp_rank"]) == (22.5, 2)
 
 
 @pytest.mark.integration

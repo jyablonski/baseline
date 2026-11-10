@@ -8,7 +8,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { ResultTable } from "@/components/result-table";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
-import { ASK_SUGGESTIONS, entityHref, entityKindLabel } from "@/lib/ask";
+import { ASK_SUGGESTIONS, MAX_ASK_QUESTION_CHARS, entityHref, entityKindLabel } from "@/lib/ask";
 import type { NlpEntity, NlpQueryResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -81,6 +81,7 @@ function AskPanel() {
               onChange={(event) => setQuestion(event.target.value)}
               placeholder="Ask about a team, player or the standings"
               aria-label="Question"
+              maxLength={MAX_ASK_QUESTION_CHARS}
               disabled={blocked}
               className={cn("field field-ask w-full pr-8", question.trim() && "field-query")}
             />

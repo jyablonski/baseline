@@ -22,6 +22,7 @@ vi.mock("@/lib/api", () => ({
 
 import AskPage from "@/app/ask/page";
 import { Providers } from "@/components/providers";
+import { MAX_ASK_QUESTION_CHARS } from "@/lib/ask";
 
 function renderPage() {
   return render(
@@ -50,7 +51,10 @@ describe("ask page", () => {
     renderPage();
     expect(screen.getByText("Nothing asked yet")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Try" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Question" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Question" })).toHaveAttribute(
+      "maxLength",
+      String(MAX_ASK_QUESTION_CHARS)
+    );
     for (const group of ["Teams", "Players", "Games", "Standings"]) {
       expect(screen.getByRole("region", { name: group })).toBeInTheDocument();
     }

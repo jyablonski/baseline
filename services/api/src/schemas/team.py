@@ -130,3 +130,7 @@ class RosterPlayer(BaseModel):
     true_shooting_pct: float | None = None
     plus_minus: float | None = None
     game_score: float | None = None
+    # League-wide Regular Season MVP ladder, across every team this season. Null
+    # when the player has no Regular Season ladder row.
+    mvp_score: float | None = None
+    mvp_rank: int | None = None

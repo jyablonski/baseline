@@ -19,7 +19,14 @@ from sqlalchemy import select
 
 from db import get_session
 from models import Player, PlayerExternalId
-from scrapers import BREF_BASE_URL, bref_get, current_season, season_start_year, to_int
+from scrapers import (
+    BREF_BASE_URL,
+    BrefRateLimitedError,
+    bref_get,
+    current_season,
+    season_start_year,
+    to_int,
+)
 from scrapers.contracts_parse import PLAYER_HREF_RE, normalize_player_name
 
 logger = logging.getLogger(__name__)
@@ -193,6 +200,8 @@ def scrape_players(
         url = team_roster_url(entry.bref_abbreviation, target_season)
         try:
             all_rows.extend(parse_roster_html(fetch(url), team_id=entry.team_id, source_url=url))
+        except BrefRateLimitedError:
+            raise
         except Exception:
             logger.exception("BRef roster scrape failed for %s", url)
 
@@ -201,6 +210,8 @@ def scrape_players(
         url = player_directory_url(letter)
         try:
             directory_names.update(parse_player_directory_html(fetch(url)))
+        except BrefRateLimitedError:
+            raise
         except Exception:
             logger.exception("BRef player directory scrape failed for %s", url)
 
@@ -243,6 +254,8 @@ def scrape_players(
         url = player_profile_url(external_id)
         try:
             full_name = parse_player_profile_html(fetch(url))
+        except BrefRateLimitedError:
+            raise
         except Exception:
             logger.exception("BRef player profile scrape failed for %s", url)
             continue
