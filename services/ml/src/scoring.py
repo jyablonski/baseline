@@ -8,13 +8,23 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
 
+from breakdown import (
+    elo_v0_breakdowns,
+    elo_v1_parts,
+    elo_v1_settings,
+    layer_breakdowns,
+    layer_settings,
+    serialize,
+)
 from elo_v2 import MODEL_NAME as ELO_V2_MODEL_NAME
 from elo_v2 import MODEL_VERSION as ELO_V2_MODEL_VERSION
 from elo_v2 import RECENT_ABSENCE_DAYS, GameContext
+from elo_v2 import features as features_v2
 from elo_v2 import score_games as score_games_v2
 from elo_v2 import walk_forward as walk_forward_v2
 from elo_v3 import MODEL_NAME as ELO_V3_MODEL_NAME
 from elo_v3 import MODEL_VERSION as ELO_V3_MODEL_VERSION
+from elo_v3 import features as features_v3
 from elo_v3 import score_games as score_games_v3
 from elo_v3 import walk_forward as walk_forward_v3
 from logit import (
@@ -400,9 +410,12 @@ def build_prediction_rows(
     as_of: datetime,
     model_name: str = MODEL_NAME,
     model_version: str = MODEL_VERSION,
+    breakdowns: Sequence[dict[str, Any] | None] | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for game, prob in zip(upcoming, probs, strict=True):
+    if breakdowns is None:
+        breakdowns = [None] * len(upcoming)
+    for game, prob, breakdown in zip(upcoming, probs, breakdowns, strict=True):
         rows.append(
             {
                 "game_id": game.game_id,
@@ -413,6 +426,7 @@ def build_prediction_rows(
                 "away_team_id": game.away_team_id,
                 "model_wp": float(prob),
                 "market_wp": market_wp.get(game.game_id),
+                "breakdown": breakdown,
                 "scraped_at": as_of,
             }
         )
@@ -432,11 +446,19 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
         contexts = load_game_contexts(session)
         _v0_games, _v0_preds, ratings = walk_elo_v0(history, load_elo_seed(session, MODEL_VERSION))
         elo_probs = score_games(upcoming, ratings)
-        rows = build_prediction_rows(upcoming, elo_probs, market, as_of=scored_at)
+        rows = build_prediction_rows(
+            upcoming,
+            elo_probs,
+            market,
+            as_of=scored_at,
+            breakdowns=elo_v0_breakdowns(upcoming, ratings),
+        )
         v1_games, v1_preds, v1_state = walk_elo_v1(
             history, load_elo_seed(session, ELO_V1_MODEL_VERSION)
         )
         v1_probs = score_games_v1(upcoming, v1_state)
+        v1_parts = elo_v1_parts(upcoming, v1_state)
+        v1_settings = elo_v1_settings(v1_state)
         rows.extend(
             build_prediction_rows(
                 upcoming,
@@ -445,6 +467,7 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
                 as_of=scored_at,
                 model_name=ELO_V1_MODEL_NAME,
                 model_version=ELO_V1_MODEL_VERSION,
+                breakdowns=[serialize(parts, v1_settings) for parts in v1_parts],
             )
         )
         _v2_preds, v2_weights = walk_forward_v2(v1_games, v1_preds, contexts)
@@ -456,6 +479,15 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
                 as_of=scored_at,
                 model_name=ELO_V2_MODEL_NAME,
                 model_version=ELO_V2_MODEL_VERSION,
+                breakdowns=layer_breakdowns(
+                    upcoming,
+                    v1_probs,
+                    v1_parts,
+                    contexts,
+                    v2_weights,
+                    feature_fn=features_v2,
+                    settings=layer_settings(v1_settings, v2_weights, injury_unit="notable_player"),
+                ),
             )
         )
         _v3_preds, v3_weights = walk_forward_v3(v1_games, v1_preds, contexts)
@@ -467,6 +499,15 @@ def score_and_persist(*, as_of: datetime | None = None) -> dict[str, Any]:
                 as_of=scored_at,
                 model_name=ELO_V3_MODEL_NAME,
                 model_version=ELO_V3_MODEL_VERSION,
+                breakdowns=layer_breakdowns(
+                    upcoming,
+                    v1_probs,
+                    v1_parts,
+                    contexts,
+                    v3_weights,
+                    feature_fn=features_v3,
+                    settings=layer_settings(v1_settings, v3_weights, injury_unit="injury_score"),
+                ),
             )
         )
         logit_version = settings.logit_model_version or DEFAULT_LOGIT_MODEL_VERSION
@@ -552,6 +593,8 @@ def build_graded_rows(
                 "away_team_id": game.away_team_id,
                 "model_wp": float(prob),
                 "market_wp": market_wp.get(game.game_id),
+                # Replays are not split: only a published prediction explains itself.
+                "breakdown": None,
                 "scraped_at": scraped_at,
             }
         )
@@ -667,7 +710,7 @@ def backfill_and_persist(
         register_elo_models(session)
         written = 0
         # One multi-row INSERT per batch keeps each statement under Postgres's
-        # 65,535 bind-parameter limit (9 columns per row).
+        # 65,535 bind-parameter limit (10 columns per row).
         for start in range(0, len(rows), BACKFILL_BATCH_SIZE):
             written += upsert_rows(
                 session,

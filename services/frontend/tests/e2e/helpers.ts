@@ -850,6 +850,18 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         });
       }
 
+      if (url.includes("/predictions/weights")) {
+        return json({
+          data: empty
+            ? null
+            : {
+                model_version: "elo-v0",
+                as_of: "2026-01-15T08:00:00",
+                settings: { home_court_points: 4.6 },
+              },
+        });
+      }
+
       if (url.includes("/predictions/calibration")) {
         return json({
           data: empty ? [] : [{ bucket: "60–70%", predicted: 0.65, actual: 0.7, n: 16 }],
@@ -1207,6 +1219,14 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
             home_moneyline: -150,
             away_moneyline: 130,
             home_spread: -3.5,
+            prediction_breakdown: {
+              points_per_logit: 8,
+              parts: [
+                { key: "strength", points: 2.6 },
+                { key: "home_court", points: 1.3 },
+              ],
+              settings: { home_court_points: 1.3, home_games: 154, home_win_rate: 0.52 },
+            },
           },
         };
         const game = games[singleGame[1]];

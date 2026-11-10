@@ -1,20 +1,24 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
 
 import { ColumnHelp } from "@/components/column-help";
+import { PageNav } from "@/components/page-nav";
 import { BaselineRows } from "@/components/predictions/baseline-rows";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
+import { TeamSelect } from "@/components/team-select";
 import { KpiCard, KpiStrip, KpiTitle } from "@/components/ui/kpi-card";
 import { api, queryErrorMessage } from "@/lib/api";
 import { formatNumber, formatProbability, formatShortDate } from "@/lib/format";
+import { weightLines } from "@/lib/model-breakdown";
 import { latestSeason, marketComparison, modelCall, modelLabel } from "@/lib/predictions";
 import type { CalibrationBucket, PredictionGame, ScorecardRow } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-const CALLS_PAGE = 20;
+const CALLS_PAGE = 10;
 
 export default function PredictionsPage() {
   return (
@@ -97,11 +101,47 @@ function ModelRecord({ row }: { row: ScorecardRow }) {
 
       <div className="grid gap-x-14 gap-y-10 lg:grid-cols-2">
         <Calibration />
-        <RecentCalls total={row.n} />
+        <ModelWeights />
       </div>
 
       <Details row={row} />
+
+      <RecentCalls />
     </>
+  );
+}
+
+/**
+ * What the live model weighs on its newest run. Silent until a run has stored
+ * its settings: there is nothing true to say before then.
+ */
+function ModelWeights() {
+  const query = useQuery({
+    queryKey: ["prediction-weights"],
+    queryFn: () => api.getLiveModelWeights(),
+  });
+  if (!query.data) return null;
+  return (
+    <section data-testid="model-weights">
+      <h2 className="type-module border-b border-rule-strong pb-2">What goes into the number</h2>
+      <ul>
+        {weightLines(query.data).map((line) => (
+          <li
+            key={line.label}
+            className="grid grid-cols-[8rem_minmax(0,1fr)] gap-4 border-b border-rule py-3"
+          >
+            <span>{line.label}</span>
+            <span>
+              <strong className="font-semibold">{line.value}</strong>
+              <span className="block text-sm text-ink-3">{line.detail}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="type-caption mt-3">
+        Points are points on the scoreboard. Updated every morning from the games played so far.
+      </p>
+    </section>
   );
 }
 
@@ -126,8 +166,8 @@ function Calibration() {
             ))}
           </ul>
           <p className="type-caption mt-3">
-            Bar: how often those teams actually won. Tick: what the model said. Close together is
-            good.
+            Bar: how often the home team actually won. Tick: the chance the model gave it. Close
+            together is good.
           </p>
         </>
       )}
@@ -138,13 +178,13 @@ function Calibration() {
 function BucketRow({ bucket }: { bucket: CalibrationBucket }) {
   return (
     <li
-      className="grid grid-cols-[6.5rem_minmax(0,1fr)_auto] items-center gap-4 border-b border-rule py-3"
+      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-b border-rule py-3"
       data-testid="calibration-bucket"
     >
-      <span>Said {bucket.bucket}</span>
+      <span className="w-32 whitespace-nowrap">Home {bucket.bucket}</span>
       <div
         role="img"
-        aria-label={`Model said ${Math.round(bucket.predicted * 100)}%, actually ${Math.round(bucket.actual * 100)}%`}
+        aria-label={`Model gave the home team ${Math.round(bucket.predicted * 100)}%, it won ${Math.round(bucket.actual * 100)}%`}
         className="relative h-2 bg-rule"
       >
         <div className="h-full bg-primary" style={{ width: `${bucket.actual * 100}%` }} />
@@ -163,40 +203,76 @@ function BucketRow({ bucket }: { bucket: CalibrationBucket }) {
   );
 }
 
-function RecentCalls({ total }: { total: number }) {
-  const query = useInfiniteQuery({
-    queryKey: ["prediction-games"],
-    queryFn: ({ pageParam }) => api.listPredictionGames({ limit: CALLS_PAGE, offset: pageParam }),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, pages) => {
-      const loaded = pages.reduce((sum, page) => sum + page.data.length, 0);
-      return lastPage.data.length === CALLS_PAGE && loaded < total ? loaded : undefined;
-    },
+/** Every graded game, newest first, ten at a time, optionally for one team. */
+function RecentCalls() {
+  const [team, setTeam] = useState("");
+  // Back to the first page whenever the team changes. Held with the team it
+  // belongs to rather than reset in an effect, so a new team never fetches its
+  // page 2 first.
+  const [paging, setPaging] = useState({ team, page: 0 });
+  const page = paging.team === team ? paging.page : 0;
+
+  // Same query key as the other directories, so this shares their cached list.
+  const teamsQuery = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.listTeams(),
   });
-  const games = query.data?.pages.flatMap((page) => page.data) ?? [];
+  const teamOptions = useMemo(
+    () =>
+      (teamsQuery.data?.data ?? [])
+        .flatMap((item) => (item.abbreviation ? [item.abbreviation] : []))
+        .sort((left, right) => left.localeCompare(right)),
+    [teamsQuery.data]
+  );
+
+  const query = useQuery({
+    queryKey: ["prediction-games", team, page],
+    queryFn: () =>
+      api.listPredictionGames({
+        team: team || undefined,
+        limit: CALLS_PAGE,
+        offset: page * CALLS_PAGE,
+      }),
+    // Keep the previous rows mounted while the next page loads, so the list
+    // does not collapse and throw the reader back up the page.
+    placeholderData: keepPreviousData,
+  });
+  const games = query.data?.data ?? [];
+  const total = query.data?.meta.total ?? 0;
+  const pages = Math.ceil(total / CALLS_PAGE);
+  const shownPage = query.isPlaceholderData ? paging.page : page;
+
   return (
     <section>
-      <h2 className="type-module border-b border-rule-strong pb-2">Recent calls</h2>
-      {query.isLoading ? (
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule-strong pb-2">
+        <h2 className="type-module">Recent calls</h2>
+        <TeamSelect team={team} teams={teamOptions} setTeam={setTeam} />
+      </div>
+      {query.isPending ? (
         <LoadingState label="Loading…" />
       ) : query.isError ? (
         <ErrorState message={queryErrorMessage(query.error)} />
+      ) : games.length === 0 ? (
+        <EmptyState
+          message={team ? `No graded games involving ${team} yet.` : "No graded games yet."}
+        />
       ) : (
-        <ul>
+        <ul className={cn(query.isPlaceholderData && "opacity-60")} aria-busy={query.isFetching}>
           {games.map((game) => (
             <CallRow key={game.game_id} game={game} />
           ))}
         </ul>
       )}
-      {query.hasNextPage ? (
-        <button
-          type="button"
-          className="mt-3 text-sm text-primary"
-          disabled={query.isFetchingNextPage}
-          onClick={() => query.fetchNextPage()}
-        >
-          Show {Math.min(CALLS_PAGE, total - games.length)} more of {total} games
-        </button>
+      {pages > 1 ? (
+        <PageNav
+          label="Recent calls pages"
+          status={`Page ${shownPage + 1} of ${pages}`}
+          hasPrev={page > 0}
+          hasNext={page + 1 < pages}
+          loading={query.isPlaceholderData}
+          onPrev={() => setPaging({ team, page: page - 1 })}
+          onNext={() => setPaging({ team, page: page + 1 })}
+        />
       ) : null}
     </section>
   );

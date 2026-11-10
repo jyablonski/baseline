@@ -145,6 +145,17 @@ ROI noise is about 1 / sqrt(n) per unit staked, so telling a 5% edge from zero t
 
 As of 2026-11-01, Elo v1 on 88 games: log loss 0.622 against the market's 0.569, slope -0.23 (standard error 0.40), and no swept rule with 20 or more bets was profitable. That is early-season Elo, which cannot see the offseason.
 
+## Why a prediction came out the way it did
+
+Every Elo row written by `score` carries `breakdown` (JSONB on `source.game_predictions`, through `gold.fct_game_predictions`): the prediction split into parts in points of spread, positive for the home team, plus the model's settings on that run. Elo is a sum on the log-odds scale, so the split is exact, not an attribution estimate (`src/breakdown.py`):
+
+- **Parts:** `strength` (rating gap) and `home_court` for every Elo; Elo v2 / v3 add `confidence` ((a − 1) × logit(v1), the tempering), `back_to_back` and `injuries`. They add up to the model's log-odds.
+- **Settings:** `home_court_points`, and for Elo v1 and its layers the raw home tally it learned from (`home_games`, `home_win_rate`, across every game the walk has seen, so not "this season" once a snapshot carries last season); for Elo v2 / v3 the layer's `confidence` and points per back-to-back and per injury unit (`injury_unit`: a notable player for v2, ten points of injury score for v3).
+- **Points:** `POINTS_PER_LOGIT` (8.0) turns log-odds into points. It was read off the sportsbooks' own spread and de-vigged moneyline on 2026-11-10's slate (7.9–8.6 on the lopsided games). No probability depends on it, so refining it changes words, not predictions.
+- **Gaps:** rows written before the column existed, backfilled replays and logit have none, and the product shows nothing for them. Changing the constant does not rewrite stored rows.
+
+The game page shows a game's breakdown; `/predictions` shows the live model's newest settings via `GET /api/v1/predictions/weights`.
+
 ## Current surface and gaps
 
 `gold.fct_prediction_results` holds each model's final call on each Final game, and `gold.fct_prediction_scorecard` aggregates it. The public `GET /api/v1/predictions/*` routes serve the live model only (inferred from `gold.fct_game_predictions`, which only holds the champion's rows) for `/predictions`. `GET /api/v1/admin/models` serves every model for Admin › Models, including the comparison on shared games and the rolling log loss.

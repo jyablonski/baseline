@@ -56,8 +56,9 @@ test("schedule shows model win % and consensus odds, linking to the scorecard", 
   await expect(page).toHaveURL(/\/predictions$/);
   await expect(page.getByRole("heading", { name: "How accurate is the model?" })).toBeVisible();
   await expect(page.getByText("Elo v0 sets the win %")).toBeVisible();
-  await expect(page.getByText("Said 60–70%")).toBeVisible();
+  await expect(page.getByText("Home 60–70%")).toBeVisible();
   await expect(page.getByRole("link", { name: "GSW 62% vs LAL" })).toBeVisible();
+  await expect(page.getByTestId("model-weights")).toContainText("Worth 4.5 points");
   await page.getByText("Accuracy Details").click();
   await expect(page.getByRole("row", { name: /Sportsbook market/ })).toBeVisible();
   // Upsets moved to the Games page.

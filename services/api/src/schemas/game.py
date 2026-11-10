@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from schemas.prediction import PredictionBreakdown
+
 
 class ScheduledGame(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -92,6 +94,9 @@ class GameDetail(ScheduledGame):
     is_upset: bool | None = None
     winner_market_wp: float | None = None
     model_called_upset: bool | None = None
+    # Why the live model said what it did. Null when the prediction was
+    # written before breakdowns were stored, or the model does not split.
+    prediction_breakdown: PredictionBreakdown | None = None
 
 
 class GameResult(BaseModel):

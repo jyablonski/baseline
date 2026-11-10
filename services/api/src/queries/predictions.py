@@ -38,6 +38,23 @@ GET_CHAMPION_MODEL_VERSION = text(
     """
 )
 
+# The live model's settings on its newest run. Every row of a run carries the
+# same settings, so any one of them will do; game_id only makes it deterministic.
+GET_LIVE_MODEL_WEIGHTS = text(
+    """
+    SELECT
+        fct_game_predictions.model_version,
+        fct_game_predictions.as_of,
+        fct_game_predictions.breakdown -> 'settings' AS settings
+    FROM gold.fct_game_predictions
+    WHERE fct_game_predictions.breakdown IS NOT NULL
+    ORDER BY
+        fct_game_predictions.as_of DESC,
+        fct_game_predictions.game_id ASC
+    LIMIT 1
+    """
+)
+
 # fct_game_predictions names the model the product is serving; both public reads
 # below follow it to the newest season so they stay in step with the schedule.
 _LIVE_RESULTS = """
@@ -67,6 +84,15 @@ _LIVE_RESULTS = """
     )
 """
 
+# Optional :team, matching either side of a graded game.
+_EITHER_TEAM = """(
+        CAST(:team AS text) IS NULL
+        OR :team IN (
+            live_results.home_team_abbreviation,
+            live_results.away_team_abbreviation
+        )
+    )"""
+
 # Buckets rather than a list of ranges so a lopsided game is never left out.
 LIST_PREDICTION_CALIBRATION = text(
     _LIVE_RESULTS
@@ -90,7 +116,7 @@ LIST_PREDICTION_CALIBRATION = text(
 
 LIST_PREDICTION_GAMES = text(
     _LIVE_RESULTS
-    + """
+    + f"""
     SELECT
         live_results.game_id,
         live_results.game_date,
@@ -99,6 +125,7 @@ LIST_PREDICTION_GAMES = text(
         live_results.model_wp,
         live_results.home_won
     FROM live_results
+    WHERE {_EITHER_TEAM}
     ORDER BY
         live_results.game_date DESC,
         live_results.game_id ASC
@@ -108,9 +135,10 @@ LIST_PREDICTION_GAMES = text(
 
 COUNT_PREDICTION_GAMES = text(
     _LIVE_RESULTS
-    + """
+    + f"""
     SELECT count(*)
     FROM live_results
+    WHERE {_EITHER_TEAM}
     """
 )
 

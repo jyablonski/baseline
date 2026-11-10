@@ -6,6 +6,7 @@ from queries.predictions import (
     CLEAR_CHAMPION,
     COUNT_PREDICTION_GAMES,
     GET_CHAMPION_MODEL_VERSION,
+    GET_LIVE_MODEL_WEIGHTS,
     GET_PROMOTION_CANDIDATE,
     LIST_MODEL_REGISTRY,
     LIST_MODEL_RESULTS,
@@ -46,15 +47,21 @@ class PredictionsRepository:
             ],
         }
 
+    def get_live_model_weights(self) -> dict | None:
+        row = self.db.execute(GET_LIVE_MODEL_WEIGHTS).first()
+        return None if row is None else dict(row._mapping)
+
     def get_calibration(self) -> list[dict]:
         return [dict(row._mapping) for row in self.db.execute(LIST_PREDICTION_CALIBRATION)]
 
-    def list_games(self, *, limit: int, offset: int) -> list[dict]:
-        rows = self.db.execute(LIST_PREDICTION_GAMES, {"limit": limit, "offset": offset})
+    def list_games(self, *, team: str | None, limit: int, offset: int) -> list[dict]:
+        rows = self.db.execute(
+            LIST_PREDICTION_GAMES, {"team": team, "limit": limit, "offset": offset}
+        )
         return [dict(row._mapping) for row in rows]
 
-    def count_games(self) -> int:
-        return self.db.execute(COUNT_PREDICTION_GAMES).scalar() or 0
+    def count_games(self, *, team: str | None) -> int:
+        return self.db.execute(COUNT_PREDICTION_GAMES, {"team": team}).scalar() or 0
 
     def get_model_review(self) -> dict:
         """Every model on the newest season, for the admin Models tab."""
