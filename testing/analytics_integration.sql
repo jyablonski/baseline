@@ -290,6 +290,7 @@ CREATE TABLE IF NOT EXISTS gold.fct_game_predictions (
     model_wp        DOUBLE PRECISION NOT NULL,
     away_wp         DOUBLE PRECISION NOT NULL,
     market_wp       DOUBLE PRECISION,
+    breakdown       JSONB,
     game_date       DATE,
     season          VARCHAR(10),
     season_type     VARCHAR(20),

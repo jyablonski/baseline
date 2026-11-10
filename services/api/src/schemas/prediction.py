@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -93,3 +94,43 @@ class ChampionChange(BaseModel):
     promoted_by: str | None = None
     # False when another job holds the queue, or nothing changed.
     rebuild_queued: bool
+
+
+class BreakdownPart(BaseModel):
+    # strength, home_court, confidence, back_to_back or injuries.
+    key: str
+    # Points of spread this part adds; positive favours the home team.
+    points: float
+
+
+class ModelSettings(BaseModel):
+    """What the model weighed on the run that wrote the prediction."""
+
+    # Home court in points of spread, as the model used it.
+    home_court_points: float
+    # Elo v1 and its layers: the raw tally the home edge was learned from,
+    # across every game the walk has seen. Null for Elo v0's fixed edge.
+    home_games: int | None = None
+    home_win_rate: float | None = None
+    # Elo v2 / v3 only. confidence is the weight on Elo v1 (below 1 pulls
+    # toward 50%); the points are per back-to-back and per injury_unit, home
+    # minus away, so a cost comes out negative.
+    confidence: float | None = None
+    back_to_back_points: float | None = None
+    injury_points: float | None = None
+    # notable_player (Elo v2) or injury_score (Elo v3, per ten points).
+    injury_unit: Literal["notable_player", "injury_score"] | None = None
+
+
+class PredictionBreakdown(BaseModel):
+    """A pregame win probability split into parts that add up to the model's line."""
+
+    points_per_logit: float
+    parts: list[BreakdownPart]
+    settings: ModelSettings
+
+
+class LiveModelWeights(BaseModel):
+    model_version: str
+    as_of: datetime
+    settings: ModelSettings

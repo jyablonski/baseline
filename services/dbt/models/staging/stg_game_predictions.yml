@@ -40,6 +40,8 @@ models:
                 max_value: 1
                 strictly: true
                 row_condition: "market_wp is not null"
+      - name: breakdown
+        description: Why the model said what it did, as parts in points of spread (positive favours home) that add up to the model's line, plus the model's settings on that run. Null for logit, backfilled replays and rows written before the column existed.
     data_tests:
       - dbt_expectations.expect_compound_columns_to_be_unique:
           arguments:

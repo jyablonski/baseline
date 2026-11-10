@@ -11,5 +11,6 @@ select
     source.away_team_id,
     source.model_wp,
     source.market_wp,
+    source.breakdown,
     source.scraped_at
 from source

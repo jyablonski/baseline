@@ -103,6 +103,40 @@ const BOX_SCORE_ROW = {
   mvp_game_score: 31.4,
 };
 
+describe("model breakdown", () => {
+  it("explains the live model's number in points that add up to its line", async () => {
+    getGameFlow.mockResolvedValue({ game_id: "0042500405", has_play_by_play: false });
+    getGamePlayByPlay.mockResolvedValue(EMPTY_PAGE);
+    getGameBoxScore.mockResolvedValue(EMPTY_PAGE);
+    getGame.mockResolvedValue({
+      ...FINAL_GAME,
+      home_spread: -2.5,
+      prediction_breakdown: {
+        points_per_logit: 8,
+        parts: [
+          { key: "strength", points: 2.1 },
+          { key: "home_court", points: 1.3 },
+        ],
+        settings: { home_court_points: 1.3, home_games: 154, home_win_rate: 0.52 },
+      },
+    });
+    render(
+      <Providers>
+        <GameFlowPage />
+      </Providers>
+    );
+    const section = await screen.findByTestId("model-breakdown");
+    expect(within(section).getByRole("heading")).toHaveTextContent("Why the model had SAS at 60%");
+    const rows = within(section).getAllByTestId("breakdown-row");
+    expect(rows.map((row) => row.textContent)).toEqual([
+      "Team strengthRatings built from past resultsSAS +2",
+      "Home courtHome teams have won 52% of the 154 games it has seenSAS +1.5",
+    ]);
+    expect(within(section).getByTestId("breakdown-line")).toHaveTextContent("SAS by 3.5");
+    expect(section).toHaveTextContent("Sportsbook lineSAS by 2.5");
+  });
+});
+
 describe("game flow page", () => {
   it("shows empty play-by-play copy and no Recent final games filter", async () => {
     getGameFlow.mockResolvedValue({

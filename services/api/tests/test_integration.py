@@ -241,6 +241,9 @@ def test_game_detail_matches_schedule_row(integration_client) -> None:
     assert game["home_streak"] == "W5"
     assert game["away_last_10"] == "6-4"
     assert game["lead_highlight"] is None
+    breakdown = game["prediction_breakdown"]
+    assert [part["key"] for part in breakdown["parts"]] == ["strength", "home_court"]
+    assert breakdown["settings"]["home_win_rate"] == pytest.approx(0.53)
 
 
 @pytest.mark.integration
@@ -256,6 +259,8 @@ def test_game_detail_final(integration_client) -> None:
         0,
     )
     assert first["lead_highlight"] == "Stephen Curry scores 42"
+    # No stored prediction, so nothing to explain.
+    assert first["prediction_breakdown"] is None
     assert (first["home_team_nickname"], first["home_team_conference"]) == ("Warriors", "West")
     assert (first["away_team_nickname"], first["away_team_conference"]) == ("Clippers", "West")
     # Form is today's, so a played game never shows it.
@@ -933,6 +938,20 @@ def test_prediction_reads_follow_the_live_model_and_newest_season(integration_cl
     assert games["meta"]["total"] == 2
     assert [game["game_date"] for game in games["data"]] == ["2024-10-25", "2024-10-22"]
     assert games["data"][0]["model_wp"] == 0.35
+
+    lac = integration_client.get("/api/v1/predictions/games", params={"team": "LAC"}).json()
+    assert lac["meta"]["total"] == 2
+    # CHI's only graded game is in an older season.
+    chi = integration_client.get("/api/v1/predictions/games", params={"team": "CHI"}).json()
+    assert chi == {"data": [], "meta": {"total": 0, "limit": 20, "offset": 0}}
+
+
+@pytest.mark.integration
+def test_live_model_weights_read_the_newest_breakdown(integration_client) -> None:
+    data = integration_client.get("/api/v1/predictions/weights").json()["data"]
+    assert data["model_version"] == "elo-v0"
+    assert data["settings"]["home_court_points"] == pytest.approx(1.24)
+    assert data["settings"]["home_games"] == 120
 
 
 @pytest.mark.integration

@@ -645,6 +645,45 @@ export type GameDetail = ScheduledGame & {
   /** The winner's market win probability from that morning's line. */
   winner_market_wp?: number | null;
   model_called_upset?: boolean | null;
+  /** Why the live model said what it did; null for predictions stored before breakdowns were. */
+  prediction_breakdown?: PredictionBreakdown | null;
+};
+
+/** strength and home_court always; the rest only from Elo v2 / v3. */
+export type BreakdownKey = "strength" | "home_court" | "confidence" | "back_to_back" | "injuries";
+
+export type BreakdownPart = {
+  key: BreakdownKey;
+  /** Points of spread this part adds; positive favours the home team. */
+  points: number;
+};
+
+/** What the model weighed on the run that wrote a prediction. */
+export type ModelSettings = {
+  home_court_points: number;
+  /** The raw tally the home edge was learned from; null for a fixed home edge. */
+  home_games?: number | null;
+  home_win_rate?: number | null;
+  /** Elo v2 / v3 only: weight on Elo v1, below 1 pulls toward 50%. */
+  confidence?: number | null;
+  /** Points per back-to-back and per injury_unit, home minus away: a cost is negative. */
+  back_to_back_points?: number | null;
+  injury_points?: number | null;
+  injury_unit?: "notable_player" | "injury_score" | null;
+};
+
+/** A pregame win probability split into parts that add up to the model's line. */
+export type PredictionBreakdown = {
+  points_per_logit: number;
+  parts: BreakdownPart[];
+  settings: ModelSettings;
+};
+
+/** The live model's settings on its newest run. */
+export type LiveModelWeights = {
+  model_version: string;
+  as_of: string;
+  settings: ModelSettings;
 };
 
 export type ScorecardRow = {

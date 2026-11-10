@@ -5,6 +5,7 @@ const data = vi.hoisted(() => ({
   rows: [] as Record<string, unknown>[],
   games: [] as Record<string, unknown>[],
   gameCalls: [] as Record<string, unknown>[],
+  weights: null as Record<string, unknown> | null,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -19,14 +20,28 @@ vi.mock("@/lib/api", () => ({
       champion_model_version: "elo-v1",
       rows: data.rows,
     }),
+    getLiveModelWeights: async () => data.weights,
     getPredictionCalibration: async () => [
       { bucket: "60–70%", predicted: 0.65, actual: 0.7, n: 16 },
     ],
-    listPredictionGames: async (params: { limit: number; offset: number }) => {
+    listTeams: async () => ({
+      data: [
+        { team_id: "t-por", abbreviation: "POR" },
+        { team_id: "t-bos", abbreviation: "BOS" },
+      ],
+      meta: { total: 2, limit: 2, offset: 0 },
+    }),
+    listPredictionGames: async (params: { team?: string; limit: number; offset: number }) => {
       data.gameCalls.push(params);
+      const games = data.games.filter(
+        (game) =>
+          !params.team ||
+          game.home_team_abbreviation === params.team ||
+          game.away_team_abbreviation === params.team
+      );
       return {
-        data: data.games.slice(params.offset, params.offset + params.limit),
-        meta: { total: data.games.length, limit: params.limit, offset: params.offset },
+        data: games.slice(params.offset, params.offset + params.limit),
+        meta: { total: games.length, limit: params.limit, offset: params.offset },
       };
     },
   },
@@ -76,6 +91,7 @@ describe("predictions page", () => {
   beforeEach(() => {
     data.gameCalls = [];
     data.games = [game(1), game(2, { model_wp: 0.56, home_won: false })];
+    data.weights = null;
   });
 
   it("names the live model and scores it against the two baselines", async () => {
@@ -103,7 +119,7 @@ describe("predictions page", () => {
     data.rows = [LIVE];
     renderPage();
     const bucket = await screen.findByTestId("calibration-bucket");
-    expect(bucket).toHaveTextContent("Said 60–70%");
+    expect(bucket).toHaveTextContent("Home 60–70%");
     expect(bucket).toHaveTextContent("won 70%");
     expect(bucket).toHaveTextContent("(16 games)");
 
@@ -117,15 +133,65 @@ describe("predictions page", () => {
     expect(within(miss).getByLabelText("Missed it")).toBeInTheDocument();
   });
 
-  it("pages through every graded game", async () => {
-    data.rows = [{ ...LIVE, n: 25 }];
+  it("says what the live model weighs on its newest run", async () => {
+    data.rows = [LIVE];
+    data.weights = {
+      model_version: "elo-v1",
+      as_of: "2026-11-10T08:00:00",
+      settings: { home_court_points: 1.3, home_games: 154, home_win_rate: 0.52 },
+    };
+    renderPage();
+    const panel = await screen.findByTestId("model-weights");
+    expect(within(panel).getByRole("heading")).toHaveTextContent("What goes into the number");
+    expect(panel).toHaveTextContent("Worth 1.5 points");
+    expect(panel).toHaveTextContent("Home teams have won 52% of the 154 games it has seen");
+    expect(panel).toHaveTextContent("Injuries, rest, trades");
+  });
+
+  it("pages through every graded game ten at a time", async () => {
+    data.rows = [LIVE];
     data.games = Array.from({ length: 25 }, (_, index) => game(index));
     renderPage();
-    await waitFor(() => expect(screen.getAllByTestId("recent-call")).toHaveLength(20));
-    fireEvent.click(screen.getByRole("button", { name: "Show 5 more of 25 games" }));
-    await waitFor(() => expect(screen.getAllByTestId("recent-call")).toHaveLength(25));
-    expect(data.gameCalls).toContainEqual({ limit: 20, offset: 20 });
-    expect(screen.queryByRole("button", { name: /more of/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByTestId("recent-call")).toHaveLength(10));
+    const pager = screen.getByRole("navigation", { name: "Recent calls pages" });
+    expect(pager).toHaveTextContent("Page 1 of 3");
+    expect(within(pager).getByRole("button", { name: "← Prev" })).toBeDisabled();
+
+    fireEvent.click(within(pager).getByRole("button", { name: "Next →" }));
+    // The pager names the new page at once but holds Next until its rows land.
+    await waitFor(() =>
+      expect(within(pager).getByRole("button", { name: "Next →" })).toBeEnabled()
+    );
+    expect(pager).toHaveTextContent("Page 2 of 3");
+    fireEvent.click(within(pager).getByRole("button", { name: "Next →" }));
+    await waitFor(() => expect(screen.getAllByTestId("recent-call")).toHaveLength(5));
+    expect(pager).toHaveTextContent("Page 3 of 3");
+    expect(within(pager).getByRole("button", { name: "Next →" })).toBeDisabled();
+    expect(data.gameCalls).toContainEqual({ team: undefined, limit: 10, offset: 20 });
+
+    fireEvent.click(within(pager).getByRole("button", { name: "← Prev" }));
+    await waitFor(() => expect(pager).toHaveTextContent("Page 2 of 3"));
+  });
+
+  it("filters the calls to one team and starts it from the first page", async () => {
+    data.rows = [LIVE];
+    data.games = Array.from({ length: 12 }, (_, index) => game(index));
+    renderPage();
+    const pager = await screen.findByRole("navigation", { name: "Recent calls pages" });
+    fireEvent.click(within(pager).getByRole("button", { name: "Next →" }));
+    await waitFor(() => expect(screen.getAllByTestId("recent-call")).toHaveLength(2));
+
+    const select = screen.getByRole("combobox", { name: "Team" });
+    await waitFor(() =>
+      expect(within(select).getByRole("option", { name: "BOS" })).toBeInTheDocument()
+    );
+    fireEvent.change(select, { target: { value: "BOS" } });
+    expect(await screen.findByText("No graded games involving BOS yet.")).toBeInTheDocument();
+    expect(data.gameCalls).toContainEqual({ team: "BOS", limit: 10, offset: 0 });
+
+    fireEvent.change(select, { target: { value: "POR" } });
+    await waitFor(() => expect(screen.getAllByTestId("recent-call")).toHaveLength(10));
+    expect(data.gameCalls).toContainEqual({ team: "POR", limit: 10, offset: 0 });
   });
 
   it("keeps the metrics behind Details", async () => {

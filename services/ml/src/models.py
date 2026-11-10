@@ -31,6 +31,7 @@ class GamePrediction(Base):
     away_team_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     model_wp: Mapped[float] = mapped_column(Float, nullable=False)
     market_wp: Mapped[float | None] = mapped_column(Float)
+    breakdown: Mapped[dict | None] = mapped_column(JSONB)
     scraped_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )

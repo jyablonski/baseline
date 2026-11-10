@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { GameFlowChart } from "@/components/charts/game-flow-chart";
 import { BoxScore } from "@/components/games/box-score";
 import { impliedProbability, WhoWins } from "@/components/games/game-pick";
+import { ModelBreakdown } from "@/components/games/model-breakdown";
 import {
   BeforeTipoff,
   GameHeader,
@@ -82,7 +83,10 @@ function GameBody() {
         <>
           <GameRecap game={game} meetings={meetings} meetingsLoading={meetingsLoading} />
           <div className="grid gap-10 lg:grid-cols-2">
-            <SeriesPanel game={game} meetings={meetings} timezone={timezone} />
+            <div className="flex flex-col gap-10">
+              <SeriesPanel game={game} meetings={meetings} timezone={timezone} />
+              <ModelBreakdown game={game} final />
+            </div>
             <ThisSeasonPanel game={game} meetings={meetings} />
           </div>
         </>
@@ -91,7 +95,11 @@ function GameBody() {
           <WhoWins game={game} tipped={tipped} />
           <div className="grid gap-10 lg:grid-cols-2">
             <BeforeTipoff game={game} />
-            <SeriesPanel game={game} meetings={meetings} timezone={timezone} />
+            {/* Stacked under the series so both columns end near the same height. */}
+            <div className="flex flex-col gap-10">
+              <SeriesPanel game={game} meetings={meetings} timezone={timezone} />
+              <ModelBreakdown game={game} final={false} />
+            </div>
           </div>
         </>
       )}

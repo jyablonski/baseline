@@ -219,3 +219,13 @@ test("schedule opens the injury report and the game page lists it", async ({ pag
   await expect(page.getByTestId("injury-row")).toContainText("Out · Ankle");
   await expect(page.getByTestId("injuries-away")).toContainText("Nobody listed.");
 });
+
+test("game page explains the model's number in points", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/games/0022500999");
+  const breakdown = page.getByTestId("model-breakdown");
+  await expect(breakdown.getByRole("heading")).toHaveText("Why the model has GSW at 62%");
+  await expect(page.getByTestId("breakdown-row")).toHaveCount(2);
+  await expect(page.getByTestId("breakdown-line")).toContainText("GSW by 4");
+  await expect(breakdown).toContainText("GSW by 3.5");
+});

@@ -656,7 +656,8 @@ GET_GAME = text(
         away_team_details.conference AS away_team_conference,
         fct_game_upsets.is_upset,
         fct_game_upsets.winner_market_wp,
-        fct_game_upsets.model_called_upset
+        fct_game_upsets.model_called_upset,
+        fct_game_predictions.breakdown AS prediction_breakdown
     FROM gold.fct_games_schedule
     {SCHEDULE_JOINS}
     CROSS JOIN LATERAL ({_pregame_records("fct_games_schedule")}) AS pregame_records

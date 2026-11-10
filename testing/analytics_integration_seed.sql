@@ -162,11 +162,13 @@ INSERT INTO gold.fct_daily_highlights (
 -- scheduled game carries neither, so the schedule must render it with nulls.
 INSERT INTO gold.fct_game_predictions (
     game_id, as_of, model_name, model_version, home_team_id, away_team_id,
-    model_wp, away_wp, market_wp, game_date, season, season_type, game_status, scraped_at
+    model_wp, away_wp, market_wp, breakdown, game_date, season, season_type, game_status, scraped_at
 ) VALUES
     ('00000000-0000-4000-8000-000000000204', CURRENT_DATE - 1, 'elo', 'elo-v0',
      '7bf8726a-a852-452d-b81f-14839127c5fb', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958',
-     0.6, 0.4, 0.62, CURRENT_DATE + 14, '2024-25', 'Regular Season', 'Scheduled', CURRENT_DATE - 1);
+     0.6, 0.4, 0.62,
+     '{"points_per_logit": 8.0, "parts": [{"key": "strength", "points": 2.0}, {"key": "home_court", "points": 1.24}], "settings": {"home_court_points": 1.24, "home_games": 120, "home_win_rate": 0.53}}',
+     CURRENT_DATE + 14, '2024-25', 'Regular Season', 'Scheduled', CURRENT_DATE - 1);
 
 INSERT INTO gold.fct_game_odds (
     odds_event_id, commence_time, home_team_name, away_team_name, game_id, bookmaker, market,

@@ -43,6 +43,7 @@ import type {
   PlayerValue,
   RosterPlayer,
   CalibrationBucket,
+  LiveModelWeights,
   PredictionGame,
   PredictionScorecard,
   SearchPlayersParams,
@@ -482,10 +483,13 @@ export const api = {
       await fetchApi(`/api/v1/predictions/scorecard${buildQuery({ season: params.season })}`)
     ),
 
+  getLiveModelWeights: async () =>
+    asData<LiveModelWeights | null>(await fetchApi("/api/v1/predictions/weights")),
+
   getPredictionCalibration: async () =>
     asData<CalibrationBucket[]>(await fetchApi("/api/v1/predictions/calibration")),
 
-  listPredictionGames: async (params: { limit?: number; offset?: number } = {}) =>
+  listPredictionGames: async (params: { team?: string; limit?: number; offset?: number } = {}) =>
     asPaginated<PredictionGame>(await fetchApi(`/api/v1/predictions/games${buildQuery(params)}`)),
 
   listBiggestCollapses: async (params: NotablesParams = {}) =>

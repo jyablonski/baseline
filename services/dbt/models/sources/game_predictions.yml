@@ -27,5 +27,8 @@ sources:
             description: Pregame home win probability.
           - name: market_wp
             description: Consensus de-vigged home win probability at scoring time; null when no odds matched.
+          - name: breakdown
+            description: >
+              Why the model said what it did, as parts in points of spread (positive favours home) that add up to the model's line, plus the model's settings on that run. Null for logit, backfilled replays and rows written before the column existed.
           - name: scraped_at
             description: When the row was written.

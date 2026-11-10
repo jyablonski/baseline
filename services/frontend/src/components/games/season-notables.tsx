@@ -5,8 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
+import { PageNav } from "@/components/page-nav";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamLogo } from "@/components/team-logo";
+import { TeamSelect } from "@/components/team-select";
 import { api, queryErrorMessage } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import {
@@ -73,23 +75,11 @@ export function SeasonNotables({ season }: { season: string }) {
     <section aria-label="Season notables" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="type-module">Season notables</h2>
-        <label className="flex items-center gap-1.5 text-xs text-ink-2">
-          Team
-          <select
-            className={cn("field px-1.5", team && "field-query")}
-            value={team}
-            onChange={(event) =>
-              router.replace(hrefWith({ team: event.target.value }), { scroll: false })
-            }
-          >
-            <option value="">All teams</option>
-            {teamOptions.map((abbreviation) => (
-              <option key={abbreviation} value={abbreviation}>
-                {abbreviation}
-              </option>
-            ))}
-          </select>
-        </label>
+        <TeamSelect
+          team={team}
+          teams={teamOptions}
+          setTeam={(value) => router.replace(hrefWith({ team: value }), { scroll: false })}
+        />
       </div>
       <nav
         aria-label="Notable games"
@@ -223,30 +213,15 @@ function NotableList({
         </table>
       </div>
       {page > 0 || hasNext ? (
-        <nav
-          aria-label="Notable games pages"
-          className="mt-3 flex items-center justify-between text-sm"
-        >
-          <button
-            type="button"
-            className="btn-ghost"
-            disabled={page === 0 || query.isPlaceholderData}
-            onClick={() => goTo(page - 1)}
-          >
-            ← Prev
-          </button>
-          <span className="text-ink-2 tabular" aria-live="polite">
-            Page {page + 1}
-          </span>
-          <button
-            type="button"
-            className="btn-ghost"
-            disabled={!hasNext || query.isPlaceholderData}
-            onClick={() => goTo(page + 1)}
-          >
-            Next →
-          </button>
-        </nav>
+        <PageNav
+          label="Notable games pages"
+          status={`Page ${page + 1}`}
+          hasPrev={page > 0}
+          hasNext={hasNext}
+          loading={query.isPlaceholderData}
+          onPrev={() => goTo(page - 1)}
+          onNext={() => goTo(page + 1)}
+        />
       ) : null}
     </div>
   );
