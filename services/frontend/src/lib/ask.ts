@@ -56,3 +56,6 @@ export function entityHref(entity: NlpEntity): string | null {
   if (entity.kind === "player") return playerHref(entity.label);
   return null;
 }
+
+/** The API refuses a longer question (422); `QueryRequest` in the API schemas. */
+export const MAX_ASK_QUESTION_CHARS = 500;

@@ -137,6 +137,30 @@ def test_scrape_players_fetches_bref_rosters(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.unit
+def test_scrape_players_stops_on_rate_limit_instead_of_writing_a_partial_roster(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import catalog.teams
+
+    import scrapers
+    from scrapers.players import scrape_players
+
+    get_session = MagicMock()
+    monkeypatch.setattr("catalog.teams.TEAM_CATALOG", catalog.teams.TEAM_CATALOG[:2])
+    monkeypatch.setattr("scrapers.players.get_session", get_session)
+    fetched: list[str] = []
+
+    def rate_limited(url: str) -> str:
+        fetched.append(url)
+        raise scrapers.BrefRateLimitedError(url, first_url=url)
+
+    with pytest.raises(scrapers.BrefRateLimitedError):
+        scrape_players(season="2024-25", fetch_html=rate_limited)
+    assert len(fetched) == 1
+    get_session.assert_not_called()
+
+
+@pytest.mark.unit
 def test_scrape_players_repairs_existing_non_roster_player(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

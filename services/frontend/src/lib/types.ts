@@ -519,6 +519,12 @@ export type RosterPlayer = {
   plus_minus: number | null;
   /** Average Game Score, the box-score value the MVP ladder uses. */
   game_score: number | null;
+  /**
+   * League-wide Regular Season MVP ladder, across every team this season. Null
+   * when the player has no Regular Season ladder row.
+   */
+  mvp_score: number | null;
+  mvp_rank: number | null;
 };
 
 export type TeamGamesParams = {

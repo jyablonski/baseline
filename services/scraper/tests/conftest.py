@@ -6,11 +6,18 @@ import pytest
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+import scrapers
 from testing.postgres_tc import (
     bootstrap_engine,
     docker_available,
     start_postgres_container,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_bref_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Process-wide by design; one test's 429 must not block the next test's fetches.
+    monkeypatch.setattr(scrapers, "_bref_rate_limited_url", None)
 
 
 @pytest.fixture(scope="session")

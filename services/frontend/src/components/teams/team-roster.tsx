@@ -75,6 +75,12 @@ export function TeamRoster({
                   one. The MVP ladder is built on it.
                 </p>
               </ColumnHelp>
+              <ColumnHelp label="MVP" title="MVP score" align="end" className="text-right">
+                <p>
+                  Game Score weighted by wins and losses, less a penalty for games missed. The rank
+                  is league-wide, counting every team the player has played for this season.
+                </p>
+              </ColumnHelp>
               <th>Status</th>
             </tr>
           </thead>
@@ -108,6 +114,12 @@ export function TeamRoster({
                   </td>
                   <td className="tabular text-right">{formatSignedMargin(player.plus_minus, 1)}</td>
                   <td className="tabular text-right">{formatStat(player.game_score)}</td>
+                  <td className="tabular whitespace-nowrap text-right">
+                    {formatStat(player.mvp_score)}
+                    {player.mvp_rank != null && (
+                      <span className="text-ink-3"> · #{player.mvp_rank}</span>
+                    )}
+                  </td>
                   <td
                     className={cn(
                       "whitespace-nowrap",

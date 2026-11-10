@@ -209,6 +209,8 @@ vi.mock("@/lib/api", () => ({
           true_shooting_pct: 0.664,
           plus_minus: 8.4,
           game_score: 27.3,
+          mvp_score: 26.1,
+          mvp_rank: 1,
         },
         {
           player_id: "p-murray",
@@ -228,6 +230,8 @@ vi.mock("@/lib/api", () => ({
           true_shooting_pct: 0.583,
           plus_minus: -1.5,
           game_score: 16.0,
+          mvp_score: 13.4,
+          mvp_rank: 41,
         },
         {
           player_id: "p-new",
@@ -247,6 +251,8 @@ vi.mock("@/lib/api", () => ({
           true_shooting_pct: null,
           plus_minus: null,
           game_score: null,
+          mvp_score: null,
+          mvp_rank: null,
         },
       ],
       meta: { total: 3, limit: 3, offset: 0 },
@@ -419,13 +425,14 @@ describe("team profile", () => {
     expect(api.getTeamRoster).toHaveBeenCalledWith("1610612743");
     const [jokic, murray, signing] = within(table).getAllByTestId("roster-row");
     expect(jokic).toHaveTextContent(
-      "Nikola JokićC7036.229.612.710.21.40.73.11.966.4%+8.427.3Active"
+      "Nikola JokićC7036.229.612.710.21.40.73.11.966.4%+8.427.326.1 · #1Active"
     );
     expect(murray).toHaveTextContent("-1.5");
     expect(within(murray).getByText("Out · Hamstring")).toHaveClass("text-destructive");
-    expect(signing).toHaveTextContent("New Signing—0———————————Active");
+    expect(signing).toHaveTextContent("New Signing—0————————————Active");
     expect(screen.getByText(/Per game with DEN, 2025-26 Regular Season/)).toBeInTheDocument();
     expect(within(table).getByRole("button", { name: "TS%" })).toBeInTheDocument();
+    expect(within(table).getByRole("button", { name: "MVP" })).toBeInTheDocument();
   });
 
   it("shows the season calendar on the Schedule tab", async () => {

@@ -35,6 +35,7 @@ test("teams directory to profile walks the team tabs", async ({ page }) => {
   const curry = page.getByTestId("roster-row");
   await expect(curry).toContainText("Stephen Curry");
   await expect(curry).toContainText("62.0%");
+  await expect(curry).toContainText("20.4 · #9");
   await expect(curry).toContainText("Out · Ankle");
 
   await tabs.getByRole("link", { name: "Cap" }).click();

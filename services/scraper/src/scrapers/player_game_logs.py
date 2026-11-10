@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from db import get_session, upsert_rows
 from models import Game, GameExternalId, Player, PlayerGameLog, Team
-from scrapers import BREF_BASE_URL, bref_get, parse_minutes, to_float, to_int
+from scrapers import BREF_BASE_URL, BrefRateLimitedError, bref_get, parse_minutes, to_float, to_int
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +244,9 @@ def _scrape_games(
                     game_date=canonical_games[game_id].game_date,
                     season=canonical_games[game_id].season,
                 )
+            except BrefRateLimitedError:
+                # The rest of the run sends nothing to BRef; fail the step, not each item.
+                raise
             except Exception:
                 failed += 1
                 logger.exception("BRef box score scrape failed for %s", external_id)

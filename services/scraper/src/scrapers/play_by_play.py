@@ -16,7 +16,15 @@ from sqlalchemy import select
 
 from db import get_session, upsert_rows
 from models import Game, GameExternalId, PlayByPlay, Player, Team
-from scrapers import BREF_BASE_URL, bref_get, current_season, repair_mojibake, to_int, to_str
+from scrapers import (
+    BREF_BASE_URL,
+    BrefRateLimitedError,
+    bref_get,
+    current_season,
+    repair_mojibake,
+    to_int,
+    to_str,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -352,6 +360,8 @@ def scrape_play_by_play(
                 continue
             try:
                 raw_rows = fetch(external_id, game)  # ty: ignore[invalid-argument-type]
+            except BrefRateLimitedError:
+                raise
             except Exception:
                 failed += 1
                 logger.exception("BRef play-by-play scrape failed for %s", external_id)

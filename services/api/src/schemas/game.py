@@ -396,8 +396,13 @@ class BoxScoreRow(BaseModel):
     mvp_game_score: float | None = None
 
 
+# POST /query is public and unauthenticated, and the rules engine runs every
+# team alias pattern over the text, so the body is capped. Matches the chat cap.
+MAX_QUERY_QUESTION_CHARS = 500
+
+
 class QueryRequest(BaseModel):
-    question: str = Field(min_length=1)
+    question: str = Field(min_length=1, max_length=MAX_QUERY_QUESTION_CHARS)
     season: str | None = None
 
 
