@@ -59,6 +59,101 @@ SET_USER_TIMEZONE = text(
 
 DELETE_USER = text("DELETE FROM source.users WHERE users.user_id = :user_id")
 
+# Only teams can be followed so far; the table also allows players.
+LIST_FOLLOWS = text(
+    """
+    SELECT
+        user_follows.entity_type,
+        user_follows.entity_id,
+        dim_teams.team_name AS name,
+        dim_teams.abbreviation,
+        user_follows.created_at
+    FROM source.user_follows
+    LEFT JOIN gold.dim_teams
+        ON
+            dim_teams.team_id = user_follows.entity_id
+            AND user_follows.entity_type = 'team'
+    WHERE user_follows.user_id = :user_id
+    ORDER BY
+        user_follows.position,
+        user_follows.created_at
+    """
+)
+
+TEAM_EXISTS = text(
+    """
+    SELECT count(*) > 0
+    FROM gold.dim_teams
+    WHERE dim_teams.team_id = :entity_id
+    """
+)
+
+# Check the cap and insert in one statement. No row back means either the cap
+# is reached or it was already followed; the repository tells the two apart.
+# The cap is soft: unlike RESERVE_CHAT there is no index behind it, so two
+# follows sent at the same moment at the cap can both land. It only limits
+# clutter, so that is not worth a lock.
+ADD_FOLLOW = text(
+    """
+    INSERT INTO source.user_follows (user_id, entity_type, entity_id, position)
+    SELECT
+        :user_id,
+        :entity_type,
+        :entity_id,
+        (
+            SELECT coalesce(max(user_follows.position) + 1, 0)
+            FROM source.user_follows
+            WHERE
+                user_follows.user_id = :user_id
+                AND user_follows.entity_type = :entity_type
+        )
+    WHERE (
+        SELECT count(*)
+        FROM source.user_follows
+        WHERE
+            user_follows.user_id = :user_id
+            AND user_follows.entity_type = :entity_type
+    ) < :max_follows
+    ON CONFLICT (user_id, entity_type, entity_id) DO NOTHING
+    RETURNING entity_id
+    """
+)
+
+IS_FOLLOWING = text(
+    """
+    SELECT count(*) > 0
+    FROM source.user_follows
+    WHERE
+        user_follows.user_id = :user_id
+        AND user_follows.entity_type = :entity_type
+        AND user_follows.entity_id = :entity_id
+    """
+)
+
+# The new order is the full list of ids, first to last. Ids the account does
+# not follow match no row; the repository checks the list first.
+REORDER_FOLLOWS = text(
+    """
+    UPDATE source.user_follows
+    SET position = new_order.position - 1
+    FROM unnest(CAST(:entity_ids AS uuid[])) WITH ORDINALITY AS new_order (entity_id, position)
+    WHERE
+        user_follows.user_id = :user_id
+        AND user_follows.entity_type = :entity_type
+        AND user_follows.entity_id = new_order.entity_id
+    """
+)
+
+DELETE_FOLLOW = text(
+    """
+    DELETE FROM source.user_follows
+    WHERE
+        user_follows.user_id = :user_id
+        AND user_follows.entity_type = :entity_type
+        AND user_follows.entity_id = :entity_id
+    """
+)
+
 EXPIRE_STALE_CHAT = text(
     f"""
     UPDATE source.chat_usage
@@ -196,8 +291,27 @@ DELETE_PICK = text(
 
 # Graded at read time from gold rather than stored: 'void' is a game that left
 # the schedule, which counts for nothing and returns its stake.
+#
+# market_wp is the picked side's no-vig consensus from the line fct_game_odds
+# keeps for each game, the last pregame pull once it has tipped. Not derived
+# from picks.moneyline: that is one vigged side, which can't be de-vigged alone.
 LIST_PICKS = text(
     f"""
+    WITH market_lines AS (
+        SELECT
+            fct_game_odds.game_id,
+            avg(fct_game_odds.home_market_wp) AS home_market_wp
+        FROM gold.fct_game_odds
+        WHERE
+            fct_game_odds.market = 'h2h'
+            AND fct_game_odds.game_id IN (
+                SELECT picks.game_id
+                FROM source.picks
+                WHERE picks.user_id = :user_id
+            )
+        GROUP BY fct_game_odds.game_id
+    )
+
     SELECT
         {PICK_COLUMNS},
         fct_games_schedule.game_date,
@@ -236,10 +350,18 @@ LIST_PICKS = text(
                 = (fct_games_schedule.home_score > fct_games_schedule.away_score)
         END AS model_correct,
         -- Null when the game had no captured pregame line, so it can't be graded as one.
-        fct_game_upsets.is_upset
+        fct_game_upsets.is_upset,
+        CASE
+            WHEN fct_games_schedule.game_id IS NULL THEN NULL
+            WHEN picks.picked_team_id = fct_games_schedule.home_team_id
+                THEN market_lines.home_market_wp
+            ELSE 1 - market_lines.home_market_wp
+        END AS market_wp
     FROM source.picks
     LEFT JOIN gold.fct_games_schedule
         ON fct_games_schedule.game_id = picks.game_id
+    LEFT JOIN market_lines
+        ON market_lines.game_id = picks.game_id
     -- One row per game: the mart keeps only the champion model's latest as_of.
     LEFT JOIN gold.fct_game_predictions
         ON fct_game_predictions.game_id = picks.game_id

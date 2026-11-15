@@ -68,9 +68,27 @@ class ChatQuota(BaseModel):
     max_turns: int
 
 
+class Follow(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    entity_type: Literal["team", "player"]
+    entity_id: UUID
+    # From gold. Null when the team has left dim_teams since it was followed.
+    name: str | None = None
+    abbreviation: str | None = None
+    created_at: datetime
+
+
+class FollowOrder(BaseModel):
+    # Every followed id, first to last. Bounded well past any follow cap.
+    entity_ids: list[UUID] = Field(max_length=50)
+
+
 class AccountProfile(BaseModel):
     user: AccountUser
     chat: ChatQuota
+    # In the order the account set, which a new follow joins at the end.
+    follows: list[Follow] = []
 
 
 class ChatMessage(BaseModel):
@@ -121,6 +139,9 @@ class Pick(BaseModel):
     model_correct: bool | None = None
     # Did the market underdog win? Null when no pregame line was captured.
     is_upset: bool | None = None
+    # The picked side's no-vig market probability from the consensus line.
+    # Null when no line was captured or the game left the schedule.
+    market_wp: float | None = None
     game_date: date | None = None
     start_time_et: time | None = None
     game_status: str | None = None
@@ -145,6 +166,11 @@ class PickSummary(BaseModel):
     # Net picks ahead of (or behind) the model, over model_games settled games.
     vs_model: int
     model_games: int
+    # Settled picks with a market line, the wins the odds expected from them,
+    # and actual wins among them less that expectation.
+    market_games: int
+    expected_wins: float
+    vs_market: float
 
 
 class PickSheet(BaseModel):

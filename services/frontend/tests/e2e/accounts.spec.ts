@@ -612,6 +612,47 @@ test.describe("account", () => {
     await expect(page.getByLabel("Time zone")).toHaveValue("America/Los_Angeles");
   });
 
+  test("a followed team gets a header shortcut and filters the schedule", async ({
+    page,
+    context,
+  }) => {
+    await signInAs(context, visitor());
+    await page.goto("/teams/golden-state-warriors");
+    await page.getByRole("button", { name: "Follow Golden State Warriors" }).click();
+    await expect(
+      page.getByRole("button", { name: "Unfollow Golden State Warriors" })
+    ).toHaveAttribute("aria-pressed", "true");
+
+    await page.goto("/");
+    await page
+      .getByRole("navigation", { name: "Your teams" })
+      .getByRole("link", { name: "Golden State Warriors" })
+      .click();
+    await expect(page).toHaveURL(/\/teams\/golden-state-warriors/);
+
+    await page.goto("/schedule");
+    await expect(row(page, "GSW")).toHaveAttribute("data-followed", "true");
+    await page.getByRole("switch", { name: "Only my teams" }).click();
+    await expect(page).toHaveURL(/mine=1/);
+    await expect(row(page, "MIA")).toHaveCount(0);
+    await expect(row(page, "GSW")).toBeVisible();
+
+    // Add a second team by search, then put it first.
+    await page.goto("/account");
+    await page.getByRole("searchbox", { name: "Add a team" }).fill("miami");
+    await page.getByRole("button", { name: /MIA\s*Miami Heat/ }).click();
+    const rows = page.getByTestId("followed-team");
+    await expect(rows).toHaveCount(2);
+    await page.getByRole("button", { name: "Move MIA up" }).click();
+    await expect(rows.first()).toContainText("Miami Heat");
+    await page.reload();
+    await expect(rows.first()).toContainText("Miami Heat");
+
+    await page.getByRole("button", { name: "Unfollow Miami Heat" }).click();
+    await page.getByRole("button", { name: "Unfollow Golden State Warriors" }).click();
+    await expect(page.getByText(/You don.t follow any teams yet/)).toBeVisible();
+  });
+
   test("signing out from the account page ends the session", async ({ page, context }) => {
     await signInAs(context, visitor({ name: "Pat Tester" }));
     await page.goto("/account");

@@ -9,8 +9,10 @@ import { formatShortDate } from "@/lib/format";
 import {
   filterSettled,
   finalScore,
+  formatMarketEdge,
   formatMoney,
   formatSignedMoney,
+  marketTotals,
   modelTeam,
   percentCorrect,
   PICK_SPLITS,
@@ -140,6 +142,14 @@ type BreakdownProps = {
 function BreakdownSplits({ picks, filters, onToggle }: BreakdownProps) {
   return (
     <div className="space-y-3">
+      <p className="type-caption flex gap-3 px-1">
+        <span className="flex-1" />
+        <span>Record</span>
+        <span className="w-12 text-right" title="Wins over what the odds expected">
+          Vs. odds
+        </span>
+        <span className="w-16 text-right">Net</span>
+      </p>
       {PICK_SPLITS.map((group) => {
         // A row counts what clicking it would show, so its own group's
         // choice is set aside.
@@ -151,7 +161,9 @@ function BreakdownSplits({ picks, filters, onToggle }: BreakdownProps) {
           <div key={group.label}>
             <p className="type-eyebrow">{group.label}</p>
             {group.splits.map((split) => {
-              const { wins, losses, net, staked } = pickTotals(rest.filter(split.test));
+              const slice = rest.filter(split.test);
+              const { wins, losses, net, staked } = pickTotals(slice);
+              const market = marketTotals(slice);
               return (
                 <button
                   key={split.id}
@@ -166,6 +178,9 @@ function BreakdownSplits({ picks, filters, onToggle }: BreakdownProps) {
                   <span className="flex-1">{split.label}</span>
                   <span>
                     {wins}–{losses}
+                  </span>
+                  <span className="w-12 text-right text-ink-2">
+                    {market.games > 0 ? formatMarketEdge(market.edge) : "–"}
                   </span>
                   <span className="w-16 text-right text-ink-2">
                     {staked > 0 ? formatSignedMoney(net) : "–"}

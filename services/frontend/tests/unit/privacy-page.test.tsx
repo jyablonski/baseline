@@ -35,6 +35,8 @@ describe("privacy page", () => {
       "Deleting your data",
     ]);
     expect(policy).not.toHaveTextContent(/chat/i);
+    expect(policy).toHaveTextContent(/make picks or follow teams\./);
+    expect(policy).toHaveTextContent(/The teams you follow, if any\./);
     expect(policy).toHaveTextContent(/nothing is collected about visitors who do not sign in/);
     expect(policy).toHaveTextContent(/Your email address is not stored/);
     expect(policy).toHaveTextContent(/It is not sold/);
@@ -51,7 +53,7 @@ describe("privacy page", () => {
 
     expect(await screen.findByRole("heading", { name: "Chat" })).toBeInTheDocument();
     expect(policy).toHaveTextContent(/third-party AI model provider/);
-    expect(policy).toHaveTextContent(/make picks or use chat\./);
+    expect(policy).toHaveTextContent(/make picks, use chat or follow teams\./);
     expect(policy).toHaveTextContent(/The text of a question is not stored/);
     expect(policy).toHaveTextContent(/your time zone, and applying the daily chat limit\./);
   });

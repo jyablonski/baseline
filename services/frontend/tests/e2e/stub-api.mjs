@@ -24,6 +24,20 @@ const TEAMS = {
   MIL: "3cbdd44d-e2b2-458a-81cd-b3008d5ebb5b",
 };
 
+// The four teams the schedule uses, as GET /teams lists them.
+const TEAM_ROWS = [
+  ["GSW", "Golden State Warriors", "West", "Pacific"],
+  ["LAL", "Los Angeles Lakers", "West", "Pacific"],
+  ["MIA", "Miami Heat", "East", "Southeast"],
+  ["MIL", "Milwaukee Bucks", "East", "Central"],
+].map(([abbreviation, team_name, conference, division]) => ({
+  team_id: TEAMS[abbreviation],
+  abbreviation,
+  team_name,
+  conference,
+  division,
+}));
+
 const GAMES = [
   {
     game_id: "00000000-0000-4000-8000-000000000401",
@@ -82,9 +96,30 @@ const requests = [];
 
 function userFor(id) {
   if (!users.has(id)) {
-    users.set(id, { name: null, timezone: null, picks: new Map(), asked: 0, blocked: false });
+    users.set(id, {
+      name: null,
+      timezone: null,
+      picks: new Map(),
+      follows: [],
+      asked: 0,
+      blocked: false,
+    });
   }
   return users.get(id);
+}
+
+/** The profile's follows in the account's order, named from TEAM_ROWS as the API names them from gold. */
+function follows(user) {
+  return user.follows.map((teamId) => {
+    const team = TEAM_ROWS.find((row) => row.team_id === teamId);
+    return {
+      entity_type: "team",
+      entity_id: teamId,
+      name: team.team_name,
+      abbreviation: team.abbreviation,
+      created_at: "2026-11-01T00:00:00Z",
+    };
+  });
 }
 
 function sheet(user) {
@@ -99,6 +134,9 @@ function sheet(user) {
         staked_open: picks.reduce((sum, pick) => sum + (pick.stake ?? 0), 0),
         vs_model: 0,
         model_games: 0,
+        market_games: 0,
+        expected_wins: 0,
+        vs_market: 0,
       },
       picks,
     },
@@ -207,7 +245,27 @@ function account(request, path, body) {
   if (user.blocked) return [403, { detail: "This account has been blocked." }];
 
   if (path === "/me" && request.method === "GET") {
-    return [200, { data: { user: accountUser(userId, user), chat: quota(user) } }];
+    return [
+      200,
+      { data: { user: accountUser(userId, user), chat: quota(user), follows: follows(user) } },
+    ];
+  }
+  if (path === "/me/follows/team" && request.method === "PUT") {
+    const ids = body.entity_ids ?? [];
+    const same = ids.length === user.follows.length && ids.every((id) => user.follows.includes(id));
+    if (!same) return [409, { detail: "The list of teams has changed. Reload and try again." }];
+    user.follows = [...ids];
+    return [200, { data: follows(user) }];
+  }
+  if (path.startsWith("/me/follows/team/")) {
+    const teamId = path.slice("/me/follows/team/".length);
+    if (!TEAM_ROWS.some((team) => team.team_id === teamId)) {
+      return [404, { detail: "That team is not in the league." }];
+    }
+    // Following one already followed keeps its place, as the API does.
+    if (request.method === "DELETE") user.follows = user.follows.filter((id) => id !== teamId);
+    else if (!user.follows.includes(teamId)) user.follows.push(teamId);
+    return [200, { data: follows(user) }];
   }
   if (path === "/me/timezone" && request.method === "PUT") {
     user.timezone = body.timezone;
@@ -405,6 +463,11 @@ function publicApi(path) {
   if (path === "/schedule") {
     return [200, { data: GAMES, meta: { total: GAMES.length, limit: 50, offset: 0 } }];
   }
+  if (path === "/teams") {
+    return [200, { data: TEAM_ROWS, meta: { total: TEAM_ROWS.length, limit: 30, offset: 0 } }];
+  }
+  const team = TEAM_ROWS.find((row) => path === `/teams/${row.team_id}`);
+  if (team) return [200, { data: team }];
   if (path === "/query") {
     return [200, { answer: "Rules answer.", data: [], sql: null }];
   }

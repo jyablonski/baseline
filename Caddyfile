@@ -3,7 +3,7 @@
 # Caddy requires `{` to be the last token on its line — one-line handle blocks
 # do not parse. Check with `caddy validate --config Caddyfile` before deploying.
 # nbadashboard.jyablonski.dev redirects to baseline; see the block at the
-# bottom and docs/plans/oci-caddy-hosting.md.
+# bottom and docs/plans/2026-09/oci-caddy-hosting.md.
 
 baseline.jyablonski.dev {
 	encode gzip zstd

@@ -19,6 +19,7 @@ import {
   isoDateET,
   isoDayBefore,
 } from "@/lib/format";
+import { involvesFollowed, keepFollowed } from "@/lib/follows";
 import { teamHref, withSeason } from "@/lib/nav";
 import { formatDayTitle, gameOdds, rankSlate } from "@/lib/results";
 import { CONTENT_TYPE_LABELS, formatCount, rangeToDates } from "@/lib/social";
@@ -73,7 +74,7 @@ function HomeDesk() {
     queryFn: () => api.listStandings({ season: season || undefined }),
   });
 
-  const { timezone } = useProfile();
+  const { timezone, followedTeamIds } = useProfile();
   const statusQuery = useQuery({
     queryKey: ["status"],
     queryFn: () => api.getStatus(),
@@ -91,6 +92,7 @@ function HomeDesk() {
 
       <section className="border-b border-rule-strong pb-[var(--ct-space-3)]">
         <ResultsStrip
+          followed={followedTeamIds}
           games={results}
           isLoading={gamesQuery.isLoading}
           error={gamesQuery.isError ? gamesQuery.error : null}
@@ -117,8 +119,18 @@ function HomeDesk() {
               />
             ) : (
               <div className="grid gap-x-10 gap-y-4 md:grid-cols-2">
-                <ConferenceTable title="East" rows={east} season={season} />
-                <ConferenceTable title="West" rows={west} season={season} />
+                <ConferenceTable
+                  title="East"
+                  rows={east}
+                  season={season}
+                  followed={followedTeamIds}
+                />
+                <ConferenceTable
+                  title="West"
+                  rows={west}
+                  season={season}
+                  followed={followedTeamIds}
+                />
               </div>
             )}
           </section>
@@ -127,6 +139,7 @@ function HomeDesk() {
         <aside className="border-t border-rule lg:border-t-0 lg:border-l lg:pl-[var(--ct-space-5)]">
           <section className="py-[var(--ct-space-4)]">
             <UpcomingList
+              followed={followedTeamIds}
               games={upcoming}
               season={season}
               isLoading={seasonIsLoading || scheduleQuery.isLoading}
@@ -147,16 +160,19 @@ function HomeDesk() {
 }
 
 function ResultsStrip({
+  followed,
   games,
   isLoading,
   error,
 }: {
+  /** Followed teams' games always make the strip, and are tinted. */
+  followed: ReadonlySet<string>;
   games: LeagueGame[];
   isLoading: boolean;
   error: unknown;
 }) {
   const date = games[0]?.game_date;
-  const shown = rankSlate(games).slice(0, SLATE_LIMIT);
+  const shown = keepFollowed(rankSlate(games), followed, SLATE_LIMIT);
   const day = date?.slice(0, 10);
   // The scrape lands the morning after, so "last night" only holds until the
   // next one; an off day or the offseason shows an older slate.
@@ -198,7 +214,7 @@ function ResultsStrip({
           >
             {shown.map((game) => (
               <li key={game.game_id}>
-                <ResultCard game={game} />
+                <ResultCard game={game} followed={involvesFollowed(game, followed)} />
               </li>
             ))}
           </ul>
@@ -219,7 +235,7 @@ const RESULT_COLUMNS: Record<number, string> = {
   6: "lg:grid-cols-3",
 };
 
-function ResultCard({ game }: { game: LeagueGame }) {
+function ResultCard({ game, followed }: { game: LeagueGame; followed: boolean }) {
   const away = game.away_team_abbreviation ?? "Away";
   const home = game.home_team_abbreviation ?? "Home";
   const odds = gameOdds(game);
@@ -231,7 +247,11 @@ function ResultCard({ game }: { game: LeagueGame }) {
     <Link
       href={`/games/${game.game_id}`}
       aria-label={`${away} ${game.away_score ?? "—"}, ${home} ${game.home_score ?? "—"}: game flow`}
-      className="block h-full space-y-1.5 px-[var(--ct-space-3)] py-[var(--ct-space-3)] hover:bg-row-hover"
+      className={cn(
+        "block h-full space-y-1.5 px-[var(--ct-space-3)] py-[var(--ct-space-3)] hover:bg-row-hover",
+        followed && "bg-tint"
+      )}
+      data-followed={followed || undefined}
     >
       <ResultLine
         teamId={game.away_team_id}
@@ -279,11 +299,14 @@ function ResultLine({
 }
 
 function UpcomingList({
+  followed,
   games,
   season,
   isLoading,
   error,
 }: {
+  /** Followed teams' games always make the list, and are tinted. */
+  followed: ReadonlySet<string>;
   games: ScheduledGame[];
   season: string;
   isLoading: boolean;
@@ -291,7 +314,7 @@ function UpcomingList({
 }) {
   const { timezone } = useProfile();
   const date = games[0]?.game_date;
-  const shown = games.slice(0, UPCOMING_LIMIT);
+  const shown = keepFollowed(games, followed, UPCOMING_LIMIT);
   // The heading names the zone once for every time under it. A game with no
   // start time has no zone to give, so the first one that does speaks for all.
   const zone =
@@ -328,45 +351,53 @@ function UpcomingList({
         <QuietNote>No upcoming games on the schedule.</QuietNote>
       ) : (
         <ul>
-          {shown.map((game) => (
-            <li
-              key={game.game_id}
-              className={cn(UPCOMING_GRID, "border-b border-rule-soft py-1.5 text-sm")}
-            >
-              <Link
-                href={`/games/${game.game_id}`}
-                className="tabular text-ink-2 hover:text-primary hover:underline"
-                title="Game preview"
+          {shown.map((game) => {
+            const isFollowed = involvesFollowed(game, followed);
+            return (
+              <li
+                key={game.game_id}
+                className={cn(
+                  UPCOMING_GRID,
+                  "border-b border-rule-soft py-1.5 text-sm",
+                  isFollowed && "bg-tint"
+                )}
+                data-followed={isFollowed || undefined}
               >
-                {formatGameTime(game.game_date, game.start_time_et, timezone).time}
-              </Link>
-              <TeamAbbrLink
-                teamId={game.away_team_id}
-                abbreviation={game.away_team_abbreviation ?? "Away"}
-                href={withSeason(
-                  teamHref(game.away_team_name ?? game.away_team_abbreviation ?? ""),
-                  season
-                )}
-              />
-              <span className="text-ink-3">@</span>
-              <TeamAbbrLink
-                teamId={game.home_team_id}
-                abbreviation={game.home_team_abbreviation ?? "Home"}
-                href={withSeason(
-                  teamHref(game.home_team_name ?? game.home_team_abbreviation ?? ""),
-                  season
-                )}
-              />
-              {game.national_tv ? (
-                <span
-                  className="type-eyebrow justify-self-end whitespace-nowrap border border-rule px-1 py-0.5 tracking-normal"
-                  title={`National TV: ${game.national_tv}`}
+                <Link
+                  href={`/games/${game.game_id}`}
+                  className="tabular text-ink-2 hover:text-primary hover:underline"
+                  title="Game preview"
                 >
-                  {game.national_tv}
-                </span>
-              ) : null}
-            </li>
-          ))}
+                  {formatGameTime(game.game_date, game.start_time_et, timezone).time}
+                </Link>
+                <TeamAbbrLink
+                  teamId={game.away_team_id}
+                  abbreviation={game.away_team_abbreviation ?? "Away"}
+                  href={withSeason(
+                    teamHref(game.away_team_name ?? game.away_team_abbreviation ?? ""),
+                    season
+                  )}
+                />
+                <span className="text-ink-3">@</span>
+                <TeamAbbrLink
+                  teamId={game.home_team_id}
+                  abbreviation={game.home_team_abbreviation ?? "Home"}
+                  href={withSeason(
+                    teamHref(game.home_team_name ?? game.home_team_abbreviation ?? ""),
+                    season
+                  )}
+                />
+                {game.national_tv ? (
+                  <span
+                    className="type-eyebrow justify-self-end whitespace-nowrap border border-rule px-1 py-0.5 tracking-normal"
+                    title={`National TV: ${game.national_tv}`}
+                  >
+                    {game.national_tv}
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
     </>
@@ -459,10 +490,13 @@ function ConferenceTable({
   title,
   rows,
   season,
+  followed,
 }: {
   title: string;
   rows: StandingRow[];
   season: string;
+  /** Followed teams, whose rows are tinted. */
+  followed: ReadonlySet<string>;
 }) {
   return (
     <div>
@@ -485,8 +519,10 @@ function ConferenceTable({
               className={cn(
                 standingsSeed(row) === PLAYOFF_LOCK_SEED &&
                   rows.length > PLAYOFF_LOCK_SEED &&
-                  "border-b-rule-strong"
+                  "border-b-rule-strong",
+                followed.has(row.team_id) && "bg-tint"
               )}
+              data-followed={followed.has(row.team_id) || undefined}
             >
               <td className="tabular text-muted-foreground">{standingsSeed(row) ?? "—"}</td>
               <td>

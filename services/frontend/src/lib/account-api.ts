@@ -7,7 +7,7 @@
  * deliberately not a NEXT_PUBLIC_ variable. Do not import this from a
  * "use client" file.
  */
-import type { AccountProfile, ChatReply, ChatTurn, PickSheet } from "@/lib/types";
+import type { AccountProfile, ChatReply, ChatTurn, Follow, PickSheet } from "@/lib/types";
 
 export class AccountApiError extends Error {
   status: number;
@@ -112,6 +112,29 @@ export async function saveTimezone(
     userId,
     method: "PUT",
     body: { timezone },
+  });
+  return body.data;
+}
+
+/** Follow or unfollow a team. Either way the reply is every follow, in the order the account set. */
+export async function setTeamFollow(
+  userId: string,
+  teamId: string,
+  following: boolean
+): Promise<Follow[]> {
+  const body = await accountFetch<{ data: Follow[] }>(
+    `/me/follows/team/${encodeURIComponent(teamId)}`,
+    { userId, method: following ? "PUT" : "DELETE" }
+  );
+  return body.data;
+}
+
+/** Save the order teams are shown in: every followed id, first to last. */
+export async function saveFollowOrder(userId: string, teamIds: string[]): Promise<Follow[]> {
+  const body = await accountFetch<{ data: Follow[] }>("/me/follows/team", {
+    userId,
+    method: "PUT",
+    body: { entity_ids: teamIds },
   });
   return body.data;
 }

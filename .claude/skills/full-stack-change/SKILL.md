@@ -58,7 +58,7 @@ Run from `services/frontend`: `npx tsc --noEmit -p .`, `npx eslint src tests`, `
 - `AGENTS.md` "API surface": a new route or user-visible behaviour gets a line marked current, with its route ordering if it shares a prefix.
 - `docs/data.md`: the mart's section says how it is served (REST, Cube, MCP) and what the UI shows.
 - `docs/frontend.md`: the page's bullet under Pages; remove it from "Not built" if it was there.
-- `docs/plans/<plan>.md`: update the `**Status:**` line with the date and the deviations from the plan, keeping the plan text as written.
+- `docs/plans/<yyyy-mm>/<plan>.md`: update the `**Status:**` line with the date and the deviations from the plan, keeping the plan text as written.
 - Markdown is never hard-wrapped.
 
 ## 5. Finish

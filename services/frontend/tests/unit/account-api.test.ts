@@ -9,6 +9,7 @@ import {
   registerAccount,
   savePick,
   saveTimezone,
+  setTeamFollow,
   sendChat,
 } from "@/lib/account-api";
 
@@ -119,6 +120,15 @@ describe("user-scoped calls", () => {
     expect(JSON.parse(lastCall().init.body as string)).toEqual({ timezone: "UTC" });
     await saveTimezone("u-7", null);
     expect(JSON.parse(lastCall().init.body as string)).toEqual({ timezone: null });
+  });
+
+  it("follows with PUT and unfollows with DELETE on the same path", async () => {
+    fetchMock.mockImplementation(async () => jsonResponse({ data: [{ entity_id: "t-1" }] }));
+    await expect(setTeamFollow("u-7", "t-1", true)).resolves.toEqual([{ entity_id: "t-1" }]);
+    expect(lastCall().url).toBe("http://api:8000/api/v1/account/me/follows/team/t-1");
+    expect(lastCall().init.method).toBe("PUT");
+    await setTeamFollow("u-7", "t-1", false);
+    expect(lastCall().init.method).toBe("DELETE");
   });
 
   it("sends the conversation and season to chat", async () => {

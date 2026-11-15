@@ -17,6 +17,7 @@ from ids import (
     GAME_SCHEDULE_TWO,
     MISSING_ID,
     PLAYER_CURRY,
+    TEAM_CHI,
     TEAM_GSW,
     TEAM_LAC,
     TEAM_LAL,
@@ -124,6 +125,10 @@ def extra_games(postgres_engine):
         )
         conn.execute(
             text("DELETE FROM gold.fct_game_upsets WHERE game_id = ANY(CAST(:ids AS uuid[]))"),
+            {"ids": [GAME_WON, GAME_LOST]},
+        )
+        conn.execute(
+            text("DELETE FROM gold.fct_game_odds WHERE game_id = ANY(CAST(:ids AS uuid[]))"),
             {"ids": [GAME_WON, GAME_LOST]},
         )
         conn.execute(text("TRUNCATE source.users CASCADE"))
@@ -716,6 +721,9 @@ def test_a_new_account_starts_with_no_picks(client) -> None:
         "staked_open": 0,
         "vs_model": 0,
         "model_games": 0,
+        "market_games": 0,
+        "expected_wins": 0,
+        "vs_market": 0,
     }
 
 
@@ -887,6 +895,9 @@ def test_finished_games_are_graded_and_stakes_settle_into_a_net(client, postgres
         "staked_open": 200,
         "vs_model": 0,
         "model_games": 0,
+        "market_games": 0,
+        "expected_wins": 0,
+        "vs_market": 0,
     }
 
 
@@ -948,6 +959,166 @@ def test_picks_are_scored_against_the_model(client, postgres_engine) -> None:
     assert (summary["vs_model"], summary["model_games"]) == (1, 2)
 
 
+def test_picks_are_scored_against_the_market(client, postgres_engine) -> None:
+    headers = _sign_up(client)
+    user_id = headers["X-Baseline-User"]
+    with postgres_engine.begin() as conn:
+        # GAME_WON: two books at 0.68 and 0.72 no-vig for GSW, a 0.7 consensus.
+        # GAME_LOST has no line at all.
+        for bookmaker, home_market_wp in (("draftkings", 0.68), ("fanduel", 0.72)):
+            conn.execute(
+                text(
+                    "INSERT INTO gold.fct_game_odds (odds_event_id, game_id, bookmaker, market, "
+                    "home_market_wp, away_market_wp) VALUES ('evt-301', :game_id, :bookmaker, "
+                    "'h2h', :home_market_wp, 1 - :home_market_wp)"
+                ),
+                {"game_id": GAME_WON, "bookmaker": bookmaker, "home_market_wp": home_market_wp},
+            )
+        # The spread market carries no moneyline probability and is ignored.
+        conn.execute(
+            text(
+                "INSERT INTO gold.fct_game_odds (odds_event_id, game_id, bookmaker, market, "
+                "spread_home) VALUES ('evt-301', :game_id, 'draftkings', 'spreads', -4.5)"
+            ),
+            {"game_id": GAME_WON},
+        )
+        # Took the underdog LAC in GAME_WON (lost) and GSW in GAME_LOST (lost).
+        for game_id, team_id in ((GAME_WON, TEAM_LAC), (GAME_LOST, TEAM_GSW)):
+            conn.execute(
+                text(
+                    "INSERT INTO source.picks (user_id, game_id, picked_team_id) "
+                    "VALUES (:user_id, :game_id, :team_id)"
+                ),
+                {"user_id": user_id, "game_id": game_id, "team_id": team_id},
+            )
+    # An open game with a line: priced, but not settled, so it counts for nothing yet.
+    assert _pick(client, headers, GAME_SCHEDULE, TEAM_GSW).status_code == 200
+
+    sheet = client.get("/api/v1/account/picks", headers=headers).json()["data"]
+    by_game = {pick["game_id"]: pick for pick in sheet["picks"]}
+    assert by_game[GAME_WON]["market_wp"] == pytest.approx(0.3)
+    assert by_game[GAME_LOST]["market_wp"] is None
+    assert by_game[GAME_SCHEDULE]["market_wp"] == pytest.approx(0.58)
+    summary = sheet["summary"]
+    assert summary["market_games"] == 1
+    assert summary["expected_wins"] == pytest.approx(0.3)
+    assert summary["vs_market"] == pytest.approx(-0.3)
+
+    # Switching GAME_WON to the favourite that won: 1 win where 0.7 was expected.
+    with postgres_engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE source.picks SET picked_team_id = :team_id "
+                "WHERE user_id = :user_id AND game_id = :game_id"
+            ),
+            {"user_id": user_id, "game_id": GAME_WON, "team_id": TEAM_GSW},
+        )
+    summary = client.get("/api/v1/account/picks", headers=headers).json()["data"]["summary"]
+    assert (summary["market_games"], summary["expected_wins"]) == (1, pytest.approx(0.7))
+    assert summary["vs_market"] == pytest.approx(0.3)
+
+
+# --- follows ----------------------------------------------------------------
+
+
+def _follow(client, headers, team_id):
+    return client.put(f"/api/v1/account/me/follows/team/{team_id}", headers=headers)
+
+
+def test_follow_teams_up_to_the_cap_then_unfollow(make_client) -> None:
+    client = make_client(follow_max_teams=2)
+    headers = _sign_up(client)
+    assert client.get("/api/v1/account/me", headers=headers).json()["data"]["follows"] == []
+
+    followed = _follow(client, headers, TEAM_GSW)
+    assert followed.status_code == 200, followed.text
+    [gsw] = followed.json()["data"]
+    assert (gsw["entity_type"], gsw["entity_id"]) == ("team", TEAM_GSW)
+    assert (gsw["abbreviation"], gsw["name"]) == ("GSW", "Golden State Warriors")
+
+    # Following again changes nothing and does not count toward the cap.
+    assert len(_follow(client, headers, TEAM_GSW).json()["data"]) == 1
+    both = _follow(client, headers, TEAM_LAC).json()["data"]
+    assert [row["abbreviation"] for row in both] == ["GSW", "LAC"]
+
+    over = _follow(client, headers, TEAM_CHI)
+    assert over.status_code == 409
+    assert "up to 2 teams" in over.json()["detail"]
+    # Re-following one already held is still fine at the cap.
+    assert _follow(client, headers, TEAM_LAC).status_code == 200
+
+    # The profile carries them, so pages need no second request.
+    profile = client.get("/api/v1/account/me", headers=headers).json()["data"]
+    assert [row["entity_id"] for row in profile["follows"]] == [TEAM_GSW, TEAM_LAC]
+
+    left = client.delete(f"/api/v1/account/me/follows/team/{TEAM_GSW}", headers=headers)
+    assert left.status_code == 200
+    assert [row["entity_id"] for row in left.json()["data"]] == [TEAM_LAC]
+    # Unfollowing something not followed is not an error.
+    again = client.delete(f"/api/v1/account/me/follows/team/{TEAM_GSW}", headers=headers)
+    assert again.status_code == 200
+    assert _follow(client, headers, TEAM_CHI).status_code == 200
+
+
+def test_follows_keep_the_order_the_account_sets(client) -> None:
+    headers = _sign_up(client)
+    for team_id in (TEAM_GSW, TEAM_LAC, TEAM_CHI):
+        assert _follow(client, headers, team_id).status_code == 200
+
+    def order(response):
+        return [row["abbreviation"] for row in response.json()["data"]]
+
+    # Newest last until reordered.
+    profile = client.get("/api/v1/account/me", headers=headers).json()["data"]
+    assert [row["abbreviation"] for row in profile["follows"]] == ["GSW", "LAC", "CHI"]
+
+    moved = client.put(
+        "/api/v1/account/me/follows/team",
+        headers=headers,
+        json={"entity_ids": [TEAM_CHI, TEAM_GSW, TEAM_LAC]},
+    )
+    assert moved.status_code == 200, moved.text
+    assert order(moved) == ["CHI", "GSW", "LAC"]
+
+    # Unfollowing keeps the rest in place, and a new follow joins the end.
+    client.delete(f"/api/v1/account/me/follows/team/{TEAM_GSW}", headers=headers)
+    assert order(_follow(client, headers, TEAM_GSW)) == ["CHI", "LAC", "GSW"]
+
+    # The new order has to name exactly what is followed, once each.
+    for ids in (
+        [TEAM_CHI, TEAM_LAC],
+        [TEAM_CHI, TEAM_LAC, TEAM_GSW, TEAM_LAL],
+        [TEAM_CHI, TEAM_CHI, TEAM_LAC],
+    ):
+        refused = client.put(
+            "/api/v1/account/me/follows/team", headers=headers, json={"entity_ids": ids}
+        )
+        assert refused.status_code == 409, ids
+        assert "Reload" in refused.json()["detail"]
+    profile = client.get("/api/v1/account/me", headers=headers).json()["data"]
+    assert [row["abbreviation"] for row in profile["follows"]] == ["CHI", "LAC", "GSW"]
+
+
+def test_following_refuses_unknown_teams_and_types(client) -> None:
+    headers = _sign_up(client)
+    missing = _follow(client, headers, MISSING_ID)
+    assert missing.status_code == 404
+    assert "not in the league" in missing.json()["detail"]
+    assert _follow(client, headers, "not-a-uuid").status_code == 422
+    # Players are allowed by the table but not offered yet.
+    player = client.put(f"/api/v1/account/me/follows/player/{PLAYER_CURRY}", headers=headers)
+    assert player.status_code == 422
+    assert client.get("/api/v1/account/me", headers=headers).json()["data"]["follows"] == []
+
+
+def test_one_users_follows_are_invisible_to_another(client) -> None:
+    mine, theirs = _sign_up(client), _sign_up(client)
+    assert _follow(client, mine, TEAM_GSW).status_code == 200
+    assert client.get("/api/v1/account/me", headers=theirs).json()["data"]["follows"] == []
+    client.delete(f"/api/v1/account/me/follows/team/{TEAM_GSW}", headers=theirs)
+    assert len(client.get("/api/v1/account/me", headers=mine).json()["data"]["follows"]) == 1
+
+
 # --- leaving ----------------------------------------------------------------
 
 
@@ -956,11 +1127,12 @@ def test_deleting_an_account_takes_its_rows_with_it(client, postgres_engine) -> 
     user_id = headers["X-Baseline-User"]
     assert _ask(client, headers, "What is Curry's salary?").status_code == 200
     assert _pick(client, headers, GAME_SCHEDULE, TEAM_GSW).status_code == 200
+    assert _follow(client, headers, TEAM_GSW).status_code == 200
 
     assert client.delete("/api/v1/account/me", headers=headers).status_code == 204
     assert client.get("/api/v1/account/me", headers=headers).status_code == 404
     with postgres_engine.connect() as conn:
-        for table in ("users", "chat_usage", "picks"):
+        for table in ("users", "chat_usage", "picks", "user_follows"):
             count = conn.execute(
                 text(f"SELECT count(*) FROM source.{table} WHERE user_id = :user_id"),
                 {"user_id": user_id},

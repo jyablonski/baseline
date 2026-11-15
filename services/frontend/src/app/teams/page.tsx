@@ -7,6 +7,7 @@ import { TeamRatingsScatter } from "@/components/charts/team-ratings-scatter";
 import { GamesBackHeader, NetRatingHeader } from "@/components/column-help";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamAbbrLink } from "@/components/team-logo";
+import { useProfile } from "@/hooks/use-profile";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import {
@@ -33,6 +34,7 @@ export default function TeamsPage() {
 
 function TeamsDirectory() {
   const { season } = useSeason();
+  const { followedTeamIds } = useProfile();
 
   const standingsQuery = useQuery({
     queryKey: ["standings", season],
@@ -70,8 +72,18 @@ function TeamsDirectory() {
         />
       ) : (
         <div className="grid gap-x-10 gap-y-6 xl:grid-cols-2">
-          <ConferenceTable title="Eastern Conference" rows={east} season={season} />
-          <ConferenceTable title="Western Conference" rows={west} season={season} />
+          <ConferenceTable
+            title="Eastern Conference"
+            rows={east}
+            season={season}
+            followed={followedTeamIds}
+          />
+          <ConferenceTable
+            title="Western Conference"
+            rows={west}
+            season={season}
+            followed={followedTeamIds}
+          />
         </div>
       )}
 
@@ -84,10 +96,13 @@ function ConferenceTable({
   title,
   rows,
   season,
+  followed,
 }: {
   title: string;
   rows: StandingRow[];
   season: string;
+  /** Followed teams, whose rows are tinted. */
+  followed: ReadonlySet<string>;
 }) {
   if (rows.length === 0) return null;
   return (
@@ -126,8 +141,10 @@ function ConferenceTable({
                     seed != null &&
                       CUT_LINES.includes(seed) &&
                       seed < rows.length &&
-                      "border-b-rule-strong"
+                      "border-b-rule-strong",
+                    followed.has(row.team_id) && "bg-tint"
                   )}
+                  data-followed={followed.has(row.team_id) || undefined}
                 >
                   <td className="tabular text-muted-foreground">{seed ?? "—"}</td>
                   <td>

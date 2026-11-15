@@ -21,11 +21,12 @@ export default function PrivacyPage() {
       <Section title="What is kept when you sign in">
         <p>
           Signing in with GitHub or Google is optional and is only needed to make picks
-          <WhenChatbot> or use chat</WhenChatbot>. When you sign in, Baseline keeps:
+          <WhenChatbot>, use chat</WhenChatbot> or follow teams. When you sign in, Baseline keeps:
         </p>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>Your display name and the account id the provider assigns you.</li>
           <li>Your picks, with any stake you put on them.</li>
+          <li>The teams you follow, if any.</li>
           <li>Your time zone setting, if you choose one.</li>
           <WhenChatbot>
             <li>
@@ -59,8 +60,9 @@ export default function PrivacyPage() {
 
       <Section title="How it is used">
         <p>
-          What is kept is used only to run your account: showing your picks and their results and
-          game times in your time zone
+          What is kept is used only to run your account: showing your picks and their results,
+          highlighting the teams you follow and linking them from the header, and showing game times
+          in your time zone
           <WhenChatbot>, and applying the daily chat limit</WhenChatbot>. It is not sold, not shared
           with anyone else, and not used for advertising.
         </p>

@@ -15,6 +15,7 @@ const accountApi = vi.hoisted(() => ({
   fetchPickSheet: vi.fn(),
   savePick: vi.fn(),
   saveTimezone: vi.fn(),
+  setTeamFollow: vi.fn(),
   deletePick: vi.fn(),
   sendChat: vi.fn(),
   deleteAccount: vi.fn(),
@@ -34,6 +35,7 @@ import {
   getProfileAction,
   removePickAction,
   savePickAction,
+  setTeamFollowAction,
   setTimezoneAction,
   signOutAction,
 } from "@/app/account/actions";
@@ -98,6 +100,33 @@ describe("who may call", () => {
     expect(accountApi.saveTimezone).toHaveBeenCalledTimes(2);
     session.current = null;
     await expect(setTimezoneAction("UTC")).resolves.toEqual(SIGNED_OUT);
+  });
+});
+
+describe("follows", () => {
+  const TEAM = "7bf8726a-a852-452d-b81f-14839127c5fb";
+
+  it("follows and unfollows as the session's user", async () => {
+    accountApi.setTeamFollow.mockResolvedValue([{ entity_id: TEAM }]);
+    await expect(setTeamFollowAction(TEAM, true)).resolves.toEqual({
+      ok: true,
+      data: [{ entity_id: TEAM }],
+    });
+    expect(accountApi.setTeamFollow).toHaveBeenCalledWith("u-1", TEAM, true);
+    await setTeamFollowAction(TEAM, false);
+    expect(accountApi.setTeamFollow).toHaveBeenLastCalledWith("u-1", TEAM, false);
+  });
+
+  it("refuses anything that is not a team id, without reaching the API", async () => {
+    for (const bad of ["den", "../me", "", 7 as unknown as string]) {
+      await expect(setTeamFollowAction(bad, true)).resolves.toEqual({
+        ok: false,
+        message: "That team is not in the league.",
+      });
+    }
+    expect(accountApi.setTeamFollow).not.toHaveBeenCalled();
+    session.current = null;
+    await expect(setTeamFollowAction(TEAM, true)).resolves.toEqual(SIGNED_OUT);
   });
 });
 
