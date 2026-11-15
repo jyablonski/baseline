@@ -2,7 +2,7 @@
 
 One-shot jobs on Compose profile `tools`: not always-on services, not a betting product.
 
-Five models score every game. **Elo v1** is the champion shown in production; **Elo v0**, **Elo v2**, **Elo v3** and **logit v1** run in shadow. `source.model_artifacts.is_champion` picks which one `gold.fct_game_predictions` surfaces. Promote from Admin › Models: it updates that row and queues a `dbt` job, and the schedule switches when the rebuild finishes, so promotion and rollback never need a backfill. The ml job scores every model and never changes the choice. A fresh database starts on Elo v0 (the migration seeds it).Plan and promotion criteria: `docs/plans/ml-v2.md`.
+Five models score every game. **Elo v1** is the champion shown in production; **Elo v0**, **Elo v2**, **Elo v3** and **logit v1** run in shadow. `source.model_artifacts.is_champion` picks which one `gold.fct_game_predictions` surfaces. Promote from Admin › Models: it updates that row and queues a `dbt` job, and the schedule switches when the rebuild finishes, so promotion and rollback never need a backfill. The ml job scores every model and never changes the choice. A fresh database starts on Elo v0 (the migration seeds it).Plan and promotion criteria: `docs/plans/2026-09/ml-v2.md`.
 
 ## The models in plain English
 

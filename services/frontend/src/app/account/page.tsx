@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 
 import { deleteAccountAction } from "@/app/account/actions";
+import { FollowedTeamsEditor } from "@/components/account/followed-teams-editor";
 import { SignInPrompt } from "@/components/account/sign-in-prompt";
 import { LoadingState } from "@/components/query-state";
 import { useProfile } from "@/hooks/use-profile";
@@ -116,18 +117,25 @@ export default function AccountPage() {
             </section>
           ) : null}
 
+          {user ? (
+            <Suspense fallback={null}>
+              <FollowedTeamsEditor />
+            </Suspense>
+          ) : null}
+
           <section className="space-y-2 border-t border-rule pt-[var(--ct-space-4)]">
             <h2 className="type-module">What Baseline keeps</h2>
             <p className="text-sm text-ink-2">
               Your display name and an account id from the provider you signed in with, your picks,
-              and your time zone setting. Your email address is not stored.
+              the teams you follow, and your time zone setting. Your email address is not stored.
             </p>
           </section>
 
           <section className="space-y-3 border-t border-rule pt-[var(--ct-space-4)]">
             <h2 className="type-module">Delete account</h2>
             <p className="text-sm text-ink-2">
-              Removes your account, your picks and your usage history. This cannot be undone.
+              Removes your account, your picks, the teams you follow and your usage history. This
+              cannot be undone.
             </p>
             {confirming ? (
               <div className="flex flex-wrap gap-2">

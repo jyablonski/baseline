@@ -14,11 +14,13 @@ import { queryErrorMessage } from "@/lib/api";
 import { formatShortDate, seasonFromDate } from "@/lib/format";
 import {
   bestCall,
+  formatMarketEdge,
   finalScore,
   formatMoney,
   formatSignedMoney,
   openSummary,
   percentCorrect,
+  MIN_MARKET_GAMES,
   pickLabel,
   pickProfit,
   picksCsv,
@@ -26,7 +28,7 @@ import {
   recentForm,
 } from "@/lib/picks";
 import { formatGameTime } from "@/lib/timezones";
-import type { PickSheet, UserPick } from "@/lib/types";
+import type { PickSheet, PickSummary, UserPick } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function PicksPage() {
@@ -131,7 +133,8 @@ function Sheet({ sheet }: { sheet: PickSheet }) {
         ) : null}
       </header>
 
-      <KpiStrip>
+      {/* Five tiles: at two columns the last one spans the row. */}
+      <KpiStrip className="lg:grid-cols-5 sm:max-lg:[&>*:last-child]:col-span-2 sm:max-lg:[&>*:last-child]:border-r-0">
         <KpiCard
           label="Record"
           value={`${summary.wins}–${summary.losses}`}
@@ -171,6 +174,13 @@ function Sheet({ sheet }: { sheet: PickSheet }) {
           }
         />
         <KpiCard
+          label="Vs. the market"
+          value={
+            summary.market_games >= MIN_MARKET_GAMES ? formatMarketEdge(summary.vs_market) : "—"
+          }
+          note={marketNote(summary)}
+        />
+        <KpiCard
           label="Best call"
           value={
             best ? (
@@ -203,6 +213,20 @@ function Sheet({ sheet }: { sheet: PickSheet }) {
       {settled.length > 0 ? <SettledPicks picks={settled} /> : null}
     </div>
   );
+}
+
+/** What the Vs. the market tile says under its figure. */
+function marketNote(summary: PickSummary) {
+  if (summary.market_games === 0) return "no finished picks with a market line yet";
+  if (summary.market_games < MIN_MARKET_GAMES) return "not enough finished picks with a line yet";
+  const wins = Math.round(summary.expected_wins + summary.vs_market);
+  const unpriced = summary.wins + summary.losses - summary.market_games;
+  return [
+    `${wins} ${wins === 1 ? "win" : "wins"} where the odds expected ${summary.expected_wins.toFixed(1)}`,
+    unpriced > 0 ? `${unpriced} without a line` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** W/L tiles for the last 20 graded picks, newest on the right. */

@@ -87,6 +87,30 @@ export function pickTotals(picks: UserPick[]) {
   return { wins, losses, net: netCents / 100, staked };
 }
 
+/** Below this many priced settled picks, a market figure is mostly noise. */
+export const MIN_MARKET_GAMES = 10;
+
+/**
+ * Wins against what the odds expected, over the settled picks that had a
+ * line. Mirrors `summarise_picks` in the API so any filtered slice can show it.
+ */
+export function marketTotals(picks: UserPick[]) {
+  const priced = picks.filter(
+    (pick) => pick.market_wp != null && (pick.result === "won" || pick.result === "lost")
+  );
+  const wins = priced.filter((pick) => pick.result === "won").length;
+  const expected = priced.reduce((sum, pick) => sum + (pick.market_wp ?? 0), 0);
+  return { games: priced.length, wins, expected, edge: wins - expected };
+}
+
+/** Wins over (or under) the market to one decimal: "+4.1", "−0.3", "0.0". */
+export function formatMarketEdge(value: number) {
+  const rounded = Math.round(value * 10) / 10;
+  if (rounded > 0) return `+${rounded.toFixed(1)}`;
+  if (rounded < 0) return `−${Math.abs(rounded).toFixed(1)}`;
+  return "0.0";
+}
+
 /**
  * The last graded picks, oldest first so the newest sits at the right end of
  * the strip. Takes picks newest first, as the API sends them.

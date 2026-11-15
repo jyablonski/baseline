@@ -15,10 +15,14 @@ const state = vi.hoisted(() => ({
   } | null,
   flags: { chatbot: true, picks: true, isLoading: false },
   pathname: "/schedule",
+  search: "season=2026-27",
+  replace: vi.fn(),
 }));
 const actions = vi.hoisted(() => ({
   getProfileAction: vi.fn(),
   setTimezoneAction: vi.fn(),
+  setTeamFollowAction: vi.fn(),
+  setFollowOrderAction: vi.fn(),
   getPickSheetAction: vi.fn(),
   savePickAction: vi.fn(),
   removePickAction: vi.fn(),
@@ -29,8 +33,8 @@ const actions = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   usePathname: () => state.pathname,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  useSearchParams: () => new URLSearchParams("season=2026-27"),
+  useRouter: () => ({ push: vi.fn(), replace: state.replace }),
+  useSearchParams: () => new URLSearchParams(state.search),
 }));
 vi.mock("@/lib/account", () => ({
   useAccount: () => ({ account: state.account, isLoading: false }),
@@ -67,6 +71,22 @@ vi.mock("@/lib/api", () => ({
       meta: { total: 1, limit: 1, offset: 0 },
     }),
     listSchedule: async () => ({ data: [game], meta: { total: 1, limit: 50, offset: 0 } }),
+    listTeams: async () => ({
+      data: [
+        { team_id: "den", abbreviation: "DEN", team_name: "Denver Nuggets", city: "Denver" },
+        { team_id: "bos", abbreviation: "BOS", team_name: "Boston Celtics", city: "Boston" },
+        { team_id: "bkn", abbreviation: "BKN", team_name: "Brooklyn Nets", city: "Brooklyn" },
+      ],
+      meta: { total: 3, limit: 30, offset: 0 },
+    }),
+    listStandings: async () => ({
+      data: [
+        { team_id: "den", abbreviation: "DEN", team_name: "Denver Nuggets", win_pct: 0.9 },
+        { team_id: "bos", abbreviation: "BOS", team_name: "Boston Celtics", win_pct: 0.8 },
+        { team_id: "bkn", abbreviation: "BKN", team_name: "Brooklyn Nets", win_pct: 0.2 },
+      ],
+      meta: { total: 3, limit: 30, offset: 0 },
+    }),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
 }));
@@ -86,6 +106,9 @@ const emptySummary = {
   staked_open: 0,
   vs_model: 0,
   model_games: 0,
+  market_games: 0,
+  expected_wins: 0,
+  vs_market: 0,
 };
 
 function sheet(picks: Record<string, unknown>[] = [], summary = emptySummary) {
@@ -130,11 +153,15 @@ function reply(answer: string, extra: Record<string, unknown> = {}) {
   };
 }
 
-function profile(timezone: string | null = null, chat = quota(10)) {
+function profile(timezone: string | null = null, chat = quota(10), follows: unknown[] = []) {
   return {
     ok: true,
-    data: { user: { created_at: "2026-10-03T12:00:00Z", timezone }, chat },
+    data: { user: { created_at: "2026-10-03T12:00:00Z", timezone }, chat, follows },
   };
+}
+
+function followed(entityId: string, name: string | null, abbreviation: string | null) {
+  return { entity_type: "team", entity_id: entityId, name, abbreviation, created_at: "" };
 }
 
 function page(node: React.ReactNode) {
@@ -146,6 +173,7 @@ beforeEach(() => {
   state.account = { name: "Pat", hasAccount: true };
   state.flags = { chatbot: true, picks: true, isLoading: false };
   state.pathname = "/schedule";
+  state.search = "season=2026-27";
   actions.getPickSheetAction.mockResolvedValue(sheet());
   actions.getProfileAction.mockResolvedValue(profile());
 });
@@ -207,7 +235,7 @@ describe("header", () => {
   it("shows the provider's picture, and the initial when there is none or it fails", () => {
     const picture = "https://avatars.githubusercontent.com/u/1?v=4";
     state.account = { name: "Pat", image: picture, hasAccount: true };
-    const { container } = render(<Header />);
+    const { container } = page(<Header />);
     const button = screen.getByRole("button", { name: "Pat" });
     expect(container.querySelector("img")).toHaveAttribute("src", picture);
     expect(within(button).queryByText("P")).not.toBeInTheDocument();
@@ -267,6 +295,32 @@ describe("header", () => {
     state.pathname = "/picks";
     page(<Header />);
     expect(screen.getByRole("button", { name: /Pat/ })).toHaveClass("ct-tab-active");
+  });
+
+  it("puts each followed team's logo in the header, linking to its page", async () => {
+    state.pathname = "/teams/boston-celtics";
+    actions.getProfileAction.mockResolvedValue(
+      profile(null, quota(10), [
+        followed("bos", "Boston Celtics", "BOS"),
+        followed("den", "Denver Nuggets", "DEN"),
+      ])
+    );
+    page(<Header />);
+    const shortcuts = await screen.findByRole("navigation", { name: "Your teams" });
+    const links = within(shortcuts).getAllByRole("link");
+    // In the order set on Account.
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "/teams/boston-celtics",
+      "/teams/denver-nuggets",
+    ]);
+    expect(links[0]).toHaveAccessibleName("Boston Celtics");
+    expect(links[0]).toHaveAttribute("aria-current", "page");
+    expect(links[1]).not.toHaveAttribute("aria-current");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    const mobile = screen.getByRole("navigation", { name: "Your teams mobile" });
+    fireEvent.click(within(mobile).getByRole("link", { name: "Denver Nuggets" }));
+    expect(screen.queryByRole("navigation", { name: "Your teams mobile" })).not.toBeInTheDocument();
   });
 
   it("lists the same destinations flat in the mobile menu", () => {
@@ -436,6 +490,54 @@ describe("schedule picks", () => {
   });
 });
 
+describe("schedule for followed teams", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-20T16:00:00Z") });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("tints a followed team's game and offers to show only those", async () => {
+    actions.getProfileAction.mockResolvedValue(
+      profile(null, quota(10), [followed("home", "Golden State Warriors", "GSW")])
+    );
+    page(<SchedulePage />);
+    const row = (await screen.findByRole("link", { name: "GSW" })).closest("tr");
+    const toggle = screen.getByRole("switch", { name: "Only my teams" });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(row).toHaveAttribute("data-followed", "true");
+    expect(row).toHaveClass("bg-tint");
+
+    fireEvent.click(toggle);
+    expect(state.replace).toHaveBeenCalledWith("/schedule?season=2026-27&mine=1", {
+      scroll: false,
+    });
+  });
+
+  it("says so when none of the followed teams play that day", async () => {
+    state.search = "season=2026-27&mine=1";
+    actions.getProfileAction.mockResolvedValue(
+      profile(null, quota(10), [followed("other", "Denver Nuggets", "DEN")])
+    );
+    page(<SchedulePage />);
+    expect(await screen.findByText("None of your teams play on this date.")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Only my teams" })).toHaveAttribute(
+      "aria-checked",
+      "true"
+    );
+    fireEvent.click(screen.getByRole("switch", { name: "Only my teams" }));
+    expect(state.replace).toHaveBeenCalledWith("/schedule?season=2026-27", { scroll: false });
+  });
+
+  it("ignores the filter for a visitor who follows nobody", async () => {
+    state.search = "season=2026-27&mine=1";
+    page(<SchedulePage />);
+    expect(await screen.findByRole("link", { name: "GSW" })).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Only my teams" })).not.toBeInTheDocument();
+  });
+});
+
 describe("picks page", () => {
   it("asks an anonymous visitor to sign in", () => {
     state.account = null;
@@ -533,6 +635,9 @@ describe("picks page", () => {
           staked_open: 100,
           vs_model: 2,
           model_games: 3,
+          market_games: 0,
+          expected_wins: 0,
+          vs_market: 0,
         }
       )
     );
@@ -629,6 +734,71 @@ describe("picks page", () => {
       await screen.findByText("right when the model was wrong, minus the reverse")
     ).toBeInTheDocument();
     expect(screen.getByText("0")).toBeInTheDocument();
+  });
+
+  it("scores picks against the market once enough have a line", async () => {
+    const settled = Array.from({ length: 12 }, (_, index) =>
+      pick({ game_id: `g-${index}`, result: "won", home_score: 2, away_score: 1 })
+    );
+    actions.getPickSheetAction.mockResolvedValue(
+      sheet(settled, {
+        ...emptySummary,
+        wins: 12,
+        market_games: 11,
+        expected_wins: 8.94,
+        vs_market: 2.06,
+      })
+    );
+    const { unmount } = page(<PicksPage />);
+    expect(await screen.findByText("+2.1")).toBeInTheDocument();
+    expect(
+      screen.getByText("11 wins where the odds expected 8.9 · 1 without a line")
+    ).toBeInTheDocument();
+    unmount();
+
+    // Too few priced picks reads as a dash, not a number.
+    actions.getPickSheetAction.mockResolvedValue(
+      sheet(settled.slice(0, 3), {
+        ...emptySummary,
+        wins: 3,
+        market_games: 3,
+        expected_wins: 2.1,
+        vs_market: 0.9,
+      })
+    );
+    page(<PicksPage />);
+    expect(
+      await screen.findByText("not enough finished picks with a line yet")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("+0.9")).not.toBeInTheDocument();
+  });
+
+  it("shows each breakdown split against the odds", async () => {
+    actions.getPickSheetAction.mockResolvedValue(
+      sheet(
+        [
+          // A home favourite that won where the odds gave it 0.6.
+          pick({ result: "won", home_score: 2, away_score: 1, market_wp: 0.6 }),
+          // An away underdog with no line.
+          pick({
+            game_id: "dog",
+            picked_team_id: "away",
+            moneyline: 150,
+            result: "lost",
+            home_score: 2,
+            away_score: 1,
+          }),
+        ],
+        { ...emptySummary, wins: 1, losses: 1, market_games: 1, expected_wins: 0.6, vs_market: 0.4 }
+      )
+    );
+    page(<PicksPage />);
+    await screen.findAllByTestId("settled-pick");
+    fireEvent.click(screen.getByRole("button", { name: /^Breakdown/ }));
+    expect(await screen.findByText("Vs. odds")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Favorites/ })).toHaveTextContent("+0.4");
+    // A split with no priced picks has nothing to compare.
+    expect(screen.getByRole("button", { name: /^Underdogs/ })).toHaveTextContent("0–1–");
   });
 
   it("pages a long settled list instead of rendering a season at once", async () => {
@@ -1003,6 +1173,86 @@ describe("account page", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Try again.");
     expect(actions.setTimezoneAction).toHaveBeenLastCalledWith(null);
     expect(select).toHaveValue("America/Los_Angeles");
+  });
+
+  it("lists the teams followed and unfollows one", async () => {
+    actions.getProfileAction.mockResolvedValue(
+      profile(null, quota(10), [
+        followed("den", "Denver Nuggets", "DEN"),
+        followed("gone", null, null),
+      ])
+    );
+    actions.setTeamFollowAction.mockResolvedValue({
+      ok: true,
+      data: [followed("gone", null, null)],
+    });
+    page(<AccountPage />);
+    expect(await screen.findByRole("link", { name: "Denver Nuggets" })).toHaveAttribute(
+      "href",
+      "/teams/denver-nuggets"
+    );
+    expect(screen.getByText("No longer in the league")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Unfollow Denver Nuggets" }));
+    await waitFor(() => expect(screen.getAllByTestId("followed-team")).toHaveLength(1));
+    expect(actions.setTeamFollowAction).toHaveBeenCalledWith("den", false);
+    expect(screen.getByText(/the teams you follow, and your time zone/)).toBeInTheDocument();
+  });
+
+  it("adds a team by search", async () => {
+    actions.setTeamFollowAction.mockResolvedValue({
+      ok: true,
+      data: [followed("bos", "Boston Celtics", "BOS")],
+    });
+    page(<AccountPage />);
+    expect(await screen.findByText(/You don.t follow any teams yet/)).toBeInTheDocument();
+    expect(screen.getByText("0 teams")).toBeInTheDocument();
+    const search = screen.getByRole("searchbox", { name: "Add a team" });
+    fireEvent.change(search, { target: { value: "bos" } });
+    const matches = await screen.findByRole("list", { name: "Matching teams" });
+    expect(within(matches).getAllByRole("button")).toHaveLength(1);
+    fireEvent.keyDown(search, { key: "Enter" });
+    await waitFor(() => expect(screen.getAllByTestId("followed-team")).toHaveLength(1));
+    expect(actions.setTeamFollowAction).toHaveBeenCalledWith("bos", true);
+    // The box clears once the follow lands, and a followed team is no longer offered.
+    expect(search).toHaveValue("");
+    fireEvent.change(search, { target: { value: "bos" } });
+    expect(await screen.findByText(/No team you don.t follow matches/)).toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "zzz" } });
+    expect(await screen.findByText(/No team you don.t follow matches/)).toBeInTheDocument();
+    // Leaving the box closes the results; coming back reopens them.
+    fireEvent.blur(search);
+    expect(screen.queryByRole("list", { name: "Matching teams" })).toBeNull();
+    fireEvent.focus(search);
+    expect(screen.getByRole("list", { name: "Matching teams" })).toBeInTheDocument();
+  });
+
+  it("moves a team up or down, and saves the whole order", async () => {
+    actions.getProfileAction.mockResolvedValue(
+      profile(null, quota(10), [
+        followed("den", "Denver Nuggets", "DEN"),
+        followed("bos", "Boston Celtics", "BOS"),
+      ])
+    );
+    actions.setFollowOrderAction.mockResolvedValue({
+      ok: true,
+      data: [followed("bos", "Boston Celtics", "BOS"), followed("den", "Denver Nuggets", "DEN")],
+    });
+    page(<AccountPage />);
+    expect(await screen.findByRole("button", { name: "Move DEN up" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move BOS down" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Move BOS up" }));
+    await waitFor(() => expect(actions.setFollowOrderAction).toHaveBeenCalledWith(["bos", "den"]));
+    await waitFor(() =>
+      expect(screen.getAllByTestId("followed-team")[0]).toHaveTextContent("1BOSBoston Celtics")
+    );
+
+    actions.setFollowOrderAction.mockResolvedValue({
+      ok: false,
+      message: "The list of teams has changed. Reload and try again.",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Move DEN up" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Reload and try again.");
   });
 
   it("links to admin for the owner and for nobody else", () => {

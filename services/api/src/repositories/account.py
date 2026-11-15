@@ -6,17 +6,23 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from queries.account import (
+    ADD_FOLLOW,
     COUNT_CHAT_TODAY,
     COUNT_LLM_CHAT_TODAY,
+    DELETE_FOLLOW,
     DELETE_PICK,
     DELETE_USER,
     EXPIRE_STALE_CHAT,
     GET_USER,
+    IS_FOLLOWING,
+    LIST_FOLLOWS,
     LIST_PICKS,
     PICK_GAME,
+    REORDER_FOLLOWS,
     RESERVE_CHAT,
     SET_USER_TIMEZONE,
     SETTLE_CHAT,
+    TEAM_EXISTS,
     UPSERT_PICK,
     UPSERT_USER,
 )
@@ -33,6 +39,18 @@ class ChatInFlightError(RuntimeError):
 
 class ChatQuotaExceededError(RuntimeError):
     """The user has used every ask for the current ET day."""
+
+
+class FollowNotFoundError(LookupError):
+    """The team to follow is not in the league. The message is safe to show."""
+
+
+class FollowLimitError(RuntimeError):
+    """The account already follows as many as it may. The message is safe to show."""
+
+
+class FollowOrderError(ValueError):
+    """A new order that is not exactly the followed set. The message is safe to show."""
 
 
 class PickError(ValueError):
@@ -60,6 +78,17 @@ def summarise_picks(picks: list[dict]) -> dict:
         if model_correct is not None and pick["result"] in ("won", "lost"):
             model_games += 1
             vs_model += int(pick["result"] == "won") - int(model_correct)
+    # Wins against the market's expectation over the settled picks that had a
+    # line: the sum of each picked side's no-vig probability is how many of
+    # them the odds expected to win. Picks with no line count on neither side.
+    market_games = market_wins = 0
+    expected_wins = 0.0
+    for pick in picks:
+        market_wp = pick.get("market_wp")
+        if market_wp is not None and pick["result"] in ("won", "lost"):
+            market_games += 1
+            market_wins += int(pick["result"] == "won")
+            expected_wins += market_wp
     return {
         "wins": sum(1 for pick in picks if pick["result"] == "won"),
         "losses": sum(1 for pick in picks if pick["result"] == "lost"),
@@ -70,6 +99,9 @@ def summarise_picks(picks: list[dict]) -> dict:
         "staked_open": sum(pick["stake"] or 0 for pick in picks if pick["result"] == "pending"),
         "vs_model": vs_model,
         "model_games": model_games,
+        "market_games": market_games,
+        "expected_wins": round(expected_wins, 2),
+        "vs_market": round(market_wins - expected_wins, 2),
     }
 
 
@@ -108,8 +140,47 @@ class AccountRepository:
         self.db.commit()
         return dict(row)
 
+    def list_follows(self, user_id: UUID) -> list[dict]:
+        rows = self.db.execute(LIST_FOLLOWS, {"user_id": user_id}).mappings().all()
+        return [dict(row) for row in rows]
+
+    def follow(self, user_id: UUID, *, entity_type: str, entity_id: UUID, max_follows: int) -> None:
+        """Follow a team. Following one already followed changes nothing."""
+        params = {"user_id": user_id, "entity_type": entity_type, "entity_id": entity_id}
+        if not self.db.execute(TEAM_EXISTS, {"entity_id": entity_id}).scalar_one():
+            self.db.rollback()
+            raise FollowNotFoundError("That team is not in the league.")
+        added = self.db.execute(ADD_FOLLOW, {**params, "max_follows": max_follows}).first()
+        if added is None and not self.db.execute(IS_FOLLOWING, params).scalar_one():
+            self.db.rollback()
+            raise FollowLimitError(
+                f"You can follow up to {max_follows} teams. Unfollow one to add another."
+            )
+        self.db.commit()
+
+    def reorder_follows(self, user_id: UUID, *, entity_type: str, entity_ids: list[UUID]) -> None:
+        """Set the order to `entity_ids`, which must be exactly what is followed."""
+        current = {
+            follow["entity_id"]
+            for follow in self.list_follows(user_id)
+            if follow["entity_type"] == entity_type
+        }
+        if len(entity_ids) != len(current) or set(entity_ids) != current:
+            self.db.rollback()
+            raise FollowOrderError("The list of teams has changed. Reload and try again.")
+        self.db.execute(
+            REORDER_FOLLOWS,
+            {"user_id": user_id, "entity_type": entity_type, "entity_ids": entity_ids},
+        )
+        self.db.commit()
+
+    def unfollow(self, user_id: UUID, *, entity_type: str, entity_id: UUID) -> None:
+        params = {"user_id": user_id, "entity_type": entity_type, "entity_id": entity_id}
+        self.db.execute(DELETE_FOLLOW, params)
+        self.db.commit()
+
     def delete_user(self, user_id: UUID) -> None:
-        # chat_usage and picks go with it: both reference users ON DELETE CASCADE.
+        # chat_usage, picks and follows go with it: all reference users ON DELETE CASCADE.
         self.db.execute(DELETE_USER, {"user_id": user_id})
         self.db.commit()
 

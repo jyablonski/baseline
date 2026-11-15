@@ -1086,6 +1086,17 @@ export type AccountProfile = {
     last_seen_at: string;
   };
   chat: ChatQuota;
+  /** In the order the account set. Only teams can be followed so far. */
+  follows: Follow[];
+};
+
+/** A team the account follows. Name and abbreviation are null if it left the league. */
+export type Follow = {
+  entity_type: "team" | "player";
+  entity_id: string;
+  name: string | null;
+  abbreviation: string | null;
+  created_at: string;
 };
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
@@ -1115,6 +1126,8 @@ export type UserPick = {
   model_correct: boolean | null;
   /** Did the market underdog win? Null when no pregame line was captured. */
   is_upset?: boolean | null;
+  /** The picked side's no-vig market probability. Null with no captured line. */
+  market_wp?: number | null;
   game_date: string | null;
   start_time_et: string | null;
   game_status: string | null;
@@ -1139,6 +1152,12 @@ export type PickSummary = {
   /** Net picks ahead of (or behind) the model over `model_games` settled games. */
   vs_model: number;
   model_games: number;
+  /** Settled picks that had a market line; the others count toward neither figure. */
+  market_games: number;
+  /** How many of those the odds expected to win: the sum of each side's no-vig probability. */
+  expected_wins: number;
+  /** Wins among them less `expected_wins`. */
+  vs_market: number;
 };
 
 export type PickSheet = { summary: PickSummary; picks: UserPick[] };

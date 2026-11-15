@@ -8,12 +8,14 @@ import {
   fetchPickSheet,
   fetchProfile,
   savePick,
+  saveFollowOrder,
   saveTimezone,
+  setTeamFollow,
   sendChat,
 } from "@/lib/account-api";
 import { MAX_STAKE } from "@/lib/picks";
 import { isTimezone } from "@/lib/timezones";
-import type { AccountProfile, ChatReply, ChatTurn, PickSheet } from "@/lib/types";
+import type { AccountProfile, ChatReply, ChatTurn, Follow, PickSheet } from "@/lib/types";
 
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; message: string };
 
@@ -78,6 +80,32 @@ export async function setTimezoneAction(
     return { ok: false, message: "That time zone is not one of the choices." };
   }
   return asUser((userId) => saveTimezone(userId, timezone));
+}
+
+// Team ids are Baseline UUIDs; anything else never reaches the API's URL.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Follow or unfollow a team. Returns every follow, in the order the account set. */
+export async function setTeamFollowAction(
+  teamId: string,
+  following: boolean
+): Promise<ActionResult<Follow[]>> {
+  if (typeof teamId !== "string" || !UUID_PATTERN.test(teamId)) {
+    return { ok: false, message: "That team is not in the league." };
+  }
+  return asUser((userId) => setTeamFollow(userId, teamId, following === true));
+}
+
+/** Set the order followed teams are shown in. Returns every follow in that order. */
+export async function setFollowOrderAction(teamIds: string[]): Promise<ActionResult<Follow[]>> {
+  if (
+    !Array.isArray(teamIds) ||
+    teamIds.length > 50 ||
+    !teamIds.every((id) => typeof id === "string" && UUID_PATTERN.test(id))
+  ) {
+    return { ok: false, message: "That team is not in the league." };
+  }
+  return asUser((userId) => saveFollowOrder(userId, teamIds));
 }
 
 export async function getPickSheetAction(): Promise<ActionResult<PickSheet>> {

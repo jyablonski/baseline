@@ -7,6 +7,18 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("season=2025-26"),
 }));
 
+// Signed out with no follows unless a test sets them.
+const follows = vi.hoisted(
+  () => [] as { entity_type: "team"; entity_id: string; name: string; abbreviation: string }[]
+);
+vi.mock("@/hooks/use-profile", () => ({
+  useProfile: () => ({
+    timezone: null,
+    follows,
+    followedTeamIds: new Set(follows.map((follow) => follow.entity_id)),
+  }),
+}));
+
 const listTeams = vi.hoisted(() => vi.fn());
 const listStandings = vi.hoisted(() => vi.fn());
 
@@ -60,6 +72,7 @@ function renderPage() {
 }
 
 beforeEach(() => {
+  follows.length = 0;
   listTeams.mockReset();
   listTeams.mockResolvedValue({ data: [], meta: { total: 0, limit: 30, offset: 0 } });
   listStandings.mockReset();
@@ -127,6 +140,21 @@ describe("teams page", () => {
     // The West has one team, so no rule under it.
     const west = screen.getByRole("region", { name: "Western Conference" });
     expect(within(west).getByText("OKC").closest("tr")).not.toHaveClass("border-b-rule-strong");
+  });
+
+  it("tints the visitor's followed teams in the standings", async () => {
+    follows.push({
+      entity_type: "team",
+      entity_id: "t-BOS",
+      name: "BOS Team",
+      abbreviation: "BOS",
+    });
+    renderPage();
+    const east = await screen.findByRole("region", { name: "Eastern Conference" });
+    const bos = within(east).getByText("BOS Team").closest("tr");
+    expect(bos).toHaveAttribute("data-followed", "true");
+    expect(bos).toHaveClass("bg-tint");
+    expect(within(east).getByText("DET Team").closest("tr")).not.toHaveClass("bg-tint");
   });
 
   it("plots offensive vs defensive rating under the standings", async () => {

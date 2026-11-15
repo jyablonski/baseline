@@ -6,9 +6,11 @@ import {
   bestCall,
   filterSettled,
   finalScore,
+  formatMarketEdge,
   formatMoney,
   formatPrice,
   formatSignedMoney,
+  marketTotals,
   modelTeam,
   openSummary,
   pickLabel,
@@ -88,6 +90,29 @@ describe("stakes", () => {
     expect(formatSignedMoney(37.15)).toBe("+$37.15");
     expect(formatSignedMoney(-50)).toBe("−$50");
     expect(formatSignedMoney(0)).toBe("$0");
+  });
+});
+
+describe("against the market", () => {
+  it("counts only settled picks that had a line", () => {
+    const totals = marketTotals([
+      pick({ result: "won", market_wp: 0.7 }),
+      pick({ result: "lost", market_wp: 0.4 }),
+      pick({ result: "won", market_wp: null }),
+      pick({ result: "pending", market_wp: 0.5 }),
+      pick({ result: "void", market_wp: 0.5 }),
+    ]);
+    expect(totals.games).toBe(2);
+    expect(totals.wins).toBe(1);
+    expect(totals.expected).toBeCloseTo(1.1);
+    expect(totals.edge).toBeCloseTo(-0.1);
+  });
+
+  it("writes the edge to one decimal with a real minus", () => {
+    expect(formatMarketEdge(4.06)).toBe("+4.1");
+    expect(formatMarketEdge(-0.3)).toBe("−0.3");
+    expect(formatMarketEdge(0.04)).toBe("0.0");
+    expect(formatMarketEdge(-0.04)).toBe("0.0");
   });
 });
 

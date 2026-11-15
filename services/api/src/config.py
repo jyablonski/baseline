@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     # makes the X-Baseline-User header trustworthy, so unset means 503, never open.
     accounts_api_token: str | None = None
     chat_daily_limit: int = 10
+    # Teams one account may follow.
+    follow_max_teams: int = 5
     # LLM-backed asks across all users per ET day. Past it, chat answers from
     # the rules backend until the next day.
     chat_global_daily_limit: int = 250

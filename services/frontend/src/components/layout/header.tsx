@@ -7,9 +7,11 @@ import { Menu, X } from "lucide-react";
 
 import { ProfileMenu } from "@/components/account/profile-menu";
 import { BaselineWordmark } from "@/components/brand/baseline-wordmark";
+import { TeamLogo } from "@/components/team-logo";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useProfile } from "@/hooks/use-profile";
 import { useAccount, useFeatures } from "@/lib/account";
-import { isNavActive, primaryNav } from "@/lib/nav";
+import { isNavActive, primaryNav, teamHref } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 export function Header() {
@@ -25,6 +27,23 @@ export function Header() {
   const accountIsLoading = !hydrated || account.isLoading;
   const tabs = primaryNav(hydrated && features.chatbot);
   const signInHref = `/signin?callbackUrl=${encodeURIComponent(pathname)}`;
+  // Followed teams, in the order set on Account, as logo shortcuts to their pages.
+  const { follows } = useProfile();
+  const shortcuts =
+    hydrated && account.account
+      ? follows.flatMap((follow) =>
+          follow.entity_type === "team" && follow.name
+            ? [
+                {
+                  teamId: follow.entity_id,
+                  name: follow.name,
+                  abbreviation: follow.abbreviation,
+                  href: teamHref(follow.name),
+                },
+              ]
+            : []
+        )
+      : [];
   // The narrow layout has no room for a dropdown, so the same destinations
   // are listed flat. Empty until the session is known, so a signed-in visitor
   // never sees "Sign in" flash past.
@@ -68,9 +87,22 @@ export function Header() {
           {menuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
         </button>
 
+        {/* A sibling of the Account nav, not inside it, so landmarks don't nest. */}
+        {shortcuts.length > 0 ? (
+          <TeamShortcuts
+            teams={shortcuts}
+            pathname={pathname}
+            label="Your teams"
+            // The rule keeps the team logos from reading as a second avatar.
+            className="ml-auto hidden border-r border-rule pr-3 md:flex"
+          />
+        ) : null}
         <nav
           aria-label="Account"
-          className="ml-auto hidden h-full shrink-0 items-center gap-4 md:flex"
+          className={cn(
+            "hidden h-full shrink-0 items-center gap-4 md:flex",
+            shortcuts.length === 0 && "ml-auto"
+          )}
         >
           {accountIsLoading ? null : account.account ? (
             <ProfileMenu
@@ -103,6 +135,16 @@ export function Header() {
               </Link>
             ))}
           </nav>
+          {shortcuts.length > 0 ? (
+            <div className="mt-2 border-t border-rule pt-2">
+              <TeamShortcuts
+                teams={shortcuts}
+                pathname={pathname}
+                label="Your teams mobile"
+                onNavigate={() => setMenuOpen(false)}
+              />
+            </div>
+          ) : null}
           {mobileAccountLinks.length > 0 ? (
             <nav
               aria-label="Account mobile"
@@ -123,5 +165,50 @@ export function Header() {
         </div>
       ) : null}
     </header>
+  );
+}
+
+type TeamShortcut = {
+  teamId: string;
+  name: string;
+  abbreviation: string | null;
+  href: string;
+};
+
+function TeamShortcuts({
+  teams,
+  pathname,
+  label,
+  onNavigate,
+  className = "flex",
+}: {
+  teams: TeamShortcut[];
+  pathname: string;
+  label: string;
+  onNavigate?: () => void;
+  className?: string;
+}) {
+  return (
+    <nav aria-label={label} className={cn("items-center gap-2", className)}>
+      {teams.map((team) => {
+        const current = pathname === team.href;
+        return (
+          <Link
+            key={team.teamId}
+            href={team.href}
+            title={team.name}
+            aria-label={team.name}
+            aria-current={current ? "page" : undefined}
+            onClick={onNavigate}
+            className={cn(
+              "inline-flex size-8 items-center justify-center rounded-full hover:bg-row-hover",
+              current && "bg-tint"
+            )}
+          >
+            <TeamLogo teamId={team.teamId} abbreviation={team.abbreviation} size={22} />
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

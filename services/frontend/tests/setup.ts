@@ -15,6 +15,8 @@ vi.mock("@/app/account/actions", () => {
   return {
     getProfileAction: signedOut,
     setTimezoneAction: signedOut,
+    setTeamFollowAction: signedOut,
+    setFollowOrderAction: signedOut,
     getPickSheetAction: signedOut,
     savePickAction: signedOut,
     removePickAction: signedOut,

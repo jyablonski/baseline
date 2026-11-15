@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { B2BBadge, B2BLegend } from "@/components/games/b2b-badge";
@@ -13,6 +13,7 @@ import { InjuryField } from "@/components/injuries/injury-field";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TEAM_LOGO_SIZE, TeamAbbrLink } from "@/components/team-logo";
 import { Popover, PopoverContent } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { usePicks } from "@/hooks/use-picks";
 import { useProfile } from "@/hooks/use-profile";
 import { useSeason } from "@/hooks/use-season";
@@ -20,6 +21,7 @@ import { useAccount, useFeatures } from "@/lib/account";
 import { api, queryErrorMessage } from "@/lib/api";
 import { useDayParam } from "@/hooks/use-day-param";
 import { dayNavigation } from "@/lib/calendar";
+import { involvesFollowed } from "@/lib/follows";
 import { formatMoneyline, formatProbability, formatSpread } from "@/lib/format";
 import { teamHref, withSeason } from "@/lib/nav";
 import { formatDayTitle } from "@/lib/results";
@@ -90,7 +92,7 @@ function ScheduleBody() {
   });
 
   const picks = usePicks();
-  const { timezone } = useProfile();
+  const { timezone, followedTeamIds } = useProfile();
   const { account, isLoading: accountIsLoading } = useAccount();
   const features = useFeatures();
   const pathname = usePathname();
@@ -108,7 +110,22 @@ function ScheduleBody() {
   // (dimmed) rather than filtering them against the new day into an empty state.
   const fetched = scheduleQuery.data?.data ?? [];
   const shownDay = scheduleQuery.isPlaceholderData ? fetched[0]?.game_date.slice(0, 10) : day;
-  const rows = fetched.filter((game) => game.game_date.slice(0, 10) === shownDay);
+  const dayRows = fetched.filter((game) => game.game_date.slice(0, 10) === shownDay);
+  // ?mine=1 keeps only followed teams' games. It is ignored with no follows, so
+  // a shared link never shows an empty table to someone else.
+  const following = followedTeamIds.size > 0;
+  const mineOnly = following && searchParams.get("mine") === "1";
+  const rows = mineOnly
+    ? dayRows.filter((game) => involvesFollowed(game, followedTeamIds))
+    : dayRows;
+  const router = useRouter();
+  const setMineOnly = (on: boolean) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (on) params.set("mine", "1");
+    else params.delete("mine");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
 
   const showDay = useDayParam(home);
 
@@ -173,6 +190,16 @@ function ScheduleBody() {
             }
             rule="light"
           >
+            {following ? (
+              <label className="ml-auto flex items-center gap-2 self-center text-sm text-ink-2">
+                My teams
+                <Switch
+                  checked={mineOnly}
+                  label="Only my teams"
+                  onChange={() => setMineOnly(!mineOnly)}
+                />
+              </label>
+            ) : null}
             <DayPicker
               current={day}
               home={home}
@@ -188,7 +215,13 @@ function ScheduleBody() {
           ) : scheduleQuery.isError ? (
             <ErrorState message={queryErrorMessage(scheduleQuery.error)} />
           ) : rows.length === 0 ? (
-            <EmptyState message="No games are scheduled for this date." />
+            <EmptyState
+              message={
+                mineOnly && dayRows.length > 0
+                  ? "None of your teams play on this date."
+                  : "No games are scheduled for this date."
+              }
+            />
           ) : (
             <ScheduleTable
               rows={rows}
@@ -196,6 +229,7 @@ function ScheduleBody() {
               picks={picks}
               timezone={timezone}
               now={now}
+              followed={mineOnly ? undefined : followedTeamIds}
               signInHref={signedOut ? signInHref : undefined}
               busy={scheduleQuery.isPlaceholderData}
             />
@@ -214,12 +248,15 @@ function ScheduleTable({
   now,
   signInHref,
   busy,
+  followed,
 }: {
   rows: ScheduledGame[];
   season: string;
   picks: ReturnType<typeof usePicks>;
   timezone: string | null;
   now: Date;
+  /** Followed teams, whose rows are tinted. Unset when the table shows only them. */
+  followed?: ReadonlySet<string>;
   /** Set for a visitor with no session: the pick column explains picks instead. */
   signInHref?: string;
   /** The previous day still on screen while the picked one loads. */
@@ -293,6 +330,7 @@ function ScheduleTable({
               signInHref={signInHref}
               awaySlot={awaySlot}
               showStatus={showStatus}
+              followed={followed ? involvesFollowed(game, followed) : false}
             />
           ))}
         </tbody>
@@ -355,6 +393,7 @@ function ScheduleGame({
   signInHref,
   awaySlot,
   showStatus,
+  followed,
 }: {
   game: ScheduledGame;
   season: string;
@@ -365,11 +404,12 @@ function ScheduleGame({
   signInHref?: string;
   awaySlot: React.CSSProperties;
   showStatus: boolean;
+  followed: boolean;
 }) {
   // The API refuses a pick from tip-off on, so the cell locks on the same clock.
   const phase = gamePhase(game.game_date, game.start_time_et, now);
   const locked = phase !== "upcoming";
-  const row = { game, season, timezone, phase, awaySlot, showStatus };
+  const row = { game, season, timezone, phase, awaySlot, showStatus, followed };
   if (signInHref) {
     return (
       <ScheduleRow {...row}>
@@ -439,6 +479,7 @@ function ScheduleRow({
   phase,
   showStatus,
   awaySlot,
+  followed,
   children,
 }: {
   game: ScheduledGame;
@@ -446,6 +487,8 @@ function ScheduleRow({
   timezone: string | null;
   phase: ReturnType<typeof gamePhase>;
   showStatus: boolean;
+  /** A followed team plays: the row is tinted. */
+  followed: boolean;
   /** Fixed width for the away team (and its badge) so the "@" aligns down the table. */
   awaySlot: React.CSSProperties;
   children?: React.ReactNode;
@@ -457,7 +500,7 @@ function ScheduleRow({
   const away = game.away_team_abbreviation ?? "Away";
   const home = game.home_team_abbreviation ?? "Home";
   return (
-    <tr>
+    <tr className={cn(followed && "bg-tint")} data-followed={followed || undefined}>
       <td className="tabular whitespace-nowrap">
         <Link href={`/games/${game.game_id}`} className="group block" title="Game preview">
           <span className="block group-hover:text-primary group-hover:underline">

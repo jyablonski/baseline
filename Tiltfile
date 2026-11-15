@@ -1,5 +1,5 @@
 # Tilt local stack: hot-reload for app code, full rebuild on Dockerfile / lockfile changes.
-# Production is compose + Caddy (`docker-compose.prod.yml`), not Tilt — see docs/plans/oci-caddy-hosting.md.
+# Production is compose + Caddy (`docker-compose.prod.yml`), not Tilt — see docs/plans/2026-09/oci-caddy-hosting.md.
 # Usage: `make up` (or `tilt up`) — postgres, migrate, cube, api, frontend, mcp.
 # Optional compose profiles (do not enable by default; they start extra services):
 #   tilt up -- --profiles tools (scraper, dbt, and ml)

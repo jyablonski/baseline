@@ -6,6 +6,20 @@ const listSchedule = vi.fn();
 const listSocialPosts = vi.fn();
 let searchParams = "season=2025-26";
 let seasons = ["2025-26"];
+// The signed-in visitor's profile; signed out (no user, no follows) unless a test sets it.
+const profileState = vi.hoisted(() => ({
+  user: null as { timezone: string | null } | null,
+  follows: [] as { entity_type: "team"; entity_id: string; name: string; abbreviation: string }[],
+}));
+
+vi.mock("@/hooks/use-profile", () => ({
+  useProfile: () => ({
+    user: profileState.user,
+    timezone: null,
+    follows: profileState.follows,
+    followedTeamIds: new Set(profileState.follows.map((follow) => follow.entity_id)),
+  }),
+}));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
@@ -45,6 +59,8 @@ vi.mock("@/lib/api", () => ({
     listSchedule: (...args: unknown[]) => listSchedule(...args),
     getSocialSummary: async () => ({ last_post_at: "2026-01-13T05:00:00Z" }),
     listSocialPosts: (...args: unknown[]) => listSocialPosts(...args),
+    getTeamSeasonGames: async () => ({ data: [], meta: { total: 0, limit: 0, offset: 0 } }),
+    listInjuries: async () => ({ data: [], meta: { total: 0, limit: 0, offset: 0 } }),
     listStandings: async () => ({
       data: [
         ...EAST.map((abbreviation, index) =>
@@ -129,6 +145,8 @@ describe("home desk", () => {
     listSchedule.mockReset();
     listSchedule.mockResolvedValue(page([]));
     listSocialPosts.mockResolvedValue(page([]));
+    profileState.user = null;
+    profileState.follows = [];
   });
 
   afterEach(() => {
@@ -170,6 +188,41 @@ describe("home desk", () => {
       "href",
       "/games?date=2026-01-12"
     );
+  });
+
+  it("tints followed teams' games and standings, keeping their games in the capped lists", async () => {
+    profileState.user = { timezone: null };
+    profileState.follows = [
+      { entity_type: "team", entity_id: "home-7", name: "H7 Team", abbreviation: "H7" },
+      { entity_type: "team", entity_id: "east-NYK", name: "NYK Team", abbreviation: "NYK" },
+    ];
+    // Eight games: the followed team's would otherwise fall off the six shown.
+    listGames.mockResolvedValue(page(Array.from({ length: 8 }, (_, index) => final(index))));
+    listSchedule.mockResolvedValue(
+      page(
+        Array.from({ length: 7 }, (_, index) => scheduled(index, { home_team_id: `nh-${index}` }))
+      )
+    );
+    renderHome();
+
+    await screen.findByRole("heading", { name: "Last night" });
+    const cards = screen.getAllByRole("link", { name: /game flow$/ });
+    expect(cards).toHaveLength(6);
+    const mine = screen.getByRole("link", { name: "A7 97, H7 107: game flow" });
+    expect(mine).toHaveAttribute("data-followed", "true");
+    expect(mine).toHaveClass("bg-tint");
+    // It displaced the last of the others, not the top of the slate.
+    expect(screen.getByRole("link", { name: "A0 90, H0 100: game flow" })).not.toHaveClass(
+      "bg-tint"
+    );
+    expect(
+      screen.queryByRole("link", { name: "A5 95, H5 105: game flow" })
+    ).not.toBeInTheDocument();
+
+    const nyk = (await screen.findByRole("link", { name: "NYK" })).closest("tr");
+    expect(nyk).toHaveAttribute("data-followed", "true");
+    expect(nyk).toHaveClass("bg-tint");
+    expect(screen.getByRole("link", { name: "BOS" }).closest("tr")).not.toHaveClass("bg-tint");
   });
 
   it("notes each game's lead highlight and the market's favourite, never the model's", async () => {

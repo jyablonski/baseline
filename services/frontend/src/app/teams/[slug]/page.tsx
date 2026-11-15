@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
+import { FollowTeamButton } from "@/components/account/follow-team-button";
 import { CapPosition } from "@/components/teams/cap-position";
 import { SeasonCalendar } from "@/components/teams/season-calendar";
 import { TeamOverview } from "@/components/teams/team-overview";
@@ -149,7 +150,10 @@ function TeamProfile() {
         <div className="flex items-center gap-4">
           <TeamLogo teamId={team.team_id} abbreviation={team.abbreviation} size={56} />
           <div>
-            <h1 className="type-entity">{team.team_name}</h1>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <h1 className="type-entity">{team.team_name}</h1>
+              <FollowTeamButton teamId={team.team_id} teamName={team.team_name} />
+            </div>
             <p className="mt-1 text-sm text-muted-foreground">
               {[
                 team.abbreviation,

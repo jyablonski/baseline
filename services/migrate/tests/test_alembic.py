@@ -56,6 +56,7 @@ EXPECTED_SOURCE_TABLES = {
     "users",
     "chat_usage",
     "picks",
+    "user_follows",
     "feature_flags",
 }
 
