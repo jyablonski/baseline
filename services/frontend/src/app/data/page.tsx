@@ -54,13 +54,13 @@ const STEPS = [
 const DERIVED = [
   {
     title: "True shooting %",
-    pages: "Game",
+    pages: "Game, Players, Teams",
     detail:
       "Points per shooting possession, so threes and free throws count for what they are worth: PTS ÷ (2 × (FGA + 0.44 × FTA)).",
   },
   {
     title: "Implied win %",
-    pages: "Game",
+    pages: "Home, Schedule, Game, Picks",
     detail:
       "Each bookmaker's moneyline turned into a chance of winning with its margin removed, so both sides add to 100%, then averaged across bookmakers.",
   },
@@ -82,12 +82,24 @@ const DERIVED = [
     detail:
       "Each game's candidate stories (season highs, streaks, blown leads, scoring duels, upsets) scored and ranked. The best one is the line under each score.",
   },
-  // injury_notable_team_rank / injury_notable_league_rank in services/dbt/dbt_project.yml.
+  // injury_notable_* and injury_key_league_rank in services/dbt/dbt_project.yml.
   {
     title: "Notable absences",
     pages: "Schedule, Game, Players, Teams",
     detail:
-      "Injured players flagged when they rank in their team's top two or the league's top 30 by average game score.",
+      "Injured players flagged when they rank in their team's top two or the league's top 30 by average game score. The schedule's Injuries column uses a wider cut, the league's top 100.",
+  },
+  // fct_team_stat_splits in services/dbt/models/marts.
+  {
+    title: "Team ratings",
+    pages: "Teams",
+    detail:
+      "Points scored and allowed per 100 possessions, and possessions per 48 minutes (pace), summed from both teams' box scores. Possessions are FGA − ORB + TOV + 0.44 × FTA, averaged across the two sides so offense and defense share one count.",
+  },
+  {
+    title: "Back-to-backs",
+    pages: "Schedule, Game, Teams",
+    detail: "A team's second game on consecutive days, by Eastern date, with last night's result.",
   },
   {
     title: "Social metrics",
@@ -122,6 +134,15 @@ const SCORES = [
     formula:
       "game MVP  = game score ± 20% of |game score|   (+ in a win, − in a loss)\nMVP score = average game MVP × availability\n\navailability: full until 10% of team games missed, then\n              falls along a curve to 0.75 at 50% missed",
   },
+  // trend_* vars in services/dbt/dbt_project.yml; fct_player_trends.
+  {
+    title: "Player form",
+    pages: "Players, Teams",
+    detail:
+      "A player's last 10 games against up to 20 before them, this season only. A change counts only when it is bigger than that player's usual game-to-game swings, and MVP game score decides trending up or down. It shows once a player has about 15 games.",
+    formula:
+      "change = average of the last 10 − average of the games before\nswing  = √(variance of the last 10 ÷ 10 + variance of the games before ÷ their count)\ncounts when |change| ≥ 2 × swing",
+  },
   // DISCUSSION_RATIO and CONTESTED_* in services/api/src/queries/social.py.
   {
     title: "Discussion ratio",
@@ -139,6 +160,8 @@ const LIMITS = [
   "Odds are a bookmaker consensus from the morning run, not live or closing lines.",
   "Social metrics only see r/nba and the top comments of each post; fanbase counts include flaired comments only.",
   "Only the current season is loaded.",
+  "Player form needs about 15 games this season, so it is blank for the first weeks.",
+  "Runs, leads and comebacks need play-by-play; a game without it is missing from those lists.",
   "Model numbers early in the season rest on very few games.",
 ];
 
@@ -280,7 +303,9 @@ export default function DataPage() {
         <p>
           The model on the schedule gives a pregame chance for every game. After the game, its
           forecast is scored against the result, beside the sportsbook and always picking home.
-          Lower log loss, Brier and calibration error are better.
+          Lower log loss, Brier and calibration error are better. On each game page the model&apos;s
+          number is also split into points of spread: team strength, home court, and for the models
+          that read them, back-to-backs and injuries.
         </p>
         <div className="mt-4">
           {scorecardQuery.isLoading ? (
@@ -321,7 +346,7 @@ export default function DataPage() {
         <ul>
           {[
             ...LIMITS,
-            // Elo v2 reads the injury report; the others do not.
+            // Elo v2 and v3 read the injury report; the others do not.
             ...(usesInjuries(scorecardQuery.data?.champion_model_version)
               ? []
               : ["The model on the schedule does not know who is out tonight."]),

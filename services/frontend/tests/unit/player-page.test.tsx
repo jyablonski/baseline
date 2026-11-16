@@ -1,7 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { trendFixture } from "./player-trend-fixture";
 
 const getPlayerGameLog = vi.fn();
+const getPlayerTrend = vi.fn();
 const listTransactions = vi.fn();
 
 vi.mock("next/navigation", () => ({
@@ -58,12 +61,18 @@ vi.mock("@/lib/api", () => ({
       avg_pts_non_b2b: 26.3,
     }),
     getPlayerGameLog: (...args: unknown[]) => getPlayerGameLog(...args),
+    getPlayerTrend: (...args: unknown[]) => getPlayerTrend(...args),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
 }));
 
 import PlayerProfilePage from "@/app/players/[slug]/page";
 import { Providers } from "@/components/providers";
+
+beforeEach(() => {
+  getPlayerTrend.mockReset();
+  getPlayerTrend.mockResolvedValue(null);
+});
 
 describe("player profile", () => {
   it("uses full identity metadata, recent points, and PBP log links", async () => {
@@ -115,7 +124,6 @@ describe("player profile", () => {
     expect(identity).toHaveTextContent("b. 14 Mar 1988");
     expect(identity).toHaveTextContent("Active");
     expect(screen.queryByText("Seasons")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Points in last 10 games" })).toBeInTheDocument();
     expect(screen.queryByText("Points per game by season")).not.toBeInTheDocument();
     expect(screen.getByText("2025-26 MVP rank")).toBeInTheDocument();
     expect(screen.getByText("#7")).toBeInTheDocument();
@@ -128,6 +136,51 @@ describe("player profile", () => {
     // No transactions on file: the section is left out entirely.
     expect(listTransactions).toHaveBeenCalledWith({ player_id: "player-1", limit: 10, offset: 0 });
     expect(screen.queryByRole("heading", { name: "Transactions" })).not.toBeInTheDocument();
+    // Too few games for a trend: the API says null and the section is not drawn.
+    expect(getPlayerTrend).toHaveBeenCalledWith("player-1");
+    expect(screen.queryByTestId("player-trend")).not.toBeInTheDocument();
+  });
+
+  it("shows form against the earlier games once there are enough", async () => {
+    listTransactions.mockResolvedValue({ data: [], meta: { total: 0, limit: 10, offset: 0 } });
+    getPlayerGameLog.mockResolvedValue({ data: [], meta: { total: 0, limit: 10, offset: 0 } });
+    getPlayerTrend.mockResolvedValue(trendFixture());
+    render(
+      <Providers>
+        <PlayerProfilePage />
+      </Providers>
+    );
+    const section = await screen.findByTestId("player-trend");
+    expect(within(section).getByRole("heading", { name: "Form" })).toBeInTheDocument();
+    expect(section).toHaveTextContent("▲ Trending up");
+    expect(section).toHaveTextContent(
+      "Last 10 games: 31.2 points a game, against 26.0 in the 20 games before."
+    );
+
+    // MVP game score, then the box stats that beat their usual swings.
+    const tiles = within(section).getAllByTestId("trend-tile");
+    expect(tiles.map((tile) => tile.querySelector("p")?.textContent)).toEqual([
+      "MVP game score",
+      "Points",
+      "Turnovers",
+      "Rebounds",
+    ]);
+    expect(tiles[0]).toHaveTextContent("28.1▲ +5.5prior 20: 22.6");
+    // Fewer turnovers is good: green, and the arrow follows the number down.
+    const turnovers = within(tiles[2]).getByText("▼ -1.0", { exact: false });
+    expect(turnovers).toHaveAttribute("data-tone", "better");
+    expect(tiles[3]).toHaveTextContent("4.6steady");
+    expect(tiles[0].querySelector("[data-slot=sparkline]")).not.toBeNull();
+
+    expect(section).toHaveTextContent("All stats5 of 12 changed");
+    const rows = within(section).getAllByRole("row").slice(1);
+    const cells = (label: string) =>
+      within(rows.find((row) => row.textContent?.startsWith(label))!).getAllByRole("cell");
+    expect(cells("TS%")[1]).toHaveTextContent("64.1%");
+    // Moved, but within the usual swings.
+    expect(cells("TS%")[3]).toHaveTextContent("steady");
+    // Minutes beat the swings: the number shows, without a judgement.
+    expect(within(cells("MIN")[3]).getByText("▲ +3.1")).toHaveAttribute("data-tone", "neutral");
   });
 
   it("shows the player's transactions once there are any", async () => {

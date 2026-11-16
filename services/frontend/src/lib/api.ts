@@ -40,6 +40,7 @@ import type {
   PlayerInjury,
   PlayerSeasonStats,
   PlayerSummary,
+  PlayerTrend,
   PlayerValue,
   RosterPlayer,
   CalibrationBucket,
@@ -345,6 +346,10 @@ export const api = {
       await fetchApi(`/api/v1/players/${id}/back-to-backs${buildQuery({ season })}`)
     ),
 
+  /** Null until the player has enough games for a trend. */
+  getPlayerTrend: async (id: string) =>
+    asData<PlayerTrend | null>(await fetchApi(`/api/v1/players/${id}/trend`)),
+
   comparePlayers: async (ids: string[], stat?: string, season?: string) =>
     asPaginated<PlayerComparison>(
       await fetchApi(
@@ -401,6 +406,9 @@ export const api = {
 
   getTeamRoster: async (id: string) =>
     asPaginated<RosterPlayer>(await fetchApi(`/api/v1/teams/${id}/roster`)),
+
+  getTeamTrends: async (id: string) =>
+    asPaginated<PlayerTrend>(await fetchApi(`/api/v1/teams/${id}/trends`)),
 
   getTeamRecord: async (id: string, params: TeamRecordParams = {}) =>
     asData<TeamRecord>(

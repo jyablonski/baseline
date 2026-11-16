@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TeamStatSplit } from "@/lib/types";
 
+import { trendFixture, withStats } from "./player-trend-fixture";
+
 const replace = vi.fn();
 let teamOverrides: Record<string, unknown> = {};
 let search = "";
@@ -189,6 +191,7 @@ vi.mock("@/lib/api", () => ({
       ],
       meta: { total: 2, limit: 2, offset: 0 },
     })),
+    getTeamTrends: vi.fn(async () => ({ data: [], meta: { total: 0, limit: 0, offset: 0 } })),
     getTeamRoster: vi.fn(async () => ({
       data: [
         {
@@ -316,6 +319,7 @@ beforeEach(() => {
   replace.mockClear();
   vi.mocked(api.getTeamStats).mockClear();
   vi.mocked(api.getTeamRoster).mockClear();
+  vi.mocked(api.getTeamTrends).mockClear();
   // The season fixtures run through April 2026; the last game is still ahead.
   vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 3, 10, 12) });
 });
@@ -391,6 +395,100 @@ describe("team profile", () => {
       "href",
       "/players/jamal-murray"
     );
+    // Nobody has enough games for a trend yet, so the section is not drawn.
+    expect(api.getTeamTrends).toHaveBeenCalledWith("1610612743");
+    expect(screen.queryByTestId("team-trends")).not.toBeInTheDocument();
+  });
+
+  it("lists who is trending up and down once anyone qualifies", async () => {
+    const riser = trendFixture({ player_id: "p-jokic", full_name: "Nikola Jokić" });
+    const faller = withStats(
+      trendFixture({ player_id: "p-braun", full_name: "Christian Braun", trend_direction: "down" }),
+      {
+        mvp_game_score: { last_10: 12.4, baseline: 17.0, change: -4.6, z: -2.4 },
+        points: { last_10: 22.0, baseline: 26.0, change: -4.0, z: -2.6 },
+        turnovers: { changed: false },
+      }
+    );
+    const steady = trendFixture({
+      player_id: "p-gordon",
+      full_name: "Aaron Gordon",
+      trend_direction: "steady",
+    });
+    vi.mocked(api.getTeamTrends).mockResolvedValueOnce({
+      data: [riser, steady, faller],
+      meta: { total: 3, limit: 3, offset: 0 },
+    });
+    renderPage();
+    const section = await screen.findByTestId("team-trends");
+    expect(within(section).getByRole("heading", { name: "Who's trending" })).toBeInTheDocument();
+    expect(section).toHaveTextContent("Last 10 games vs each player's previous games, up to 20");
+
+    // One stat per player: the one furthest past its usual swings, named.
+    const [up] = within(section).getAllByTestId("trend-up");
+    expect(up).toHaveTextContent("Nikola JokićPoints 31.2 · was 26.0");
+    expect(within(up).getByText("+5.2")).toHaveAttribute("data-tone", "better");
+    expect(up.querySelector("[data-slot=sparkline]")).not.toBeNull();
+    expect(within(up).getByRole("link", { name: "Nikola Jokić" })).toHaveAttribute(
+      "href",
+      "/players/nikola-jokić"
+    );
+
+    const [down] = within(section).getAllByTestId("trend-down");
+    expect(down).toHaveTextContent("Christian BraunPoints 22.0 · was 26.0");
+    expect(within(down).getByText("-4.0")).toHaveAttribute("data-tone", "worse");
+    expect(section).not.toHaveTextContent("Aaron Gordon");
+  });
+
+  it("adds each rating's last 10 games to its tile", async () => {
+    vi.mocked(api.getTeamStats).mockResolvedValueOnce({
+      data: [
+        statSplit({}),
+        statSplit({
+          split: "last_10",
+          games: 10,
+          net_rating: 12.4,
+          offensive_rating: 119.2,
+          defensive_rating: 105.6,
+          pace: 95.1,
+        }),
+      ],
+      meta: { total: 2, limit: 2, offset: 0 },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getAllByTestId("last-ten")).toHaveLength(4));
+    const [net, offense, defense, pace] = screen.getAllByTestId("last-ten");
+    expect(net).toHaveTextContent("Last 10 +12.4 +2.6 vs season");
+    // A point and a bit either way is within the usual swing.
+    expect(offense).toHaveTextContent("Last 10 119.2 steady vs season");
+    // Fewer points allowed is better.
+    expect(within(defense).getByText("-3.0")).toHaveClass("text-primary");
+    expect(pace).toHaveTextContent("Last 10 95.1 slower vs season");
+  });
+
+  it("adds no last 10 line while the season is the last 10 games", async () => {
+    vi.mocked(api.getTeamStats).mockResolvedValueOnce({
+      data: [
+        statSplit({ games: 10 }),
+        statSplit({ split: "last_10", games: 10, net_rating: 12.4 }),
+      ],
+      meta: { total: 2, limit: 2, offset: 0 },
+    });
+    renderPage();
+    const ratings = await screen.findByTestId("team-ratings");
+    expect(ratings).toHaveTextContent("Net rating");
+    expect(screen.queryAllByTestId("last-ten")).toHaveLength(0);
+  });
+
+  it("leaves the trends out while every qualified player is steady", async () => {
+    vi.mocked(api.getTeamTrends).mockResolvedValueOnce({
+      data: [trendFixture({ trend_direction: "steady" })],
+      meta: { total: 1, limit: 1, offset: 0 },
+    });
+    renderPage();
+    await screen.findByTestId("team-ratings");
+    await waitFor(() => expect(api.getTeamTrends).toHaveBeenCalled());
+    expect(screen.queryByTestId("team-trends")).not.toBeInTheDocument();
   });
 
   it("lists every team stat with its rank, by split", async () => {

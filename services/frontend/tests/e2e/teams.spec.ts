@@ -24,6 +24,10 @@ test("teams directory to profile walks the team tabs", async ({ page }) => {
   await expect(page.getByTestId("team-ratings")).toContainText("Net rating");
   await expect(page.getByTestId("team-ratings")).toContainText("+9.8");
   await expect(page.getByTestId("injury-row")).toContainText("Out · Ankle");
+  const trending = page.getByTestId("team-trends");
+  await expect(trending.getByRole("heading", { name: "Who's trending" })).toBeVisible();
+  await expect(trending.getByTestId("trend-up")).toContainText("Stephen Curry");
+  await expect(trending.getByTestId("trend-up")).toContainText("Points 29.8 · was 24.1");
 
   await tabs.getByRole("link", { name: "Stats" }).click();
   await expect(page).toHaveURL(/tab=stats/);

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { TeamTrends } from "@/components/teams/team-trends";
 import { KpiCard, KpiStrip } from "@/components/ui/kpi-card";
 import { ErrorState, LoadingState } from "@/components/query-state";
 import { queryErrorMessage } from "@/lib/api";
@@ -12,27 +13,35 @@ import {
 import { playerHref } from "@/lib/nav";
 import {
   OVERVIEW_STATS,
+  type StatDefinition,
   formatTeamStat,
+  lastTenChange,
   isOut,
   lastGames,
   rankFill,
   statRank,
 } from "@/lib/team-page";
-import type { PlayerInjury, TeamSeasonGame, TeamStatSplit } from "@/lib/types";
+import type { PlayerInjury, PlayerTrend, TeamSeasonGame, TeamStatSplit } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function TeamOverview({
   seasonStats,
+  lastTenStats,
   games,
   injuries,
   injuriesLoading,
   injuriesError,
+  trends,
   scheduleHref,
   rosterHref,
 }: {
   seasonStats: TeamStatSplit | null;
+  /** The last_10 split; null until a team has played. */
+  lastTenStats: TeamStatSplit | null;
   games: TeamSeasonGame[];
   injuries: PlayerInjury[] | undefined;
+  /** Empty until anyone qualifies, and on error: the section just isn't shown. */
+  trends: PlayerTrend[];
   injuriesLoading: boolean;
   injuriesError: unknown;
   scheduleHref: string;
@@ -58,7 +67,17 @@ export function TeamOverview({
               value={formatTeamStat(seasonStats?.[stat.key], stat.format)}
               // Pace has no better direction, so it gets the rank but no meter.
               progress={rank != null && !stat.neutral ? rankFill(rank, count) : undefined}
-              note={rank != null ? `${formatOrdinal(rank)} of ${count}${coverage}` : null}
+              note={
+                rank != null ? (
+                  <>
+                    {`${formatOrdinal(rank)} of ${count}${coverage}`}
+                    <LastTenLine
+                      change={lastTenChange(seasonStats, lastTenStats, stat)}
+                      stat={stat}
+                    />
+                  </>
+                ) : null
+              }
             />
           );
         })}
@@ -105,6 +124,17 @@ export function TeamOverview({
           </ol>
         )}
       </section>
+
+      <TeamTrends
+        trends={trends}
+        heading={
+          <SectionHeading id="team-trends" title="Who's trending">
+            <span className="text-sm text-ink-2">
+              Last 10 games vs each player&apos;s previous games, up to 20
+            </span>
+          </SectionHeading>
+        }
+      />
 
       <section aria-labelledby="team-injuries">
         <SectionHeading id="team-injuries" title="Injury report">
@@ -169,5 +199,35 @@ function SectionHeading({
       </h2>
       {children}
     </div>
+  );
+}
+
+/** "Last 10 121.6 +2.6" under a tile; "steady" (or faster / slower for pace) when it barely moved. */
+function LastTenLine({
+  change,
+  stat,
+}: {
+  change: ReturnType<typeof lastTenChange>;
+  stat: StatDefinition;
+}) {
+  if (!change) return null;
+  return (
+    <span className="mt-2 block border-t border-rule pt-2" data-testid="last-ten">
+      Last 10{" "}
+      <span className="tabular font-semibold text-foreground">
+        {formatTeamStat(change.value, stat.format)}
+      </span>{" "}
+      <span
+        className={cn(
+          "tabular font-semibold",
+          change.tone === "better" && "text-primary",
+          change.tone === "worse" && "text-destructive",
+          change.tone === "steady" && "text-ink-3"
+        )}
+      >
+        {change.word ?? formatTeamStat(change.change, "signed")}
+      </span>{" "}
+      <span className="text-ink-3">vs season</span>
+    </span>
   );
 }

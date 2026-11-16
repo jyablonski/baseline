@@ -59,6 +59,8 @@ export type StatDefinition = {
   format: StatFormat;
   /** Pace has no better direction, so its rank is shown without a good/bad tone. */
   neutral?: boolean;
+  /** A lower value is the better one (defensive rating). */
+  lowerIsBetter?: boolean;
 };
 
 export const STAT_GROUPS: { title: string; stats: StatDefinition[] }[] = [
@@ -67,7 +69,7 @@ export const STAT_GROUPS: { title: string; stats: StatDefinition[] }[] = [
     stats: [
       { key: "net_rating", label: "Net rating", format: "signed" },
       { key: "offensive_rating", label: "Offensive rating", format: "rating" },
-      { key: "defensive_rating", label: "Defensive rating", format: "rating" },
+      { key: "defensive_rating", label: "Defensive rating", format: "rating", lowerIsBetter: true },
       { key: "pace", label: "Pace", format: "rating", neutral: true },
     ],
   },
@@ -123,6 +125,33 @@ export function rankFill(rank: number | null, count: number) {
 }
 
 export type RankTone = "good" | "middle" | "bad" | "neutral";
+
+/**
+ * The last 10 games against the season so far, for the Overview tiles. The
+ * cutoffs are plain judgement (per-game team ratings that would allow a noise
+ * test like the player trends' are not stored): 2 points of rating per 100
+ * possessions, 1 possession of pace. Pace has no better direction, so it reads
+ * faster or slower rather than better or worse.
+ */
+export function lastTenChange(
+  season: TeamStatSplit | null,
+  lastTen: TeamStatSplit | null,
+  stat: StatDefinition
+): { value: number; change: number; tone: "better" | "worse" | "steady"; word?: string } | null {
+  // Until the season is longer than the window, the two splits are the same games.
+  if (!season || !lastTen || season.games <= lastTen.games) return null;
+  const now = lastTen[stat.key];
+  const before = season[stat.key];
+  if (now == null || before == null) return null;
+  const change = now - before;
+  const cutoff = stat.neutral ? 1 : 2;
+  if (Math.abs(change) < cutoff) return { value: now, change, tone: "steady", word: "steady" };
+  if (stat.neutral) {
+    return { value: now, change, tone: "steady", word: change > 0 ? "faster" : "slower" };
+  }
+  const improved = stat.lowerIsBetter ? change < 0 : change > 0;
+  return { value: now, change, tone: improved ? "better" : "worse" };
+}
 
 /** Top third reads good, bottom third bad, the rest middle. */
 export function rankTone(rank: number | null, count: number, neutral = false): RankTone {

@@ -11,6 +11,7 @@ from schemas import (
     ItemResponse,
     PaginatedResponse,
     PaginationMeta,
+    PlayerTrend,
     RosterPlayer,
     StandingSummary,
     TeamDetail,
@@ -197,6 +198,21 @@ def get_team_roster(
     if repo.get_team(team_id) is None:
         raise HTTPException(status_code=404, detail="Team not found")
     data = [RosterPlayer.model_validate(row) for row in repo.list_team_roster(team_id)]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=len(data), offset=0),
+    )
+
+
+@router.get("/{team_id}/trends", response_model=PaginatedResponse[PlayerTrend])
+def get_team_trends(
+    team_id: UUID,
+    repo: TeamsRepository = Depends(get_teams_repository),
+) -> PaginatedResponse[PlayerTrend]:
+    """Qualified current players' last-10 trends, biggest riser first; empty until any qualify."""
+    if repo.get_team(team_id) is None:
+        raise HTTPException(status_code=404, detail="Team not found")
+    data = [PlayerTrend.model_validate(row) for row in repo.list_team_trends(team_id)]
     return PaginatedResponse(
         data=data,
         meta=PaginationMeta(total=len(data), limit=len(data), offset=0),

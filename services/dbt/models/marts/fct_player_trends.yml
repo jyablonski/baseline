@@ -1,0 +1,493 @@
+version: 2
+
+models:
+  - name: fct_player_trends
+    description: >
+      Each player's newest trend_window_games Regular Season games (minutes > 0)
+      against the up to trend_baseline_games before them, current season only,
+      stat by stat, with the season average for display. A stat's change counts
+      only when it beats the player's game-to-game swings (`_z`, `_changed`). A player qualifies with a full window, at
+      least trend_min_baseline_games earlier games and trend_min_minutes per game
+      in both; trend_direction and trend_rank exist only for qualified players.
+      Served by REST (GET /api/v1/players/{id}/trend and GET /api/v1/teams/{id}/trends).
+    config:
+      meta:
+        grain: One row per player with a game played in the current Regular Season.
+    columns:
+      - name: player_id
+        description: Baseline player UUID.
+        data_tests:
+          - unique
+          - not_null
+      - name: season
+        description: NBA season label, the newest with a Regular Season game log.
+        data_tests:
+          - not_null
+      - name: team_id
+        description: Team of the player's newest counted game.
+        data_tests:
+          - not_null
+      - name: games_played
+        description: Regular Season games with minutes this season.
+        data_tests:
+          - not_null
+      - name: window_games
+        description: Games in the window, at most trend_window_games.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: "{{ var('trend_window_games') }}"
+      - name: baseline_games
+        description: Games in the baseline, the up to trend_baseline_games before the window.
+        data_tests:
+          - not_null
+      - name: window_start_date
+        description: First game in the window.
+      - name: window_end_date
+        description: Last game in the window, the player's newest game.
+      - name: points_last_10
+        description: "Points, per game over the newest trend_window_games games."
+      - name: points_baseline
+        description: "Points, per game over the up to trend_baseline_games games before the window."
+      - name: points_season
+        description: "Points, per game over every counted game."
+      - name: points_change
+        description: "Points, last_10 minus baseline."
+      - name: points_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: points_changed
+        description: "abs(points_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: points_games
+        description: "The window's per-game values, oldest first."
+      - name: rebounds_last_10
+        description: "Rebounds, per game over the newest trend_window_games games."
+      - name: rebounds_baseline
+        description: "Rebounds, per game over the up to trend_baseline_games games before the window."
+      - name: rebounds_season
+        description: "Rebounds, per game over every counted game."
+      - name: rebounds_change
+        description: "Rebounds, last_10 minus baseline."
+      - name: rebounds_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: rebounds_changed
+        description: "abs(rebounds_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: rebounds_games
+        description: "The window's per-game values, oldest first."
+      - name: assists_last_10
+        description: "Assists, per game over the newest trend_window_games games."
+      - name: assists_baseline
+        description: "Assists, per game over the up to trend_baseline_games games before the window."
+      - name: assists_season
+        description: "Assists, per game over every counted game."
+      - name: assists_change
+        description: "Assists, last_10 minus baseline."
+      - name: assists_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: assists_changed
+        description: "abs(assists_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: assists_games
+        description: "The window's per-game values, oldest first."
+      - name: steals_last_10
+        description: "Steals, per game over the newest trend_window_games games."
+      - name: steals_baseline
+        description: "Steals, per game over the up to trend_baseline_games games before the window."
+      - name: steals_season
+        description: "Steals, per game over every counted game."
+      - name: steals_change
+        description: "Steals, last_10 minus baseline."
+      - name: steals_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: steals_changed
+        description: "abs(steals_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: steals_games
+        description: "The window's per-game values, oldest first."
+      - name: blocks_last_10
+        description: "Blocks, per game over the newest trend_window_games games."
+      - name: blocks_baseline
+        description: "Blocks, per game over the up to trend_baseline_games games before the window."
+      - name: blocks_season
+        description: "Blocks, per game over every counted game."
+      - name: blocks_change
+        description: "Blocks, last_10 minus baseline."
+      - name: blocks_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: blocks_changed
+        description: "abs(blocks_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: blocks_games
+        description: "The window's per-game values, oldest first."
+      - name: three_pointers_made_last_10
+        description: "Three-pointers made, per game over the newest trend_window_games games."
+      - name: three_pointers_made_baseline
+        description: "Three-pointers made, per game over the up to trend_baseline_games games before the window."
+      - name: three_pointers_made_season
+        description: "Three-pointers made, per game over every counted game."
+      - name: three_pointers_made_change
+        description: "Three-pointers made, last_10 minus baseline."
+      - name: three_pointers_made_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: three_pointers_made_changed
+        description: "abs(three_pointers_made_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: three_pointers_made_games
+        description: "The window's per-game values, oldest first."
+      - name: turnovers_last_10
+        description: "Turnovers per game over the newest trend_window_games games (lower is better)."
+      - name: turnovers_baseline
+        description: "Turnovers per game over the games before the window (lower is better)."
+      - name: turnovers_season
+        description: "Turnovers per game over every counted game (lower is better)."
+      - name: turnovers_change
+        description: "Turnovers, last_10 minus baseline."
+      - name: turnovers_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: turnovers_changed
+        description: "abs(turnovers_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: turnovers_games
+        description: "The window's per-game values, oldest first."
+      - name: minutes_last_10
+        description: "Minutes, per game over the newest trend_window_games games."
+      - name: minutes_baseline
+        description: "Minutes, per game over the up to trend_baseline_games games before the window."
+      - name: minutes_season
+        description: "Minutes, per game over every counted game."
+      - name: minutes_change
+        description: "Minutes, last_10 minus baseline."
+      - name: minutes_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: minutes_changed
+        description: "abs(minutes_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: minutes_games
+        description: "The window's per-game values, oldest first."
+      - name: plus_minus_last_10
+        description: "Plus-minus, per game over the newest trend_window_games games."
+      - name: plus_minus_baseline
+        description: "Plus-minus, per game over the up to trend_baseline_games games before the window."
+      - name: plus_minus_season
+        description: "Plus-minus, per game over every counted game."
+      - name: plus_minus_change
+        description: "Plus-minus, last_10 minus baseline."
+      - name: plus_minus_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: plus_minus_changed
+        description: "abs(plus_minus_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: plus_minus_games
+        description: "The window's per-game values, oldest first."
+      - name: game_score_last_10
+        description: "Game Score (mvp_box_score), per game over the newest trend_window_games games."
+      - name: game_score_baseline
+        description: "Game Score (mvp_box_score), per game over the up to trend_baseline_games games before the window."
+      - name: game_score_season
+        description: "Game Score (mvp_box_score), per game over every counted game."
+      - name: game_score_change
+        description: "Game Score, last_10 minus baseline."
+      - name: game_score_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: game_score_changed
+        description: "abs(game_score_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: game_score_games
+        description: "The window's per-game values, oldest first."
+      - name: mvp_game_score_last_10
+        description: "MVP game score (win-weighted Game Score, no availability multiplier), per game over the newest trend_window_games games."
+      - name: mvp_game_score_baseline
+        description: "MVP game score (win-weighted Game Score, no availability multiplier), per game over the up to trend_baseline_games games before the window."
+      - name: mvp_game_score_season
+        description: "MVP game score (win-weighted Game Score, no availability multiplier), per game over every counted game."
+      - name: mvp_game_score_change
+        description: "MVP game score, last_10 minus baseline."
+      - name: mvp_game_score_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: mvp_game_score_changed
+        description: "abs(mvp_game_score_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: mvp_game_score_games
+        description: "The window's per-game values, oldest first."
+      - name: true_shooting_pct_last_10
+        description: "True shooting over the window's totals, PTS / (2 * (FGA + 0.44 * FTA)); null without a shot attempt."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1.5
+                row_condition: "true_shooting_pct_last_10 is not null"
+      - name: true_shooting_pct_baseline
+        description: "True shooting over the baseline's totals, PTS / (2 * (FGA + 0.44 * FTA)); null without a shot attempt."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1.5
+                row_condition: "true_shooting_pct_baseline is not null"
+      - name: true_shooting_pct_season
+        description: "True shooting over the season's totals, PTS / (2 * (FGA + 0.44 * FTA)); null without a shot attempt."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1.5
+                row_condition: "true_shooting_pct_season is not null"
+      - name: true_shooting_pct_change
+        description: "True shooting, last_10 minus baseline."
+      - name: true_shooting_pct_z
+        description: "Change over its standard error, from the per-game values in both windows (Welch's z); null when either window has under two values or neither varies."
+      - name: true_shooting_pct_changed
+        description: "abs(true_shooting_pct_z) >= trend_noise_z: the change beats normal game-to-game swings. False when z is null."
+        data_tests:
+          - not_null
+      - name: true_shooting_pct_games
+        description: "The window's per-game values, oldest first (per-game TS%, null without a shot attempt)."
+      - name: is_qualified
+        description: Full window, enough baseline games, and enough minutes in both.
+        data_tests:
+          - not_null
+      - name: trend_direction
+        description: "up / down when mvp_game_score_z reaches trend_noise_z either way, else steady; null when not qualified."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["up", "down", "steady"]
+      - name: trend_rank
+        description: League rank by MVP game score change among qualified players, 1 = biggest riser; null when not qualified.
+
+unit_tests:
+  - name: player_trends_change_must_beat_game_to_game_swings
+    description: >
+      Three-game windows. The riser's last three (30, 32, 34) sit far above the
+      three before (10, 12, 14), so z = 20 / sqrt(4/3 + 4/3) = 12.25 and it is up;
+      the 100 before those is outside the capped baseline. The swinger moves by 5
+      but swings by 10 a game, so z = 5 / sqrt(100/3 + 100/3) = 0.61: steady.
+    model: fct_player_trends
+    overrides:
+      vars:
+        trend_window_games: 3
+        trend_baseline_games: 3
+        trend_min_baseline_games: 2
+        trend_min_minutes: 0
+        trend_noise_z: 2.0
+    given:
+      - input: ref('int_player_game_logs_enriched')
+        rows:
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c001",
+              game_id: "00000000-0000-4000-8000-0000000d0001",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-01,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 100,
+              mvp_game_score: 100,
+              mvp_box_score: 100,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c001",
+              game_id: "00000000-0000-4000-8000-0000000d0002",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-03,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 10,
+              mvp_game_score: 10,
+              mvp_box_score: 10,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c001",
+              game_id: "00000000-0000-4000-8000-0000000d0003",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-05,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 12,
+              mvp_game_score: 12,
+              mvp_box_score: 12,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c001",
+              game_id: "00000000-0000-4000-8000-0000000d0004",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-07,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 14,
+              mvp_game_score: 14,
+              mvp_box_score: 14,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c001",
+              game_id: "00000000-0000-4000-8000-0000000d0005",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-09,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 30,
+              mvp_game_score: 30,
+              mvp_box_score: 30,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c001",
+              game_id: "00000000-0000-4000-8000-0000000d0006",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-11,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 32,
+              mvp_game_score: 32,
+              mvp_box_score: 32,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c001",
+              game_id: "00000000-0000-4000-8000-0000000d0007",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-13,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 34,
+              mvp_game_score: 34,
+              mvp_box_score: 34,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c002",
+              game_id: "00000000-0000-4000-8000-0000000e0001",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-03,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 10,
+              mvp_game_score: 10,
+              mvp_box_score: 10,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c002",
+              game_id: "00000000-0000-4000-8000-0000000e0002",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-05,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 20,
+              mvp_game_score: 20,
+              mvp_box_score: 20,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c002",
+              game_id: "00000000-0000-4000-8000-0000000e0003",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-07,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 30,
+              mvp_game_score: 30,
+              mvp_box_score: 30,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c002",
+              game_id: "00000000-0000-4000-8000-0000000e0004",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-09,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 15,
+              mvp_game_score: 15,
+              mvp_box_score: 15,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c002",
+              game_id: "00000000-0000-4000-8000-0000000e0005",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-11,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 25,
+              mvp_game_score: 25,
+              mvp_box_score: 25,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+          - {
+              player_id: "00000000-0000-4000-8000-00000000c002",
+              game_id: "00000000-0000-4000-8000-0000000e0006",
+              team_id: "00000000-0000-4000-8000-00000000a001",
+              game_date: 2026-11-13,
+              season: 2026-27,
+              season_type: Regular Season,
+              minutes: 30,
+              points: 35,
+              mvp_game_score: 35,
+              mvp_box_score: 35,
+              field_goals_attempted: 10,
+              free_throws_attempted: 0,
+            }
+    expect:
+      rows:
+        - {
+            player_id: "00000000-0000-4000-8000-00000000c001",
+            baseline_games: 3,
+            mvp_game_score_baseline: 12.0,
+            mvp_game_score_change: 20.0,
+            mvp_game_score_z: 12.25,
+            mvp_game_score_changed: true,
+            points_changed: true,
+            trend_direction: up,
+          }
+        - {
+            player_id: "00000000-0000-4000-8000-00000000c002",
+            baseline_games: 3,
+            mvp_game_score_baseline: 20.0,
+            mvp_game_score_change: 5.0,
+            mvp_game_score_z: 0.61,
+            mvp_game_score_changed: false,
+            points_changed: false,
+            trend_direction: steady,
+          }

@@ -85,6 +85,11 @@ function TeamProfile() {
     queryFn: () => api.getTeamStats(teamId),
     enabled: Boolean(teamId) && (tab === "overview" || tab === "stats"),
   });
+  const trendsQuery = useQuery({
+    queryKey: ["team", teamId, "trends"],
+    queryFn: () => api.getTeamTrends(teamId),
+    enabled: Boolean(teamId) && tab === "overview",
+  });
   const rosterQuery = useQuery({
     queryKey: ["team", teamId, "roster"],
     queryFn: () => api.getTeamRoster(teamId),
@@ -135,6 +140,7 @@ function TeamProfile() {
   const injuries = injuriesQuery.data?.data;
   const outCount = (injuries ?? []).filter(isOut).length;
   const seasonStats = statsQuery.data?.data.find((row) => row.split === "season") ?? null;
+  const lastTenStats = statsQuery.data?.data.find((row) => row.split === "last_10") ?? null;
 
   return (
     <div className="space-y-6">
@@ -224,10 +230,12 @@ function TeamProfile() {
       {tab === "overview" ? (
         <TeamOverview
           seasonStats={seasonStats}
+          lastTenStats={lastTenStats}
           games={seasonGames}
           injuries={injuries}
           injuriesLoading={injuriesQuery.isLoading}
           injuriesError={injuriesQuery.error}
+          trends={trendsQuery.data?.data ?? []}
           scheduleHref={teamTabHref(pathname, searchParams, "schedule")}
           rosterHref={teamTabHref(pathname, searchParams, "roster")}
         />

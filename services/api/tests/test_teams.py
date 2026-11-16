@@ -712,3 +712,43 @@ def test_team_roster(client, session, mapping_row, query_result) -> None:
 
     session.queue = [query_result(rows=[])]
     assert client.get(f"/api/v1/teams/{MISSING_ID}/roster").status_code == 404
+
+
+@pytest.mark.unit
+def test_team_trends(client, session, mapping_row, query_result, trend_row) -> None:
+    session.queue = [
+        query_result(rows=[_team_row()]),
+        query_result(
+            [
+                mapping_row(trend_row()),
+                mapping_row(
+                    trend_row(
+                        MISSING_ID,
+                        full_name="Bench Guard",
+                        trend_direction="down",
+                        trend_rank=40,
+                        mvp_game_score_change=-4.0,
+                    )
+                ),
+            ]
+        ),
+    ]
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}/trends")
+    assert response.status_code == 200
+    body = response.json()
+    assert [row["trend_direction"] for row in body["data"]] == ["up", "down"]
+    assert body["data"][1]["stats"][0]["change"] == -4.0
+    assert body["meta"]["total"] == 2
+    _, params = session.calls[-1]
+    assert str(params["team_id"]) == TEAM_GSW
+
+
+@pytest.mark.unit
+def test_team_trends_empty_and_missing(client, session, query_result) -> None:
+    session.queue = [query_result(rows=[_team_row()]), query_result([])]
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}/trends")
+    assert response.status_code == 200
+    assert response.json()["data"] == []
+
+    session.queue = [query_result(rows=[])]
+    assert client.get(f"/api/v1/teams/{MISSING_ID}/trends").status_code == 404

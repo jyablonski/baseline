@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from queries.players import trend_from_row
 from queries.teams import (
     COMPUTE_RECORD,
     COMPUTE_RECORDS_BY_SEASON_TYPE,
@@ -13,6 +14,7 @@ from queries.teams import (
     LIST_TEAM_ROSTER,
     LIST_TEAM_SEASON_GAMES,
     LIST_TEAM_STAT_SPLITS,
+    LIST_TEAM_TRENDS,
     LIST_TEAMS,
     LIST_TEAMS_COUNT,
     TEAM_BY_ABBREVIATION,
@@ -154,3 +156,7 @@ class TeamsRepository:
     def list_team_roster(self, team_id: UUID) -> list[dict]:
         rows = self.db.execute(LIST_TEAM_ROSTER, {"team_id": team_id})
         return [dict(row._mapping) for row in rows]
+
+    def list_team_trends(self, team_id: UUID) -> list[dict]:
+        rows = self.db.execute(LIST_TEAM_TRENDS, {"team_id": team_id})
+        return [trend_from_row(dict(row._mapping)) for row in rows]

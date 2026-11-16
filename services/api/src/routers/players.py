@@ -22,6 +22,7 @@ from schemas import (
     PlayerDetail,
     PlayerSeasonStats,
     PlayerSummary,
+    PlayerTrend,
     PlayerValue,
 )
 
@@ -207,6 +208,18 @@ def get_player_game_log(
         data=data,
         meta=PaginationMeta(total=total, limit=limit, offset=offset),
     )
+
+
+@router.get("/{player_id}/trend", response_model=ItemResponse[PlayerTrend | None])
+def get_player_trend(
+    player_id: UUID,
+    repo: PlayersRepository = Depends(get_players_repository),
+) -> ItemResponse[PlayerTrend | None]:
+    """Last 10 games against the earlier ones; null until the player qualifies."""
+    if not repo.player_exists(player_id):
+        raise HTTPException(status_code=404, detail="Player not found")
+    row = repo.get_player_trend(player_id)
+    return ItemResponse(data=None if row is None else PlayerTrend.model_validate(row))
 
 
 @router.get("/{player_id}/season-stats", response_model=PaginatedResponse[PlayerSeasonStats])

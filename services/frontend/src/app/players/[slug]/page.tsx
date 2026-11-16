@@ -1,14 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
-import { StatBarChart } from "@/components/charts/stat-bar-chart";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { InjuryPill } from "@/components/injuries/injury-list";
+import { PlayerForm } from "@/components/players/player-trend";
 import { TransactionList } from "@/components/transactions/transaction-list";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
@@ -85,16 +85,10 @@ function PlayerProfile() {
       }),
     enabled: Boolean(playerId),
   });
-  const recentLogQuery = useQuery({
-    queryKey: ["player", playerId, "recent-points", season],
-    queryFn: () =>
-      api.getPlayerGameLog(playerId, {
-        season: season || undefined,
-        sort: "game_date",
-        order: "desc",
-        limit: 10,
-        offset: 0,
-      }),
+  // Null until the player has enough games; an error also hides the section.
+  const trendQuery = useQuery({
+    queryKey: ["player", playerId, "trend"],
+    queryFn: () => api.getPlayerTrend(playerId),
     enabled: Boolean(playerId),
   });
   const player = playerQuery.data;
@@ -104,15 +98,6 @@ function PlayerProfile() {
       router.replace(withSeason(playerHref(player.full_name), season));
     }
   }, [player, routeSlug, router, season]);
-
-  const recentPoints = useMemo(
-    () =>
-      [...(recentLogQuery.data?.data ?? [])].reverse().map((row) => ({
-        date: formatDate(row.game_date).replace(/ \d{4}$/, ""),
-        points: row.points ?? 0,
-      })),
-    [recentLogQuery.data]
-  );
 
   function toggleSort(key: SortKey) {
     setPage(0);
@@ -247,6 +232,8 @@ function PlayerProfile() {
           </p>
         </div>
       </div>
+
+      {trendQuery.data ? <PlayerForm trend={trendQuery.data} /> : null}
 
       <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
         <section>
@@ -421,24 +408,6 @@ function PlayerProfile() {
                 ) : null}
               </div>
             )}
-          </div>
-
-          <div>
-            <h2 className="type-module">Points in last 10 games</h2>
-            <p className="type-caption mt-1">Oldest to newest in the selected season.</p>
-            <div className="mt-3">
-              {recentLogQuery.isLoading ? (
-                <LoadingState />
-              ) : recentLogQuery.isError ? (
-                <EmptyState title="No recent points" message="No recent game log to chart yet." />
-              ) : (
-                <StatBarChart
-                  data={recentPoints}
-                  xKey="date"
-                  bars={[{ dataKey: "points", fill: "#2D5A27", name: "Points" }]}
-                />
-              )}
-            </div>
           </div>
         </aside>
       </div>

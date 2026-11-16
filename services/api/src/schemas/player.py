@@ -1,7 +1,8 @@
 from datetime import date
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PlayerSummary(BaseModel):
@@ -168,3 +169,64 @@ class HeadToHeadComparison(BaseModel):
     games_played: int
     players: list[HeadToHeadPlayerAverages]
     games: list[HeadToHeadGame]
+
+
+class PlayerTrendStat(BaseModel):
+    """One stat's last-10 average against the up to 20 games before them.
+
+    true_shooting_pct is a 0-1 rate over each window's totals, null without a
+    shot attempt; the rest are per-game averages.
+    """
+
+    stat: Literal[
+        "mvp_game_score",
+        "game_score",
+        "points",
+        "rebounds",
+        "assists",
+        "steals",
+        "blocks",
+        "three_pointers_made",
+        "turnovers",
+        "true_shooting_pct",
+        "plus_minus",
+        "minutes",
+    ]
+    last_10: float | None = None
+    baseline: float | None = None
+    season: float | None = None
+    # last_10 minus baseline.
+    change: float | None = None
+    # The change over its standard error from the per-game values in both
+    # windows; null when either window has under two values or neither varies.
+    z: float | None = None
+    # The change beats normal game-to-game swings (|z| at or past the noise
+    # threshold). Only these get an arrow or a colour.
+    changed: bool = False
+    # The window's per-game values, oldest first, for the sparkline. TS% is a
+    # per-game rate here, null for a game without a shot attempt.
+    games: list[float | None] = Field(default_factory=list)
+
+
+class PlayerTrend(BaseModel):
+    """A qualified player's newest Regular Season games against their earlier ones.
+
+    Only qualified players are served (a full window, enough earlier games and
+    minutes in both), so the direction and rank are always set.
+    """
+
+    player_id: UUID
+    full_name: str
+    # Team of the player's newest game.
+    team_id: UUID
+    season: str
+    games_played: int
+    window_games: int
+    baseline_games: int
+    window_start_date: date
+    window_end_date: date
+    # From the MVP game score change, the first entry of stats.
+    trend_direction: Literal["up", "down", "steady"]
+    # League rank by MVP game score change, 1 = the biggest riser.
+    trend_rank: int
+    stats: list[PlayerTrendStat]

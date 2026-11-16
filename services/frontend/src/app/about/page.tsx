@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { DeveloperCard } from "@/components/layout/developer-card";
 import { RefreshTime } from "@/components/layout/refresh-time";
 import { Section } from "@/components/layout/section";
@@ -53,6 +55,13 @@ export default function AboutPage() {
         </p>
         <p className="mt-3">
           Coverage defaults to the latest season only. Preseason games are not included.
+        </p>
+        <p className="mt-3">
+          Every source, what Baseline adds on top, and how its scores and win models are calculated:{" "}
+          <Link className="underline underline-offset-2" href="/data">
+            About the data
+          </Link>
+          .
         </p>
       </Section>
 

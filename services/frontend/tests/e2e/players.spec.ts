@@ -15,6 +15,14 @@ test("players directory to profile shows remaining-contract snapshot and B2B", a
   await expect(page.getByRole("heading", { name: "Remaining contract" })).toBeVisible();
   await expect(page.getByText(/Basketball-Reference remaining-year snapshot/)).toBeVisible();
   await expect(page.getByText(/Unmatched names show/)).toHaveCount(0);
+
+  const trend = page.getByTestId("player-trend");
+  await expect(trend.getByRole("heading", { name: "Form" })).toBeVisible();
+  await expect(trend).toContainText("Trending up");
+  await expect(trend.getByTestId("trend-tile").nth(1)).toContainText("Points");
+  await expect(trend.getByTestId("trend-tile").nth(1)).toContainText("+5.7");
+  await trend.getByText("All stats").click();
+  await expect(trend.getByRole("row", { name: /^REB/ })).toContainText("steady");
 });
 
 test("players directory can compare two selected names", async ({ page }) => {

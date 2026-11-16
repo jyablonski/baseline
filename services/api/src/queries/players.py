@@ -529,3 +529,71 @@ def compare_players_stmt(order_column: str):
         dim_players.full_name
         """
     ).bindparams(bindparam("player_ids", expanding=True))
+
+
+# Display order: the overall number first, then the box score, then context.
+PLAYER_TREND_STATS = (
+    "mvp_game_score",
+    "game_score",
+    "points",
+    "rebounds",
+    "assists",
+    "steals",
+    "blocks",
+    "three_pointers_made",
+    "turnovers",
+    "true_shooting_pct",
+    "plus_minus",
+    "minutes",
+)
+
+# `<stat>_<field>` columns of fct_player_trends, folded into one entry per stat.
+PLAYER_TREND_WINDOWS = ("last_10", "baseline", "season", "change", "z", "changed", "games")
+
+_PLAYER_TREND_STAT_COLUMNS = tuple(
+    f"{stat}_{window}" for stat in PLAYER_TREND_STATS for window in PLAYER_TREND_WINDOWS
+)
+
+PLAYER_TREND_COLUMNS = ",\n        ".join(
+    [
+        "fct_player_trends.player_id",
+        "dim_players.full_name",
+        "fct_player_trends.team_id",
+        "fct_player_trends.season",
+        "fct_player_trends.games_played",
+        "fct_player_trends.window_games",
+        "fct_player_trends.baseline_games",
+        "fct_player_trends.window_start_date",
+        "fct_player_trends.window_end_date",
+        "fct_player_trends.trend_direction",
+        "fct_player_trends.trend_rank",
+    ]
+    + [f"fct_player_trends.{column}" for column in _PLAYER_TREND_STAT_COLUMNS]
+)
+
+# The mart holds only the current Regular Season. An unqualified player has a
+# row but no trend, so the route reports nothing rather than a half-empty one.
+PLAYER_TREND = text(
+    f"""
+    SELECT
+        {PLAYER_TREND_COLUMNS}
+    FROM gold.fct_player_trends
+    INNER JOIN gold.dim_players
+        ON fct_player_trends.player_id = dim_players.player_id
+    WHERE
+        fct_player_trends.player_id = :player_id
+        AND fct_player_trends.is_qualified
+    """
+)
+
+
+def trend_from_row(row: dict) -> dict:
+    """Fold the mart's wide `<stat>_<window>` columns into one entry per stat."""
+    trend = {key: value for key, value in row.items() if key not in _PLAYER_TREND_STAT_COLUMNS}
+    trend["stats"] = [
+        {"stat": stat, **{window: row[f"{stat}_{window}"] for window in PLAYER_TREND_WINDOWS}}
+        for stat in PLAYER_TREND_STATS
+    ]
+    for stat in trend["stats"]:
+        stat["games"] = stat["games"] or []
+    return trend

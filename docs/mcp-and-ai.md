@@ -2,7 +2,7 @@
 
 `services/mcp` exposes NBA analytics as MCP tools for developers, so an agent can query the warehouse without writing SQL.
 
-It is a FastMCP server over the Cube semantic layer. Ask and the signed-in chat use the same named operations — see [ask.md](ask.md).
+It is a FastMCP server over the Cube semantic layer. Ask and the signed-in chat use the same named operations — see [features/ask-and-chat.md](features/ask-and-chat.md).
 
 ## One tool list, two surfaces
 
@@ -59,8 +59,8 @@ Games and feeds:
 - `get_play_by_play` — actions for one game
 - `get_player_injuries` — current snapshot
 - `get_game_odds` — lines for games that have not tipped; with `game_id`, that game's last pregame line even after it is played
-- `get_biggest_upsets` — games the moneyline underdog won, most surprising first, with the model's view alongside. Empty until 2026-27 games with captured lines are Final; see [data.md](data.md#upsets)
-- `get_daily_highlights` — what stood out on one day (default: the latest day with games), most notable first, one lead highlight per game; `all_candidates` adds the runners-up. See [data.md](data.md#daily-highlights)
+- `get_biggest_upsets` — games the moneyline underdog won, most surprising first, with the model's view alongside. Empty until 2026-27 games with captured lines are Final; see [data.md](features/upsets.md)
+- `get_daily_highlights` — what stood out on one day (default: the latest day with games), most notable first, one lead highlight per game; `all_candidates` adds the runners-up. See [data.md](features/daily-highlights.md)
 - `get_reddit_posts` — r/nba posts; comments are reachable via `query_cube`
 
 Escape hatch:

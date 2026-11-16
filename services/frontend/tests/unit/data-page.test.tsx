@@ -83,6 +83,11 @@ describe("data page", () => {
     expect(within(champion).getByText("0.612")).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /Sportsbook market/ })).toHaveTextContent("0.580");
     expect(screen.getByText(/16 games is too few/)).toBeInTheDocument();
+    // Newer derived numbers, each with the pages that show it.
+    expect(screen.getByText("Team ratings").nextElementSibling).toHaveTextContent("Teams");
+    expect(screen.getByText("Player form")).toBeInTheDocument();
+    expect(screen.getByText(/counts when \|change\| ≥ 2 × swing/)).toBeInTheDocument();
+    expect(screen.getByText(/split into points of spread/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Report it" })).toHaveAttribute(
       "href",
       expect.stringMatching(/^mailto:/)

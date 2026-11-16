@@ -1,3 +1,19 @@
+---
+summary: r/nba posts and top comments, with player mentions, fanbases and discourse leaderboards.
+status: current
+code:
+  - services/scraper/src/scrapers/reddit.py
+  - services/dbt/models/intermediate/int_reddit_documents.*
+  - services/dbt/models/marts/fct_reddit_*
+  - services/api/src/routers/social.py
+  - services/api/src/queries/social.py
+  - services/frontend/src/app/social/
+  - services/frontend/src/components/social/
+  - services/frontend/src/lib/social.ts
+related:
+  - docs/features/home.md
+---
+
 # Social
 
 r/nba posts and their top comments, modelled into discourse metrics.

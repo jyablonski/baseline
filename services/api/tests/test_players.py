@@ -788,3 +788,53 @@ def test_player_value_query_needs_a_score_and_a_salary() -> None:
     # Falls back to the latest scored season when the asked-for one is empty.
     assert "FILTER (" in sql
     assert "WHERE fct_player_mvp_scores.season = :season" in sql
+
+
+@pytest.mark.unit
+def test_player_trend(client, session, mapping_row, query_result, trend_row) -> None:
+    session.queue = [query_result(rows=[1]), query_result([mapping_row(trend_row())])]
+    response = client.get(f"/api/v1/players/{PLAYER_CURRY}/trend")
+    assert response.status_code == 200
+    trend = response.json()["data"]
+    assert (trend["trend_direction"], trend["trend_rank"]) == ("up", 1)
+    assert (trend["window_games"], trend["baseline_games"]) == (10, 6)
+    # MVP game score leads, and the wide columns fold into one entry per stat.
+    assert trend["stats"][0] == {
+        "stat": "mvp_game_score",
+        "last_10": 28.1,
+        "baseline": 22.6,
+        "season": 1.2,
+        "change": 5.5,
+        "z": 2.8,
+        "changed": True,
+        "games": [1.0, 2.0, None],
+    }
+    assert len(trend["stats"]) == 12
+    ts = next(stat for stat in trend["stats"] if stat["stat"] == "true_shooting_pct")
+    assert ts["baseline"] is None
+    assert not any(key.endswith("_change") for key in trend)
+    _, params = session.calls[-1]
+    assert str(params["player_id"]) == PLAYER_CURRY
+
+
+@pytest.mark.unit
+def test_player_trend_null_until_qualified(client, session, query_result) -> None:
+    session.queue = [query_result(rows=[1]), query_result([])]
+    response = client.get(f"/api/v1/players/{PLAYER_KAWHI}/trend")
+    assert response.status_code == 200
+    assert response.json() == {"data": None}
+
+
+@pytest.mark.unit
+def test_player_trend_not_found(client, session, query_result) -> None:
+    session.queue = [query_result(rows=[])]
+    assert client.get(f"/api/v1/players/{MISSING_ID}/trend").status_code == 404
+
+
+@pytest.mark.unit
+def test_player_trend_sql_serves_qualified_rows_only() -> None:
+    from queries.players import PLAYER_TREND
+    from queries.teams import LIST_TEAM_TRENDS
+
+    for statement in (PLAYER_TREND, LIST_TEAM_TRENDS):
+        assert "AND fct_player_trends.is_qualified" in str(statement)
