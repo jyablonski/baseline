@@ -37,7 +37,7 @@ Every model declares what one row means, twice, and the two must agree:
           column_list: ["player_id", "game_id"]
 ```
 
-dbt-score enforces both (`dbt_score_rules/baseline.py`): `has_grain_meta` is CRITICAL, so a missing or malformed grain fails `make dbt-score`, pre-commit and CI; `has_grain_test` flags a model with no uniqueness test. When a change alters what a row is, update the sentence and the test together.
+Both are enforced by the repo's dbt-score rules (the `dbt_score_rules/` package): `has_grain_meta` is CRITICAL, so a missing or malformed grain fails `make dbt-score`, pre-commit and CI; `has_grain_test` flags a model with no uniqueness test. When a change alters what a row is, update the sentence and the test together.
 
 ## Python / tooling
 

@@ -137,49 +137,11 @@ The API enforces a flag, the UI only reflects it, so a page left open after a fl
 
 Flags are created by Alembic migrations, never through the API: setting an unknown key is a 404. A flag with no row reads as off.
 
-### Chat or Ask
-
-The header has one tab for questions, never both. Which one it is, and what answers a question once you are in Chat, are two separate decisions.
-
-**1. Which tab the site shows.** The header shows **Chat** only when `GET /api/v1/features` reports `chatbot: true`, and that takes both of these:
-
-- the `chatbot` flag is on in `source.feature_flags` (the migration creates it on; `/admin` toggles it), and
-- `NLP_LLM_API_KEY` is set to a non-empty value on the API.
-
-If either is missing, or the features request fails or has not loaded yet, the header shows **Ask**. `NLP_BACKEND` plays no part in this: it only chooses the engine behind `/ask`. `/ask` stays reachable by URL either way, and the Chat page links to it when chat is unavailable.
-
-**2. Whether a visitor can use Chat.** Showing the tab is not enough. A question is refused, with nothing sent to the model, when:
-
-| Condition                                                                     | Result                                          |
-| ----------------------------------------------------------------------------- | ----------------------------------------------- |
-| `ACCOUNTS_API_TOKEN` unset                                                    | 503, accounts unavailable (sign-in still works) |
-| Not signed in                                                                 | the page asks them to sign in                   |
-| `chatbot` flag switched off after the page loaded                             | 503, "Chat is turned off right now"             |
-| Their `CHAT_DAILY_LIMIT` is spent, or one of their questions is still running | 429 / 409                                       |
-| The conversation already holds `CHAT_MAX_TURNS` questions                     | 400, start a new conversation                   |
-
-**3. What answers inside Chat.** Chat stays in the header, but one question at a time it can fall back to the same rules engine Ask uses:
-
-| Situation                                                                                  | Answered by                                                                                                                                                                             |
-| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Key set, and fewer than `CHAT_GLOBAL_DAILY_LIMIT` model-backed questions today (all users) | the model, through the named Cube tools                                                                                                                                                 |
-| `CHAT_GLOBAL_DAILY_LIMIT` reached                                                          | the rules engine, for everyone, until midnight Eastern                                                                                                                                  |
-| The model call fails or times out                                                          | nobody: 502, "The answer service did not respond" (no silent fallback)                                                                                                                  |
-| Cube is down                                                                               | nobody. On the rules engine the reply says the semantic layer is down; on the model path it is the fixed "I don't have that", because a reply with no rows behind it is always replaced |
-
-Each row in `source.chat_usage` records which one answered in `backend` (`llm` or `rules`).
+Which of Chat or Ask the header shows, and what answers inside Chat, is in [features/ask-and-chat.md](features/ask-and-chat.md#chat-or-ask).
 
 ## Accounts, chat, and picks
 
-Sign-in is open to anyone and is needed only for `/chat`, picks and following teams. User data lives in `source.users`, `source.chat_usage`, `source.picks` and `source.user_follows` (Alembic-owned, written by the API, never read by dbt or Cube). No email is stored; an account is identified by the provider and the provider's account id. An account may choose a time zone on `/account` (`users.timezone`, one of a fixed list the API validates; null is Eastern), which shifts game start times on the schedule, picks, team and home pages for that user only. Stored times and every date boundary stay Eastern. An account may also follow up to `FOLLOW_MAX_TEAMS` teams (default 5) from a team page: `source.user_follows` holds the team's Baseline UUID, checked against `gold.dim_teams` when it is written, so it survives dbt rebuilds. `user_follows.position` is the order the account sets on `/account`; a new follow goes last, and a reorder must name every followed team (409 otherwise). Following puts each team's logo in the header in that order, linking to its team page, keeps those teams' games in the home page's capped lists and tints them and their standings rows there and on `/teams`, tints their rows on `/schedule`, and offers `?mine=1` there to show only them. The table also allows players, which are not offered yet.
-
-The browser never calls `/api/v1/account/*`. A Next.js server action checks the session, then calls the API with `Authorization: Bearer $ACCOUNTS_API_TOKEN` and the caller's internal id in `X-Baseline-User`. The token is the only reason the API believes that header, so it is separate from `ADMIN_API_TOKEN`, server-side only, and unset returns 503. With it unset sign-in and `/admin` still work; chat and picks report that accounts are unavailable.
-
-**Chat.** `CHAT_DAILY_LIMIT` questions per user per Eastern day (default 10), `CHAT_MAX_TURNS` questions per conversation (default 6), one in-flight question per user. Every ask is a row in `source.chat_usage` with its backend, model, token counts, tool rounds, outcome, and latency; the text of the question is not stored. Chat answers through the same OpenAI-compatible adapter `/ask` uses (`NLP_LLM_BASE_URL`, `NLP_LLM_MODEL`); when it is offered and when it falls back to the rules engine is set out under [Chat or Ask](#chat-or-ask) (`CHAT_GLOBAL_DAILY_LIMIT` defaults to 250). The model is offered the shared named tools from `lib/baseline-analytics` minus the Reddit one, is told today's date, sees at most `CHAT_MODEL_ROW_CAP` rows of a result, and a reply with no rows behind it is replaced by a fixed "I don't have that". Answers are plain text; the page does not render Markdown. The suggested follow-up questions under an answer are fixed text per tool (`services/frontend/src/lib/chat.ts`), not model output.
-
-**Picks.** One pick per user and game, open until tip (or until the start of game day when no tip time is on file). Picking a winner is one click and counts toward the record. A stake is optional, in whole dollars from $1 to $1,000 (`MAX_STAKE`), and settles at the consensus moneyline stored with the pick when it was saved. There is no balance: nobody is given money to start with, a stake is not checked against anything, and the only money figure is the net of what settled stakes have won and lost, kept to the cent. It has no cash value. Picks are graded at read time from `gold.fct_games_schedule`, and compared with the champion model's favourite from `gold.fct_game_predictions` for the "vs. the model" figure: +1 where the pick won and the model's favourite lost, −1 the other way round. "Vs. the market" is wins less the wins the odds expected over settled picks that had a line: each pick carries `market_wp`, the picked side's no-vig consensus from the line `gold.fct_game_odds` keeps for the game (not the vigged price stored with the pick), and the expected count is their sum. Picks with no captured line count toward neither side, and `/picks` shows a dash until 10 priced picks have settled; the Breakdown shows the same figure per split. A won pick on a game the market underdog won (`gold.fct_game_upsets`) is tagged "Called the upset"; games with no captured pregame line are never tagged.
-
-**Stale sessions.** A session cookie carries the account id. If the API no longer has that row (the account was deleted from another device, or the table was rebuilt), the first call returns 404; the server action then re-registers the same provider identity, rewrites the cookie, and retries once. The visitor sees nothing. A pick sheet that fails for any other reason is reported on `/schedule` rather than silently dropping the pick column.
+Sign-in, accounts, time zones and follows are in [features/accounts-and-follows.md](features/accounts-and-follows.md); chat quotas and logging in [features/ask-and-chat.md](features/ask-and-chat.md); picks and how they are graded in [features/picks.md](features/picks.md). `ACCOUNTS_API_TOKEN` must be set (server-side only, separate from `ADMIN_API_TOKEN`); with it unset sign-in and `/admin` still work, and chat and picks report that accounts are unavailable.
 
 To block an account: `UPDATE source.users SET status = 'blocked' WHERE user_id = '<id>'`. To review usage: `SELECT usage_day, backend, outcome, count(*), sum(input_tokens), sum(output_tokens) FROM source.chat_usage GROUP BY 1, 2, 3 ORDER BY 1 DESC`. A user can delete their own account, with its picks and usage rows, from `/account`.
 

@@ -22,6 +22,7 @@ exposures:
       - ref('fct_player_game_logs')
       - ref('fct_player_mvp_scores')
       - ref('fct_player_season_stats')
+      - ref('fct_player_trends')
       - ref('fct_prediction_scorecard')
       - ref('fct_reddit_comments')
       - ref('fct_reddit_entity_mentions')

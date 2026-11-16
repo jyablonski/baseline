@@ -42,6 +42,8 @@ from schemas.player import (
     PlayerDetail,
     PlayerSeasonStats,
     PlayerSummary,
+    PlayerTrend,
+    PlayerTrendStat,
     PlayerValue,
 )
 from schemas.prediction import (
@@ -137,6 +139,8 @@ __all__ = [
     "PlayerInjury",
     "PlayerSeasonStats",
     "PlayerSummary",
+    "PlayerTrend",
+    "PlayerTrendStat",
     "PlayerValue",
     "BreakdownPart",
     "CalibrationBucket",

@@ -471,6 +471,50 @@ def test_team_roster(integration_client) -> None:
 
 
 @pytest.mark.integration
+def test_player_trend(integration_client) -> None:
+    trend = integration_client.get(f"/api/v1/players/{PLAYER_CURRY}/trend").json()["data"]
+    assert (trend["full_name"], trend["trend_direction"], trend["trend_rank"]) == (
+        "Stephen Curry",
+        "up",
+        1,
+    )
+    assert (trend["window_start_date"], trend["window_end_date"]) == ("2024-11-20", "2025-01-08")
+    stats = {stat["stat"]: stat for stat in trend["stats"]}
+    assert stats["mvp_game_score"] == {
+        "stat": "mvp_game_score",
+        "last_10": 28.1,
+        "baseline": 22.6,
+        "season": 26.0,
+        "change": 5.5,
+        "z": 2.84,
+        "changed": True,
+        "games": [24.1, 30.2, 22.0, 31.5, 27.4, 33.0, 25.8, 29.9, 26.6, 30.5],
+    }
+    assert stats["true_shooting_pct"]["change"] == pytest.approx(0.049)
+    # A game with no shot attempt has no TS%; an unchanged stat is never flagged.
+    assert stats["true_shooting_pct"]["games"][2] is None
+    assert (stats["rebounds"]["z"], stats["rebounds"]["changed"]) == (-0.4, False)
+    assert (stats["steals"]["z"], stats["steals"]["changed"], stats["steals"]["games"]) == (
+        None,
+        False,
+        [],
+    )
+
+    # Kawhi has a row but has not qualified.
+    unqualified = integration_client.get(f"/api/v1/players/{PLAYER_KAWHI}/trend")
+    assert (unqualified.status_code, unqualified.json()["data"]) == (200, None)
+    assert integration_client.get(f"/api/v1/players/{MISSING_ID}/trend").status_code == 404
+
+
+@pytest.mark.integration
+def test_team_trends(integration_client) -> None:
+    gsw = integration_client.get(f"/api/v1/teams/{TEAM_GSW}/trends").json()["data"]
+    assert [row["player_id"] for row in gsw] == [PLAYER_CURRY]
+    lac = integration_client.get(f"/api/v1/teams/{TEAM_LAC}/trends")
+    assert (lac.status_code, lac.json()["data"]) == (200, [])
+
+
+@pytest.mark.integration
 def test_injuries(integration_client) -> None:
     current = integration_client.get("/api/v1/injuries").json()["data"]
     assert [(row["player_name"], row["injury_status"]) for row in current] == [

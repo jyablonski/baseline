@@ -318,6 +318,154 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         });
       }
 
+      // Before "/players" and the "/teams/{id}" regex, which would swallow them.
+      if (url.includes("/trend")) {
+        const trend = (player_id: string, full_name: string) => ({
+          player_id,
+          full_name,
+          team_id: "1610612744",
+          season: "2025-26",
+          games_played: 18,
+          window_games: 10,
+          baseline_games: 8,
+          window_start_date: "2025-11-24",
+          window_end_date: "2026-01-06",
+          trend_direction: "up",
+          trend_rank: 4,
+          stats: [
+            {
+              stat: "mvp_game_score",
+              last_10: 27.4,
+              baseline: 21.9,
+              season: 25.0,
+              change: 5.5,
+              z: 2.6,
+              changed: true,
+              games: [26.4, 27.4, 28.4, 26.4, 27.4, 28.4, 26.4, 27.4, 28.4, 26.4],
+            },
+            {
+              stat: "game_score",
+              last_10: 23.1,
+              baseline: 19.0,
+              season: 21.3,
+              change: 4.1,
+              z: 2.1,
+              changed: true,
+              games: [22.1, 23.1, 24.1, 22.1, 23.1, 24.1, 22.1, 23.1, 24.1, 22.1],
+            },
+            {
+              stat: "points",
+              last_10: 29.8,
+              baseline: 24.1,
+              season: 27.3,
+              change: 5.7,
+              z: 2.4,
+              changed: true,
+              games: [28.8, 29.8, 30.8, 28.8, 29.8, 30.8, 28.8, 29.8, 30.8, 28.8],
+            },
+            {
+              stat: "rebounds",
+              last_10: 6.8,
+              baseline: 7.0,
+              season: 6.9,
+              change: -0.2,
+              z: 0.4,
+              changed: false,
+              games: [5.8, 6.8, 7.8, 5.8, 6.8, 7.8, 5.8, 6.8, 7.8, 5.8],
+            },
+            {
+              stat: "assists",
+              last_10: 4.1,
+              baseline: 3.9,
+              season: 4.0,
+              change: 0.2,
+              z: 0.4,
+              changed: false,
+              games: [3.1, 4.1, 5.1, 3.1, 4.1, 5.1, 3.1, 4.1, 5.1, 3.1],
+            },
+            {
+              stat: "steals",
+              last_10: 1.6,
+              baseline: 1.5,
+              season: 1.6,
+              change: 0.1,
+              z: 0.4,
+              changed: false,
+              games: [0.6, 1.6, 2.6, 0.6, 1.6, 2.6, 0.6, 1.6, 2.6, 0.6],
+            },
+            {
+              stat: "blocks",
+              last_10: 0.5,
+              baseline: 0.6,
+              season: 0.5,
+              change: -0.1,
+              z: 0.4,
+              changed: false,
+              games: [-0.5, 0.5, 1.5, -0.5, 0.5, 1.5, -0.5, 0.5, 1.5, -0.5],
+            },
+            {
+              stat: "three_pointers_made",
+              last_10: 2.4,
+              baseline: 2.1,
+              season: 2.3,
+              change: 0.3,
+              z: 0.4,
+              changed: false,
+              games: [1.4, 2.4, 3.4, 1.4, 2.4, 3.4, 1.4, 2.4, 3.4, 1.4],
+            },
+            {
+              stat: "turnovers",
+              last_10: 1.9,
+              baseline: 2.0,
+              season: 1.9,
+              change: -0.1,
+              z: 0.4,
+              changed: false,
+              games: [0.9, 1.9, 2.9, 0.9, 1.9, 2.9, 0.9, 1.9, 2.9, 0.9],
+            },
+            {
+              stat: "true_shooting_pct",
+              last_10: 0.634,
+              baseline: 0.581,
+              season: 0.611,
+              change: 0.053,
+              z: 2.0,
+              changed: true,
+              games: [0.614, 0.634, 0.654, 0.614, 0.634, 0.654, 0.614, 0.634, 0.654, 0.614],
+            },
+            {
+              stat: "plus_minus",
+              last_10: 4.2,
+              baseline: 1.0,
+              season: 2.8,
+              change: 3.2,
+              z: 0.4,
+              changed: false,
+              games: [3.2, 4.2, 5.2, 3.2, 4.2, 5.2, 3.2, 4.2, 5.2, 3.2],
+            },
+            {
+              stat: "minutes",
+              last_10: 34.0,
+              baseline: 33.1,
+              season: 33.6,
+              change: 0.9,
+              z: 0.4,
+              changed: false,
+              games: [33.0, 34.0, 35.0, 33.0, 34.0, 35.0, 33.0, 34.0, 35.0, 33.0],
+            },
+          ],
+        });
+        if (url.includes("/teams/")) {
+          const rows = empty
+            ? []
+            : [trend("00000000-0000-4000-8000-000000000101", "Stephen Curry")];
+          return json({ data: rows, meta: { total: rows.length, limit: rows.length, offset: 0 } });
+        }
+        return json({
+          data: empty ? null : trend("00000000-0000-4000-8000-000000202695", "Kawhi Leonard"),
+        });
+      }
+
       if (url.includes("/back-to-backs")) {
         return json({
           data: {

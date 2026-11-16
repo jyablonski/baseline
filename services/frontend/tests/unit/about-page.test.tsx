@@ -55,6 +55,10 @@ describe("about page", () => {
         "Coverage defaults to the latest season only. Preseason games are not included."
       )
     ).toBeInTheDocument();
+    expect(within(pipeline!).getByRole("link", { name: "About the data" })).toHaveAttribute(
+      "href",
+      "/data"
+    );
   });
 
   it("credits the developer with profile links", () => {

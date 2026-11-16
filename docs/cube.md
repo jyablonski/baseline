@@ -15,7 +15,7 @@ Two endpoints matter:
 
 Clients send query JSON, never SQL. They validate member names against meta first, so `Unknown Cube member(s)` means the member is missing from the **running instance's model** — the Postgres column may well exist.
 
-`game_odds` holds both the upcoming slate and the last pregame line of every played game, so filter `commence_time` when you want only upcoming games. `game_upsets` sits on `gold.fct_game_upsets` and stays empty until Final games with captured lines exist (see [data.md](data.md#upsets)). `daily_highlights` sits on `gold.fct_daily_highlights`: filter `is_featured = true` for a day's headline cards or `game_rank = 1` for one line per game (see [data.md](data.md#daily-highlights)).
+`game_odds` holds both the upcoming slate and the last pregame line of every played game, so filter `commence_time` when you want only upcoming games. `game_upsets` sits on `gold.fct_game_upsets` and stays empty until Final games with captured lines exist (see [data.md](features/upsets.md)). `daily_highlights` sits on `gold.fct_daily_highlights`: filter `is_featured = true` for a day's headline cards or `game_rank = 1` for one line per game (see [data.md](features/daily-highlights.md)).
 
 Cube is not a second warehouse. Results reflect the current gold tables _and_ the model baked into the running image. Refreshing data does not update the model.
 
@@ -81,4 +81,4 @@ Fix the model or the requested member list. Never add a gold-SQL fallback.
 
 ## Related
 
-[ask.md](ask.md) · [mcp-and-ai.md](mcp-and-ai.md) · [data.md](data.md) · [operations.md](operations.md)
+[features/ask-and-chat.md](features/ask-and-chat.md) · [mcp-and-ai.md](mcp-and-ai.md) · [data.md](data.md) · [operations.md](operations.md)

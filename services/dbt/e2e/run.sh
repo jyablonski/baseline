@@ -611,4 +611,34 @@ if [ "$LONG_ABSENCE" != "0.00/0" ]; then
   echo "unexpected long absence score: $LONG_ABSENCE" >&2
   exit 1
 fi
+echo "==> asserting nobody trends before they have enough games"
+TRENDS_GATED="$("${PSQL[@]}" -Atc "
+  SELECT string_agg(full_name || ' ' || is_qualified || ' ' || coalesce(trend_direction, '-'), ' | ' ORDER BY full_name)
+  FROM gold.fct_player_trends
+  INNER JOIN gold.dim_players USING (player_id)")"
+if [ "$TRENDS_GATED" != "Kawhi Leonard false - | Stephen Curry false -" ]; then
+  echo "expected no trends with the default gates, got: $TRENDS_GATED" >&2
+  exit 1
+fi
+
+echo "==> asserting trends with a one-game window"
+# Kawhi's newest Regular Season game (30 pts, MVP 30.48) against 10/22 and 10/23
+# (20.32, 25.56); the Cup final is not in it. Curry's 10/25 loss (18.48) against
+# his 10/22 win (30.6). One game is too few to test for noise, so both read
+# steady; the noise test itself is the dbt unit test on fct_player_trends.
+uv run dbt run --profiles-dir . --select fct_player_trends \
+  --vars '{trend_window_games: 1, trend_min_baseline_games: 1}'
+TRENDS="$("${PSQL[@]}" -Atc "
+  SELECT string_agg(
+    full_name || ' ' || points_last_10 || '/' || points_baseline ||
+    ' mvp=' || mvp_game_score_last_10 || '/' || mvp_game_score_baseline || ' ' || mvp_game_score_change ||
+    ' ' || trend_direction || ' #' || trend_rank || ' g=' || window_games || '+' || baseline_games ||
+    ' games=' || points_games::text,
+    ' | ' ORDER BY trend_rank)
+  FROM gold.fct_player_trends
+  INNER JOIN gold.dim_players USING (player_id)")"
+if [ "$TRENDS" != "Kawhi Leonard 30.0/26.0 mvp=30.5/22.9 7.5 steady #1 g=1+2 games={30.0} | Stephen Curry 29.0/32.0 mvp=18.5/30.6 -12.1 steady #2 g=1+1 games={29.0}" ]; then
+  echo "unexpected player trends: $TRENDS" >&2
+  exit 1
+fi
 echo "==> dbt e2e passed"

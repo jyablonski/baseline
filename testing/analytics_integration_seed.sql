@@ -1,6 +1,6 @@
 -- Seeded gold mart rows for API/MCP integration tests (no dbt required).
 
-TRUNCATE gold.fct_team_stat_splits, gold.fct_game_flow, gold.fct_transaction_participants, gold.fct_transactions, gold.fct_game_upsets, gold.fct_game_injuries, gold.fct_player_injuries, gold.fct_daily_highlights, gold.fct_prediction_results, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
+TRUNCATE gold.fct_player_trends, gold.fct_team_stat_splits, gold.fct_game_flow, gold.fct_transaction_participants, gold.fct_transactions, gold.fct_game_upsets, gold.fct_game_injuries, gold.fct_player_injuries, gold.fct_daily_highlights, gold.fct_prediction_results, gold.fct_prediction_scorecard, gold.fct_game_odds, gold.fct_game_predictions,
          gold.fct_standings, gold.fct_player_mvp_scores, gold.fct_player_season_stats, gold.fct_player_game_logs,
          gold.fct_team_game_results, gold.fct_games_schedule, gold.dim_players, gold.dim_teams
          RESTART IDENTITY CASCADE;
@@ -330,6 +330,32 @@ INSERT INTO gold.fct_transaction_participants (
      NULL, '7bf8726a-a852-452d-b81f-14839127c5fb', 'GSW', NULL, 'external_id'),
     ('tx-signing', '2025-07-01', '2025-26', 'player', 'none', 'curryst01', 'Stephen Curry',
      '00000000-0000-4000-8000-000000000101', NULL, NULL, 'Stephen Curry', 'external_id');
+
+-- Curry qualifies and is trending up; Kawhi has a row but too few games, so
+-- neither route serves him.
+INSERT INTO gold.fct_player_trends (
+    player_id, season, team_id, games_played, window_games, baseline_games, window_start_date, window_end_date,
+    points_last_10, points_baseline, points_season, points_change, rebounds_last_10, rebounds_baseline, rebounds_season, rebounds_change, assists_last_10, assists_baseline, assists_season, assists_change, steals_last_10, steals_baseline, steals_season, steals_change, blocks_last_10, blocks_baseline, blocks_season, blocks_change, three_pointers_made_last_10, three_pointers_made_baseline, three_pointers_made_season, three_pointers_made_change, turnovers_last_10, turnovers_baseline, turnovers_season, turnovers_change, minutes_last_10, minutes_baseline, minutes_season, minutes_change, plus_minus_last_10, plus_minus_baseline, plus_minus_season, plus_minus_change, game_score_last_10, game_score_baseline, game_score_season, game_score_change, mvp_game_score_last_10, mvp_game_score_baseline, mvp_game_score_season, mvp_game_score_change, true_shooting_pct_last_10, true_shooting_pct_baseline, true_shooting_pct_season, true_shooting_pct_change,
+    is_qualified, trend_direction, trend_rank
+) VALUES
+    ('00000000-0000-4000-8000-000000000101', '2024-25', '7bf8726a-a852-452d-b81f-14839127c5fb', 16, 10, 6, '2024-11-20', '2025-01-08',
+     31.2, 26.0, 29.1, 5.2, 4.6, 4.8, 4.7, -0.2, 6.4, 6.1, 6.3, 0.3, 1.1, 1.0, 1.1, 0.1, 0.3, 0.4, 0.3, -0.1, 5.4, 4.2, 5.0, 1.2, 2.9, 3.1, 3.0, -0.2, 34.1, 33.0, 33.7, 1.1, 6.3, 1.2, 4.4, 5.1, 24.8, 20.1, 23.0, 4.7, 28.1, 22.6, 26.0, 5.5, 0.641, 0.592, 0.623, 0.049,
+     TRUE, 'up', 1),
+    ('00000000-0000-4000-8000-000000000102', '2024-25', 'a79dabb2-26c5-443c-bbb4-cabdd8db5958', 3, 3, 0, '2024-10-22', '2024-10-25',
+     24.0, NULL, 24.0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+     FALSE, NULL, NULL);
+
+-- Curry's noise test and sparklines: MVP game score and points beat his swings,
+-- rebounds do not.
+UPDATE gold.fct_player_trends SET
+    mvp_game_score_z = 2.84, mvp_game_score_changed = TRUE,
+    mvp_game_score_games = '{24.1,30.2,22.0,31.5,27.4,33.0,25.8,29.9,26.6,30.5}',
+    points_z = 2.31, points_changed = TRUE,
+    points_games = '{28,35,26,33,30,36,27,32,29,36}',
+    rebounds_z = -0.4, rebounds_changed = FALSE,
+    true_shooting_pct_games = '{0.61,0.66,NULL,0.70,0.62,0.68,0.64,0.65,0.63,0.66}'
+WHERE player_id = '00000000-0000-4000-8000-000000000101';
+
 
 -- GSW and LAC splits; GSW also has last_10 with null possession stats, as if
 -- those games predate the rebound split.

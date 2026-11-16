@@ -1164,3 +1164,57 @@ export type PickSheet = { summary: PickSummary; picks: UserPick[] };
 
 /** Switchable features, keyed by flag. A missing key means off. */
 export type FeatureFlags = Record<string, boolean>;
+
+export type PlayerTrendStatKey =
+  | "mvp_game_score"
+  | "game_score"
+  | "points"
+  | "rebounds"
+  | "assists"
+  | "steals"
+  | "blocks"
+  | "three_pointers_made"
+  | "turnovers"
+  | "true_shooting_pct"
+  | "plus_minus"
+  | "minutes";
+
+/** One stat's last-10 average against the up to 20 games before them (TS% is a 0-1 rate). */
+export interface PlayerTrendStat {
+  stat: PlayerTrendStatKey;
+  /** Null only for TS% over a window with no shot attempts. */
+  last_10: number | null;
+  baseline: number | null;
+  season: number | null;
+  /** last_10 minus baseline. */
+  change: number | null;
+  /** The change over its standard error; null when there are too few games to test. */
+  z: number | null;
+  /** The change beats normal game-to-game swings. Only these get an arrow or a colour. */
+  changed: boolean;
+  /** The window's per-game values, oldest first. TS% is null for a game without a shot. */
+  games: (number | null)[];
+}
+
+/**
+ * A player's newest Regular Season games against their earlier ones. Only
+ * served once the player has enough games and minutes, so the direction and
+ * rank are always set; `GET /players/{id}/trend` is null before that.
+ */
+export interface PlayerTrend {
+  player_id: string;
+  full_name: string;
+  team_id: string;
+  season: string;
+  games_played: number;
+  window_games: number;
+  baseline_games: number;
+  window_start_date: string;
+  window_end_date: string;
+  /** From the MVP game score change. */
+  trend_direction: "up" | "down" | "steady";
+  /** League rank by MVP game score change, 1 = the biggest riser. */
+  trend_rank: number;
+  /** MVP game score first. */
+  stats: PlayerTrendStat[];
+}

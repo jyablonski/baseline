@@ -17,10 +17,12 @@ from queries.players import (
     PLAYER_BY_ID,
     PLAYER_EXISTS,
     PLAYER_NAME,
+    PLAYER_TREND,
     PLAYERS_BY_IDS,
     compare_players_stmt,
     list_game_logs_stmt,
     list_players_stmt,
+    trend_from_row,
 )
 
 __all__ = ["COMPARE_STAT_COLUMNS", "PlayersRepository"]
@@ -69,6 +71,10 @@ class PlayersRepository:
             .first()
         )
         return dict(row) if row is not None else None
+
+    def get_player_trend(self, player_id: UUID) -> dict | None:
+        row = self.db.execute(PLAYER_TREND, {"player_id": player_id}).mappings().first()
+        return trend_from_row(dict(row)) if row is not None else None
 
     def compare_players(
         self, player_ids: list[UUID], order_column: str, season: str | None = None

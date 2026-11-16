@@ -40,6 +40,20 @@ repos:
         pass_filenames: false
         files: ^services/dbt/((models|seeds|macros|tests|dbt_score_rules)/|dbt_project\.yml$|pyproject\.toml$|packages\.yml$)
         entry: scripts/dbt-score.sh
+      # See scripts/feature-docs.py. Always runs: moving code can break a doc's
+      # code: paths without touching docs/.
+      - id: feature-docs
+        name: feature docs
+        language: system
+        pass_filenames: false
+        always_run: true
+        entry: python3 scripts/feature-docs.py check
+      # A reminder, never a failure: features whose code changed without their doc.
+      - id: feature-docs-drift
+        name: feature docs drift
+        language: system
+        verbose: true
+        entry: python3 scripts/feature-docs.py changed
       - id: frontend-eslint
         name: frontend eslint
         language: system

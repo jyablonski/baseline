@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from datetime import date
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from ids import PLAYER_CURRY, TEAM_GSW
 from sqlalchemy.orm import sessionmaker
 
 from dependencies import get_cube_analytics, get_db
 from main import create_app
+from queries.players import PLAYER_TREND_STATS
 from testing.postgres_tc import (
     bootstrap_engine,
     docker_available,
@@ -109,6 +112,36 @@ def mapping_row():
 @pytest.fixture
 def query_result():
     return QueryResult
+
+
+def _trend_row(player_id: str = PLAYER_CURRY, **overrides) -> dict:
+    """A qualified fct_player_trends row in the routes' wide shape."""
+    row = {
+        "player_id": player_id,
+        "full_name": "Stephen Curry",
+        "team_id": TEAM_GSW,
+        "season": "2024-25",
+        "games_played": 16,
+        "window_games": 10,
+        "baseline_games": 6,
+        "window_start_date": date(2024, 11, 20),
+        "window_end_date": date(2025, 1, 8),
+        "trend_direction": "up",
+        "trend_rank": 1,
+    }
+    for stat in PLAYER_TREND_STATS:
+        row |= {f"{stat}_last_10": 1.5, f"{stat}_baseline": 1.0, f"{stat}_season": 1.2}
+        row |= {f"{stat}_change": 0.5, f"{stat}_z": 0.4, f"{stat}_changed": False}
+        row[f"{stat}_games"] = [1.0, 2.0, None]
+    row |= {"mvp_game_score_last_10": 28.1, "mvp_game_score_baseline": 22.6}
+    row |= {"mvp_game_score_change": 5.5, "true_shooting_pct_baseline": None}
+    row |= {"mvp_game_score_z": 2.8, "mvp_game_score_changed": True}
+    return row | overrides
+
+
+@pytest.fixture
+def trend_row():
+    return _trend_row
 
 
 @pytest.fixture

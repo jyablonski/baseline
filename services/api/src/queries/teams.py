@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
+from queries.players import PLAYER_TREND_COLUMNS
 from queries.standings import RESOLVED_SEASON
 
 TEAM_GAME_FILTERS = """
@@ -482,6 +483,25 @@ LIST_TEAM_ROSTER = text(
         AND dim_players.is_active
     ORDER BY
         team_logs.minutes DESC NULLS LAST,
+        dim_players.full_name
+    """
+)
+
+
+# Qualified trends for the current roster (players whose team is this one),
+# biggest MVP game score riser first. Empty until anyone has enough games.
+LIST_TEAM_TRENDS = text(
+    f"""
+    SELECT
+        {PLAYER_TREND_COLUMNS}
+    FROM gold.fct_player_trends
+    INNER JOIN gold.dim_players
+        ON fct_player_trends.player_id = dim_players.player_id
+    WHERE
+        dim_players.team_id = :team_id
+        AND fct_player_trends.is_qualified
+    ORDER BY
+        fct_player_trends.mvp_game_score_change DESC,
         dim_players.full_name
     """
 )

@@ -79,6 +79,12 @@ reference = "make prod-deploy IMAGE_PREFIX=… IMAGE_TAG=<sha>"
 reason = "CI deploy command; the values come from the workflow"
 
 [[tool.agentslint.ignore]]
+file = "AGENTS.md"
+rule = "command-unsupported"
+reference = "python3 scripts/feature-docs.py for <path>"
+reason = "Documented lookup shape; <path> is a deliberate placeholder"
+
+[[tool.agentslint.ignore]]
 file = "services/frontend/AGENTS.md"
 rule = "path-exists"
 reference = "node_modules/next/dist/docs/"

@@ -17,14 +17,14 @@ The layers are `gold` (dbt) → `services/api` (FastAPI, raw SQL) → `services/
 
 Follow the layering every router uses: `queries/<area>.py` (SQL `text()`), `repositories/<area>.py` (execute, `dict(row._mapping)`), `schemas/<area>.py` (Pydantic, exported from `schemas/__init__.py`), `routers/<area>.py` (validate params, wrap in `PaginatedResponse` / `ItemResponse`).
 
-SQL rules (from `AGENTS.md`, "SQL style (API)"):
+SQL rules (from `services/api/AGENTS.md`, "SQL style"):
 
 - 4-space indent. A multi-field `SELECT` / `WHERE` / `ORDER BY` starts on its own line, one field per line.
 - No table aliases in new SQL: `FROM gold.fct_game_upsets`, columns qualified as `fct_game_upsets.game_id`. Need a table twice? Use named CTEs. Some older files (e.g. `queries/transactions.py`) use aliases; match the file you are editing rather than half-converting it.
 - Optional filters bind as `(CAST(:x AS text) IS NULL OR table.col = :x)`. A "newest season by default" filter uses a `latest_*` CTE plus `coalesce(CAST(:season AS text), latest.season)` (see `LIST_DAILY_HIGHLIGHTS`, `LIST_UPSETS`).
 - Several unit tests assert on SQL substrings, so renaming an alias or column can break them.
 
-Route ordering: fixed paths under `/api/v1/games` (`/collapses`, `/highlights`, `/upsets`) must be declared before `/{game_id}`, or they are parsed as a UUID and 422. Same for `/transactions/seasons` before `/{transaction_key}`. Update the comment above `/{game_id}` and the line in `AGENTS.md` that lists them.
+Route ordering: fixed paths under `/api/v1/games` (`/collapses`, `/highlights`, `/upsets`) must be declared before `/{game_id}`, or they are parsed as a UUID and 422. Same for `/transactions/seasons` before `/{transaction_key}`. Update the comment above `/{game_id}` and the list in `docs/features/game-page.md` (Invariants).
 
 A new field on an existing response: add it to the query, the schema (with a comment saying when it is null), and any shared SQL. `GET_GAME` reuses `SCHEDULE_COLUMNS`, so a schedule-row change shows up there too.
 
@@ -55,9 +55,11 @@ Run from `services/frontend`: `npx tsc --noEmit -p .`, `npx eslint src tests`, `
 
 ## 4. Docs that move with it
 
-- `AGENTS.md` "API surface": a new route or user-visible behaviour gets a line marked current, with its route ordering if it shares a prefix.
-- `docs/data.md`: the mart's section says how it is served (REST, Cube, MCP) and what the UI shows.
-- `docs/frontend.md`: the page's bullet under Pages; remove it from "Not built" if it was there.
+- The feature doc in `docs/features/`: a new route or user-visible behaviour goes under its "Surfaces" and "What users see" (with route ordering if it shares a prefix). A new feature gets a doc with `code:` paths in its front matter. Run `python3 scripts/feature-docs.py index` after adding a doc or changing a summary; the pre-commit `feature-docs` hook fails otherwise.
+- `docs/glossary.md`: a new domain term, or a column whose name differs from what the product calls it.
+- `docs/decisions/`: a deliberate choice a future reader might "fix".
+- `docs/data.md`: a new mart gets a row in its Feature marts table pointing at the feature doc; the mart's detail lives in the feature doc.
+- `docs/frontend.md`: a new page gets a row in the Pages index pointing at its feature doc.
 - `docs/plans/<yyyy-mm>/<plan>.md`: update the `**Status:**` line with the date and the deviations from the plan, keeping the plan text as written.
 - Markdown is never hard-wrapped.
 
