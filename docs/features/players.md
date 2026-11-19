@@ -60,4 +60,4 @@ The `mvp_*` vars in `services/dbt/dbt_project.yml`.
 
 ## Out of scope
 
-Season-over-season or all-time views, a season-leaders API, and an official awards model.
+Season-over-season or all-time views, a season-leaders API route or page, and an official awards model. Ask answers league leaders in PPG, RPG and APG (see [ask-and-chat.md](ask-and-chat.md)); that is the only leaders surface.

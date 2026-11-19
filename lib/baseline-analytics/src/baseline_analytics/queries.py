@@ -1124,3 +1124,180 @@ def team_flow_games_query(
         "filters": filters,
         "order": {"team_game_flow.game_date": "desc"},
     }
+
+
+# Season leaders: only per-game stats the season-stats cube holds.
+SEASON_LEADER_STATS = {"ppg": "ppg", "rpg": "rpg", "apg": "apg"}
+# A player qualifies with at least this share of the most games anyone has
+# played (or, for one team's leaders, any teammate), so one big night can't lead.
+LEADERS_MIN_GAMES_SHARE = 0.7
+SEASON_LEADER_DIMENSIONS = [
+    "player_season_stats.player_id",
+    "players.full_name",
+    "teams.abbreviation",
+    "player_season_stats.season",
+    "player_season_stats.games_played",
+    "player_season_stats.ppg",
+    "player_season_stats.rpg",
+    "player_season_stats.apg",
+]
+
+
+def _season_leader_filters(season: str, team_abbreviation: str | None) -> list[dict[str, Any]]:
+    filters = [equals("player_season_stats.season", season)]
+    if team_abbreviation:
+        filters.append(equals("teams.abbreviation", team_abbreviation.upper()))
+    return filters
+
+
+def season_max_games_query(season: str, team_abbreviation: str | None = None) -> dict[str, Any]:
+    return {
+        "measures": ["player_season_stats.max_games_played"],
+        "filters": _season_leader_filters(season, team_abbreviation),
+    }
+
+
+def season_leaders_query(
+    stat: str,
+    season: str,
+    min_games: int,
+    team_abbreviation: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    member = f"player_season_stats.{SEASON_LEADER_STATS[stat]}"
+    return {
+        "dimensions": list(SEASON_LEADER_DIMENSIONS),
+        "filters": [
+            *_season_leader_filters(season, team_abbreviation),
+            {
+                "member": "player_season_stats.games_played",
+                "operator": "gte",
+                "values": [str(min_games)],
+            },
+            {"member": member, "operator": "set"},
+        ],
+        "order": {member: "desc", "players.full_name": "asc"},
+        "limit": clamp_limit(limit, 5, 25),
+    }
+
+
+PLAYER_TREND_DIMENSIONS = [
+    "player_trends.player_id",
+    "players.full_name",
+    "teams.abbreviation",
+    "player_trends.season",
+    "player_trends.games_played",
+    "player_trends.is_qualified",
+    "player_trends.trend_direction",
+    "player_trends.trend_rank",
+    "player_trends.mvp_game_score_last_10",
+    "player_trends.mvp_game_score_baseline",
+    "player_trends.mvp_game_score_change",
+    "player_trends.points_last_10",
+    "player_trends.points_change",
+    "player_trends.rebounds_last_10",
+    "player_trends.rebounds_change",
+    "player_trends.assists_last_10",
+    "player_trends.assists_change",
+]
+TREND_DIRECTIONS = ("up", "down")
+
+
+def trending_players_query(
+    direction: str = "up",
+    team_abbreviation: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    filters = [
+        equals("player_trends.is_qualified", "true"),
+        equals("player_trends.trend_direction", direction),
+    ]
+    if team_abbreviation:
+        filters.append(equals("teams.abbreviation", team_abbreviation.upper()))
+    # trend_rank 1 is the biggest riser, so fallers read from the other end.
+    return {
+        "dimensions": list(PLAYER_TREND_DIMENSIONS),
+        "filters": filters,
+        "order": {"player_trends.trend_rank": "asc" if direction == "up" else "desc"},
+        "limit": clamp_limit(limit, 5, 25),
+    }
+
+
+def player_trend_query(player_id: UUID) -> dict[str, Any]:
+    return {
+        "dimensions": list(PLAYER_TREND_DIMENSIONS),
+        "filters": [equals("player_trends.player_id", player_id)],
+        "limit": 1,
+    }
+
+
+TEAM_STATS = (
+    "offensive_rating",
+    "defensive_rating",
+    "net_rating",
+    "pace",
+    "points_per_game",
+    "opponent_points_per_game",
+    "three_point_pct",
+)
+TEAM_STAT_SPLITS = ("season", "last_10", "home", "away")
+TEAM_STAT_DIMENSIONS = [
+    "team_stat_splits.team_id",
+    "teams.abbreviation",
+    "teams.team_name",
+    "team_stat_splits.season",
+    "team_stat_splits.split",
+    "team_stat_splits.games",
+    "team_stat_splits.wins",
+    "team_stat_splits.losses",
+    "team_stat_splits.games_with_possessions",
+    "team_stat_splits.team_count",
+    *(f"team_stat_splits.{stat}{suffix}" for stat in TEAM_STATS for suffix in ("", "_rank")),
+]
+
+
+def team_stats_query(team_abbreviation: str, split: str = "season") -> dict[str, Any]:
+    return {
+        "dimensions": list(TEAM_STAT_DIMENSIONS),
+        "filters": [
+            equals("teams.abbreviation", team_abbreviation.upper()),
+            equals("team_stat_splits.split", split),
+        ],
+        "limit": 1,
+    }
+
+
+def team_stat_ranking_query(
+    stat: str,
+    split: str = "season",
+    worst: bool = False,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    rank = f"team_stat_splits.{stat}_rank"
+    return {
+        "dimensions": list(TEAM_STAT_DIMENSIONS),
+        "filters": [
+            equals("team_stat_splits.split", split),
+            {"member": rank, "operator": "set"},
+        ],
+        "order": {rank: "desc" if worst else "asc", "teams.team_name": "asc"},
+        "limit": clamp_limit(limit, 5, 30),
+    }
+
+
+TEAM_ROSTER_DIMENSIONS = [
+    "players.player_id",
+    "players.full_name",
+    "players.position",
+    "teams.abbreviation",
+]
+
+
+def team_roster_query(team_abbreviation: str) -> dict[str, Any]:
+    """Players whose current team is this one: the roster tab's rule."""
+    return {
+        "dimensions": list(TEAM_ROSTER_DIMENSIONS),
+        "filters": [equals("teams.abbreviation", team_abbreviation.upper())],
+        "order": {"players.full_name": "asc"},
+        "limit": 40,
+    }

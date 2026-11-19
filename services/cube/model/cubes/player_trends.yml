@@ -1,0 +1,112 @@
+cubes:
+  - name: player_trends
+    sql_table: gold.fct_player_trends
+    description: >
+      Each player's last 10 Regular Season games against their games before them,
+      this season. Unqualified players (too few games or minutes) have a row with
+      is_qualified false and no direction or rank; serve qualified rows only.
+      trend_direction is up, down or steady from the MVP game score change and its
+      noise test; trend_rank ranks that change among qualified players (1 = biggest riser).
+
+    joins:
+      - name: players
+        sql: "{CUBE}.player_id = {players}.player_id"
+        relationship: many_to_one
+
+      # No direct teams join: teams.* resolves through players, so a team's
+      # trending players are those whose dim_players.team_id is the team, the
+      # same rule as GET /teams/{id}/trends and the roster. team_id below is the
+      # team of the player's most recent counted game.
+
+    dimensions:
+      - name: player_id
+        sql: player_id
+        type: string
+        primary_key: true
+        public: true
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: team_id
+        sql: team_id
+        type: string
+
+      - name: games_played
+        sql: games_played
+        type: number
+
+      - name: window_games
+        sql: window_games
+        type: number
+
+      - name: baseline_games
+        sql: baseline_games
+        type: number
+
+      - name: is_qualified
+        sql: is_qualified
+        type: boolean
+
+      - name: trend_direction
+        sql: trend_direction
+        type: string
+        description: up, down or steady; null when not qualified
+
+      - name: trend_rank
+        sql: trend_rank
+        type: number
+        description: League rank of the MVP game score change among qualified players, 1 = biggest riser
+
+      - name: mvp_game_score_last_10
+        sql: mvp_game_score_last_10
+        type: number
+
+      - name: mvp_game_score_baseline
+        sql: mvp_game_score_baseline
+        type: number
+
+      - name: mvp_game_score_change
+        sql: mvp_game_score_change
+        type: number
+
+      - name: points_last_10
+        sql: points_last_10
+        type: number
+
+      - name: points_baseline
+        sql: points_baseline
+        type: number
+
+      - name: points_change
+        sql: points_change
+        type: number
+
+      - name: rebounds_last_10
+        sql: rebounds_last_10
+        type: number
+
+      - name: rebounds_change
+        sql: rebounds_change
+        type: number
+
+      - name: assists_last_10
+        sql: assists_last_10
+        type: number
+
+      - name: assists_change
+        sql: assists_change
+        type: number
+
+      - name: minutes_last_10
+        sql: minutes_last_10
+        type: number
+
+      - name: minutes_change
+        sql: minutes_change
+        type: number
+
+    measures:
+      - name: count
+        type: count

@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 from uuid import UUID
 
 from baseline_analytics.cube_client import CubeClient
 from baseline_analytics.errors import CubeError
 from baseline_analytics.queries import (
+    LEADERS_MIN_GAMES_SHARE,
+    SEASON_LEADER_STATS,
+    TEAM_STAT_SPLITS,
+    TEAM_STATS,
+    TREND_DIRECTIONS,
     biggest_upsets_query,
+    current_nba_season,
     daily_highlights_query,
     game_odds_query,
     game_predictions_query,
@@ -27,9 +34,12 @@ from baseline_analytics.queries import (
     player_profile_query,
     player_salary_query,
     player_season_stats_query,
+    player_trend_query,
     project_compare_stats,
     reddit_posts_query,
     search_players_query,
+    season_leaders_query,
+    season_max_games_query,
     standings_query,
     standings_seasons_query,
     team_by_abbreviation_query,
@@ -39,9 +49,13 @@ from baseline_analytics.queries import (
     team_payroll_season_query,
     team_record_games_query,
     team_record_query,
+    team_roster_query,
+    team_stat_ranking_query,
+    team_stats_query,
     teams_played_query,
     transaction_participants_query,
     transactions_query,
+    trending_players_query,
     upset_seasons_query,
 )
 
@@ -416,6 +430,97 @@ class CubeAnalytics:
             for row in rows
         ]
 
+    def get_season_leaders(
+        self,
+        stat: str = "ppg",
+        season: str | None = None,
+        team_abbreviation: str | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Per-game leaders among players with at least 70% of the most games
+        played (league-wide, or within the team when one is given)."""
+        key = stat.strip().lower()
+        if key not in SEASON_LEADER_STATS:
+            raise ValueError(f"stat must be one of {sorted(SEASON_LEADER_STATS)}")
+        resolved = season or current_nba_season()
+        rows = self.client.load(season_max_games_query(resolved, team_abbreviation))
+        most_games = _as_int(rows[0].get("max_games_played")) if rows else None
+        if not most_games:
+            return {"season": resolved, "stat": key, "min_games": None, "players": []}
+        min_games = math.ceil(most_games * LEADERS_MIN_GAMES_SHARE)
+        rows = self.client.load(
+            season_leaders_query(key, resolved, min_games, team_abbreviation, limit)
+        )
+        return {
+            "season": resolved,
+            "stat": key,
+            "min_games": min_games,
+            "players": [
+                {
+                    "player_id": _as_uuid(row.get("player_id")),
+                    "full_name": row.get("full_name"),
+                    "team_abbreviation": row.get("abbreviation"),
+                    "games_played": _as_int(row.get("games_played")),
+                    "ppg": _as_float(row.get("ppg")),
+                    "rpg": _as_float(row.get("rpg")),
+                    "apg": _as_float(row.get("apg")),
+                }
+                for row in rows
+            ],
+        }
+
+    def get_trending_players(
+        self,
+        direction: str = "up",
+        team_abbreviation: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Qualified players trending up (biggest riser first) or down."""
+        if direction not in TREND_DIRECTIONS:
+            raise ValueError(f"direction must be one of {list(TREND_DIRECTIONS)}")
+        rows = self.client.load(trending_players_query(direction, team_abbreviation, limit))
+        return [_trend_row(row) for row in rows]
+
+    def get_player_trend(self, player_id: UUID) -> dict[str, Any] | None:
+        """The player's trend row, qualified or not; None when they have none."""
+        rows = self.client.load(player_trend_query(player_id))
+        return _trend_row(rows[0]) if rows else None
+
+    def get_team_stats(
+        self, team_abbreviation: str, split: str = "season"
+    ) -> dict[str, Any] | None:
+        if split not in TEAM_STAT_SPLITS:
+            raise ValueError(f"split must be one of {list(TEAM_STAT_SPLITS)}")
+        rows = self.client.load(team_stats_query(team_abbreviation, split))
+        return _team_stats_row(rows[0]) if rows else None
+
+    def get_team_stat_ranking(
+        self,
+        stat: str,
+        split: str = "season",
+        worst: bool = False,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Teams by one stat's league rank, best first (worst first when asked)."""
+        if stat not in TEAM_STATS:
+            raise ValueError(f"stat must be one of {list(TEAM_STATS)}")
+        if split not in TEAM_STAT_SPLITS:
+            raise ValueError(f"split must be one of {list(TEAM_STAT_SPLITS)}")
+        rows = self.client.load(team_stat_ranking_query(stat, split, worst, limit))
+        return [_team_stats_row(row) for row in rows]
+
+    def get_team_roster(self, team_abbreviation: str) -> list[dict[str, Any]]:
+        rows = self.client.load(team_roster_query(team_abbreviation))
+        return [
+            {
+                "player_id": _as_uuid(row.get("player_id")),
+                "full_name": row.get("full_name"),
+                "position": row.get("position"),
+                "team_abbreviation": row.get("abbreviation"),
+            }
+            for row in rows
+        ]
+
     def get_mvp_ladder(
         self,
         season: str | None = None,
@@ -721,6 +826,50 @@ def _upset_row(row: dict[str, Any]) -> dict[str, Any]:
         "model_winner_wp": _as_float(row.get("model_winner_wp")),
         # Cube returns booleans as true/false or "true"/"false" depending on driver.
         "model_called_upset": None if called is None else str(called).lower() == "true",
+    }
+
+
+def _trend_row(row: dict[str, Any]) -> dict[str, Any]:
+    qualified = row.get("is_qualified")
+    return {
+        "player_id": _as_uuid(row.get("player_id")),
+        "full_name": row.get("full_name"),
+        "team_abbreviation": row.get("abbreviation"),
+        "season": row.get("season"),
+        "games_played": _as_int(row.get("games_played")),
+        "is_qualified": qualified is True or str(qualified).lower() == "true",
+        "trend_direction": row.get("trend_direction"),
+        "trend_rank": _as_int(row.get("trend_rank")),
+        **{
+            key: _as_float(row.get(key))
+            for key in (
+                "mvp_game_score_last_10",
+                "mvp_game_score_baseline",
+                "mvp_game_score_change",
+                "points_last_10",
+                "points_change",
+                "rebounds_last_10",
+                "rebounds_change",
+                "assists_last_10",
+                "assists_change",
+            )
+        },
+    }
+
+
+def _team_stats_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "team_id": _as_uuid(row.get("team_id")),
+        "abbreviation": row.get("abbreviation"),
+        "team_name": row.get("team_name"),
+        "season": row.get("season"),
+        "split": row.get("split"),
+        **{
+            key: _as_int(row.get(key))
+            for key in ("games", "wins", "losses", "games_with_possessions", "team_count")
+        },
+        **{stat: _as_float(row.get(stat)) for stat in TEAM_STATS},
+        **{f"{stat}_rank": _as_int(row.get(f"{stat}_rank")) for stat in TEAM_STATS},
     }
 
 

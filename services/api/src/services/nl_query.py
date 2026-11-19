@@ -8,8 +8,10 @@ is a Cube member plus one intent — not a new gold SQL string.
 from __future__ import annotations
 
 import re
-from datetime import date
+from collections.abc import Callable
+from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from baseline_analytics.errors import CubeError
 from baseline_analytics.operations import CubeAnalytics
@@ -142,6 +144,113 @@ _STANDINGS = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+_BEST_RECORD = re.compile(r"\b(best|worst)\s+record\b", re.IGNORECASE)
+# "Who leads the league in scoring" and "who is leading the MVP race" are player
+# questions that the standings words above would otherwise answer with a team.
+_PLAYER_LEADER = re.compile(
+    r"\b("
+    r"mvp|scor(?:ing|ers?|es)|points|rebound(?:s|ing|ers?)?|assists?|blocks?|steals?|"
+    r"threes|three[\s-]*pointers?|triple[\s-]*doubles?|minutes"
+    r")\b",
+    re.IGNORECASE,
+)
+# Rules answers report what happened, never who will win: "who wins tonight,
+# Warriors or Lakers" would otherwise read "wins" as a record question.
+_PREDICTION = re.compile(
+    r"\bwho\s+(?:wins|will\s+win|is\s+going\s+to\s+win)\b"
+    r"|\bwill\b[^?.]*\bwin\b"
+    r"|\bgoing\s+to\s+win\b"
+    r"|\b(?:predict(?:ed|ions?)?|odds|favou?red|favou?rites?|spread|moneyline)\b",
+    re.IGNORECASE,
+)
+# The league's calendar: "tonight" at 10pm Pacific is still today in the East.
+_EASTERN = ZoneInfo("America/New_York")
+_MVP = re.compile(r"\bmvp\b", re.IGNORECASE)
+_INJURY = re.compile(
+    r"\b(injur(?:y|ies|ed)|hurt|questionable|day[\s-]*to[\s-]*day|out\s+(?:tonight|today)|healthy)\b",
+    re.IGNORECASE,
+)
+# "Is Curry playing tonight?" with a player is an injury question; with a team
+# ("Are the Warriors playing tonight?") it is a schedule one.
+_PLAYING_TODAY = re.compile(r"\bplay(?:s|ing)?\b[^?.]*\b(?:tonight|today)\b", re.IGNORECASE)
+_GAME_LOG = re.compile(
+    r"\b(?:last\s+(?:night|game|(?:\d{1,2}|three|five|ten)\s+games)|latest\s+game|"
+    r"most\s+recent\s+game|game\s+log|recent\s+games|yesterday)\b"
+    r"|\bhow\s+did\b[^?.]*\bplay\b",
+    re.IGNORECASE,
+)
+_LAST_N = re.compile(r"\blast\s+(\d{1,2}|three|five|ten)\s+games\b", re.IGNORECASE)
+_NUMBER_WORDS = {"three": 3, "five": 5, "ten": 10}
+_MAX_LAST_N = 10
+_SCHEDULE = re.compile(
+    r"\b(?:next\s+game|play(?:s|ing)?\s+next|next\s+opponent|upcoming\s+games?|schedule)\b"
+    r"|\bwhen\s+(?:do|does|is|are)\b[^?.]*\bplay",
+    re.IGNORECASE,
+)
+_TODAY = re.compile(r"\b(?:tonight|today)\b", re.IGNORECASE)
+# Today's slate when no team is named: "Who plays tonight?", "games on today".
+_SLATE = re.compile(r"\b(?:games?|plays?|playing|on)\b[^?.]*\b(?:tonight|today)\b", re.IGNORECASE)
+_ROSTER = re.compile(
+    r"\broster\b|\bwho\s+(?:is|are|plays?)\s+(?:on|for)\b|\bplayers\s+(?:on|for)\b", re.IGNORECASE
+)
+_TRENDING = re.compile(
+    r"\b(?:hot|hottest\s+players?|cold|coldest|trending|heating\s+up|cooling\s+off|"
+    r"on\s+fire|slump(?:ing|s)?)\b",
+    re.IGNORECASE,
+)
+_TRENDING_DOWN = re.compile(
+    r"\b(?:cold|coldest|trending\s+down|cooling\s+off|slump(?:ing|s)?)\b", re.IGNORECASE
+)
+_TREND_LABELS = {"up": "trending up", "down": "trending down", "steady": "steady"}
+# "Who leads the league in scoring", "top scorers", "which team has the best
+# defense": a ranking word plus a player or team stat.
+_LEADER_WORDS = re.compile(
+    r"\b(?:leads|leading|leaders?|top|most|best|highest|worst|lowest|fewest|fastest|slowest)\b",
+    re.IGNORECASE,
+)
+_WORST = re.compile(r"\b(?:worst|lowest|fewest|least|slowest|bottom)\b", re.IGNORECASE)
+_TEAM_WORD = re.compile(r"\bteams?\b", re.IGNORECASE)
+_LEADER_NOUNS = {"ppg": "scoring", "rpg": "rebounding", "apg": "assists"}
+# Most specific first: "points allowed" before "points", "net rating" before "offense".
+_TEAM_STAT_PATTERNS = (
+    (
+        re.compile(r"\b(?:points?\s+allowed|allows?|opponent\s+points)\b", re.IGNORECASE),
+        "opponent_points_per_game",
+    ),
+    (re.compile(r"\bnet\s+rating\b", re.IGNORECASE), "net_rating"),
+    (
+        re.compile(r"\b(?:defen[cs]e|defensive(?:\s+rating)?|drtg)\b", re.IGNORECASE),
+        "defensive_rating",
+    ),
+    (
+        re.compile(r"\b(?:offen[cs]e|offensive(?:\s+rating)?|ortg)\b", re.IGNORECASE),
+        "offensive_rating",
+    ),
+    (re.compile(r"\b(?:pace|fastest|slowest)\b", re.IGNORECASE), "pace"),
+    (
+        re.compile(r"\b(?:3\s*-?\s*point|three[\s-]*point|3pt|from\s+three)\b", re.IGNORECASE),
+        "three_point_pct",
+    ),
+    (
+        re.compile(r"\b(?:ppg|points?\s+per\s+game|scor(?:es|ing))\b", re.IGNORECASE),
+        "points_per_game",
+    ),
+)
+_TEAM_STAT_LABELS = {
+    "offensive_rating": "offensive rating",
+    "defensive_rating": "defensive rating",
+    "net_rating": "net rating",
+    "pace": "pace",
+    "points_per_game": "points per game",
+    "opponent_points_per_game": "points allowed per game",
+    "three_point_pct": "3-point percentage",
+}
+_TEAM_STATS_WORD = re.compile(r"\b(?:stats|numbers|ratings?)\b", re.IGNORECASE)
+_TEAM_SPLITS = (
+    (re.compile(r"\blast\s+(?:10|ten)\b", re.IGNORECASE), "last_10", " over the last 10 games"),
+    (re.compile(r"\b(?:at\s+home|home)\b", re.IGNORECASE), "home", " at home"),
+    (re.compile(r"\b(?:on\s+the\s+road|road|away)\b", re.IGNORECASE), "away", " on the road"),
+)
 # Checked before standings and records, which "win" and "leads" would also match.
 _STREAK = re.compile(r"\b(?:win(?:ning)?\s+streaks?|streaks?|hottest\s+teams?)\b", re.IGNORECASE)
 _WIN_STREAK_VALUE = re.compile(r"^\s*W\s*(\d+)\s*$", re.IGNORECASE)
@@ -154,6 +263,7 @@ _PAYROLL = re.compile(r"\bpayroll\b", re.IGNORECASE)
 # Lakers blown", where the noun and the participle are not adjacent.
 _BLOWN_LEADS = re.compile(
     r"\b(blown\s+leads?|blew\s+(?:a\s+|the\s+)?lead|collapses?|choked)\b"
+    r"|\b(?:blow|blows|blowing|blew)\b[^?.]*\bleads?\b"
     r"|\bleads?\b[^?.]*\bblown\b"
     r"|\bblown\b[^?.]*\bleads?\b",
     re.IGNORECASE,
@@ -181,7 +291,7 @@ _SEASON_STATS = re.compile(
     r".{0,40}\b(?:by|per|each)\s+season"
     r"|"
     r"(?:by|per|each)\s+season.{0,40}"
-    r"(?:ppg|rpg|apg|points?\s+per\s+game)"
+    r"(?:ppg|rpg|apg|points?\s+per\s+game|rebounds?\s+per\s+game|assists?\s+per\s+game)"
     r")",
     re.IGNORECASE,
 )
@@ -240,11 +350,14 @@ _CAPABILITY = (
     "I can answer back-to-back questions, player compares, "
     "team win percentage filtered by arena city, team head-to-head records, "
     "blown leads and comebacks, salary/payroll snapshots, "
-    "standings, win streaks, and per-season averages "
+    "standings, win streaks, per-season averages, injuries, the schedule, "
+    "the MVP ladder, recent games, league leaders, who's trending, team stats and rosters "
     "(e.g. Kawhi B2Bs, LeBron vs Curry, Warriors in Chicago, Blazers vs Lakers, "
     "Lakers blown leads, Celtics comebacks from 15+, "
     "Curry salary, Warriors payroll, who leads the West, longest win streak, "
-    "Curry PPG by season). "
+    "Curry PPG by season, Is Curry injured, Warriors next game, MVP ladder, "
+    "Curry last game, who leads the league in scoring, who's hot, Warriors offensive rating, "
+    "Warriors roster). "
 )
 
 _HIDDEN_ASK_KEYS = frozenset(
@@ -278,14 +391,91 @@ _COMPARE_ASK_KEYS = (
     "career_rpg",
     "career_apg",
 )
+# Order matters: the first match is the stat the answer leads with. "per game"
+# is excluded from the counting stats, or "points per game" also asks for total
+# points and "rebounds per game" for games played. Bare "rebounds" / "assists"
+# read as per game, since there are no totals for them.
 _COMPARE_STAT_PATTERNS = (
-    (re.compile(r"\b(ppg|points?\s+per\s+game)\b", re.IGNORECASE), "career_ppg"),
-    (re.compile(r"\b(rpg|rebounds?\s+per\s+game)\b", re.IGNORECASE), "career_rpg"),
-    (re.compile(r"\b(apg|assists?\s+per\s+game)\b", re.IGNORECASE), "career_apg"),
+    (
+        re.compile(r"\b(ppg|points?\s+per\s+game|scor(?:es|ing|er))\b", re.IGNORECASE),
+        "career_ppg",
+    ),
+    (re.compile(r"\b(rpg|rebound(?:s|ing)?)\b", re.IGNORECASE), "career_rpg"),
+    (re.compile(r"\b(apg|assists?)\b", re.IGNORECASE), "career_apg"),
     (re.compile(r"\b(seasons?)\b", re.IGNORECASE), "seasons_played"),
-    (re.compile(r"\b(total\s+points|points)\b", re.IGNORECASE), "total_points"),
+    (
+        re.compile(r"\b(total\s+points|points)\b(?!\s+per\s+game)", re.IGNORECASE),
+        "total_points",
+    ),
     (re.compile(r"\bteams?\b", re.IGNORECASE), "teams_played_for"),
-    (re.compile(r"\b(games?|gp)\b", re.IGNORECASE), "career_games_played"),
+    (re.compile(r"(?<!per\s)\b(games?|gp)\b", re.IGNORECASE), "career_games_played"),
+)
+_PER_GAME_COMPARE = {"career_ppg": "PPG", "career_rpg": "RPG", "career_apg": "APG"}
+_COUNT_COMPARE = {
+    "career_games_played": ("game", "games"),
+    "seasons_played": ("season", "seasons"),
+    "total_points": ("point", "points"),
+    "teams_played_for": ("team", "teams"),
+}
+# Two players and one of these, without "compare" or "vs": "Curry or LeBron,
+# who scores more?", "Is Curry better than LeBron?".
+_COMPARE_LOOSE = re.compile(r"\b(or|better|than|more|higher|fewer|less)\b", re.IGNORECASE)
+# "Better" names no stat, so it is read as scoring rather than games played.
+_BETTER = re.compile(r"\bbetter\b", re.IGNORECASE)
+# One player and one of these is a season-averages question even without "by
+# season": "How many rebounds does Curry average?", "Curry stats".
+_PLAYER_AVERAGE = re.compile(
+    r"\b(averag(?:e|es|ed|ing)|stats|numbers|stat\s+line|ppg|rpg|apg|per\s+game)\b",
+    re.IGNORECASE,
+)
+# Season averages and league leaders: the three per-game stats the season-stats cube holds.
+_SEASON_STAT_PATTERNS = (
+    (re.compile(r"\b(?:ppg|points?|scor(?:es|ing|ers?))\b", re.IGNORECASE), "ppg"),
+    (re.compile(r"\b(?:rpg|rebound(?:s|ing|ers?)?)\b", re.IGNORECASE), "rpg"),
+    (re.compile(r"\b(?:apg|assists?)\b", re.IGNORECASE), "apg"),
+)
+_SEASON_STAT_LABELS = {"ppg": "PPG", "rpg": "RPG", "apg": "APG"}
+_INJURY_ASK_KEYS = ("player_name", "team_abbreviation", "description", "update_date")
+_SCHEDULE_ASK_KEYS = ("game_date", "opponent", "location", "national_tv")
+_SLATE_ASK_KEYS = ("away_team", "home_team", "status", "national_tv")
+_MVP_ASK_KEYS = ("mvp_rank", "full_name", "team_abbreviation", "mvp_score", "games_played")
+_TREND_ASK_KEYS = (
+    "full_name",
+    "team_abbreviation",
+    "trend_direction",
+    "trend_rank",
+    "mvp_game_score_last_10",
+    "mvp_game_score_baseline",
+    "mvp_game_score_change",
+    "points_last_10",
+    "points_change",
+)
+_TEAM_STATS_ASK_KEYS = (
+    "split",
+    "games",
+    "wins",
+    "losses",
+    "net_rating",
+    "net_rating_rank",
+    "offensive_rating",
+    "offensive_rating_rank",
+    "defensive_rating",
+    "defensive_rating_rank",
+    "pace",
+    "pace_rank",
+    "points_per_game",
+    "opponent_points_per_game",
+    "three_point_pct",
+)
+_GAME_LOG_ASK_KEYS = (
+    "game_date",
+    "opponent",
+    "location",
+    "result",
+    "minutes",
+    "points",
+    "rebounds",
+    "assists",
 )
 _RECORD_ASK_KEYS = (
     "abbreviation",
@@ -392,12 +582,19 @@ def _season_label(match: re.Match[str] | None) -> str | None:
 
 
 class NaturalLanguageQueryService:
-    def __init__(self, cube: CubeAnalytics) -> None:
+    def __init__(self, cube: CubeAnalytics, today: Callable[[], date] | None = None) -> None:
         self.cube = cube
+        self._today = today or (lambda: datetime.now(_EASTERN).date())
 
     def classify(self, question: str) -> str:
         text = question.strip()
         if not text:
+            return "refuse"
+        # Before the prediction guard: "who will win MVP" is answered from the
+        # ladder, which reports a season so far, not a forecast.
+        if _MVP.search(text):
+            return "mvp"
+        if _PREDICTION.search(text):
             return "refuse"
         if _B2B.search(text):
             return "b2b"
@@ -405,8 +602,26 @@ class NaturalLanguageQueryService:
             return "season_stats"
         if _STREAK.search(text):
             return "streak"
-        if _STANDINGS.search(text):
-            return "standings"
+        if _INJURY.search(text):
+            return "injuries"
+        teams = self._extract_team_abbrs(text)
+        if teams and _ROSTER.search(text):
+            return "roster"
+        names = [] if teams else self._extract_player_names(text)
+        if names:
+            if _GAME_LOG.search(text):
+                return "game_log"
+            if _PLAYING_TODAY.search(text):
+                return "injuries"
+        if _TRENDING.search(text):
+            return "trends"
+        if _SCHEDULE.search(text) or (_TODAY.search(text) and (teams or _SLATE.search(text))):
+            return "schedule"
+        ranking = self._ranking_family(text, teams, names)
+        if ranking:
+            return ranking
+        if _STANDINGS.search(text) or _BEST_RECORD.search(text):
+            return "refuse" if _PLAYER_LEADER.search(text) else "standings"
         if _SALARY.search(text):
             return "salary"
         if _COMPARE.search(text) or _AGAINST.search(text):
@@ -417,6 +632,11 @@ class NaturalLanguageQueryService:
                 return "team_h2h"
             if _COMPARE.search(text):
                 return "compare"
+        loose = self._loose_player_family(text, teams, names)
+        if loose:
+            return loose
+        if teams and (self._team_stat(text) or _TEAM_STATS_WORD.search(text)):
+            return "team_stats"
         if _BLOWN_LEADS.search(text) or _COMEBACK.search(text):
             return "blown_leads"
         if _WIN_PCT.search(text) or (
@@ -425,6 +645,45 @@ class NaturalLanguageQueryService:
         ):
             return "arena_city"
         return "refuse"
+
+    def _ranking_family(self, text: str, teams: list[str], names: list[str]) -> str | None:
+        """League leaders or a team-stat ranking. A named player is never a
+        ranking; a named team narrows player leaders to it ("Who leads the
+        Warriors in scoring?") and makes a team stat that team's own number."""
+        ranks = _LEADER_WORDS.search(text) or _STANDINGS.search(text) or _BEST_RECORD.search(text)
+        # "Did the Lakers blow a 20-point lead?" names a lead and points, not a leader.
+        if names or not ranks or _BLOWN_LEADS.search(text) or _COMEBACK.search(text):
+            return None
+        player_stat = self._leader_stat(text)
+        team_stat = self._team_stat(text)
+        if team_stat and not teams and (_TEAM_WORD.search(text) or not player_stat):
+            return "team_rank"
+        if player_stat or _PLAYER_LEADER.search(text):
+            return "leaders"
+        return None
+
+    def _leader_stat(self, text: str) -> str | None:
+        return next((key for pattern, key in _SEASON_STAT_PATTERNS if pattern.search(text)), None)
+
+    def _team_stat(self, text: str) -> str | None:
+        return next((key for pattern, key in _TEAM_STAT_PATTERNS if pattern.search(text)), None)
+
+    def _team_split(self, text: str) -> tuple[str, str]:
+        return next(
+            ((split, label) for pattern, split, label in _TEAM_SPLITS if pattern.search(text)),
+            ("season", ""),
+        )
+
+    def _loose_player_family(self, text: str, teams: list[str], names: list[str]) -> str | None:
+        """Player questions phrased without the strict keywords. Teams are
+        excluded: a capitalised team name would otherwise read as a player."""
+        if teams:
+            return None
+        if len(names) >= 2 and _COMPARE_LOOSE.search(text):
+            return "compare"
+        if len(names) == 1 and _PLAYER_AVERAGE.search(text):
+            return "season_stats"
+        return None
 
     def answer(self, question: str, season: str | None = None) -> QueryResponse:
         text = question.strip()
@@ -450,6 +709,24 @@ class NaturalLanguageQueryService:
             return self._answer_season_stats(text)
         if family == "streak":
             return self._answer_streak(text, header_season)
+        if family == "mvp":
+            return self._answer_mvp(text, header_season)
+        if family == "leaders":
+            return self._answer_leaders(text, header_season)
+        if family == "trends":
+            return self._answer_trends(text)
+        if family == "team_stats":
+            return self._answer_team_stats(text)
+        if family == "team_rank":
+            return self._answer_team_rank(text)
+        if family == "roster":
+            return self._answer_roster(text)
+        if family == "injuries":
+            return self._answer_injuries(text)
+        if family == "game_log":
+            return self._answer_game_log(text, header_season)
+        if family == "schedule":
+            return self._answer_schedule(text, header_season)
         if family == "standings":
             return self._answer_standings(text, header_season)
         if family == "salary":
@@ -468,6 +745,535 @@ class NaturalLanguageQueryService:
             answer=f"{_CAPABILITY}Received: {text}",
             data=[],
             sql=None,
+        )
+
+    def _named_player(self, text: str) -> tuple[dict[str, Any] | None, QueryResponse | None]:
+        """The first player named, or the answer to give when there isn't one."""
+        names = self._extract_player_names(text)
+        if not names:
+            return None, None
+        player = self._resolve_player(names[0])
+        if player is None:
+            return None, QueryResponse(
+                answer=f"No player found matching '{names[0]}'.", data=[], sql=None
+            )
+        return player, None
+
+    def _named_team(self, text: str) -> tuple[dict[str, Any] | None, QueryResponse | None]:
+        """The first team named, or the answer to give when it isn't found."""
+        abbr = self._extract_team_abbr(text)
+        if abbr is None:
+            return None, None
+        team = self.cube.find_team(abbr)
+        if team is None:
+            return None, QueryResponse(
+                answer=f"No team found for abbreviation '{abbr}'.", data=[], sql=None
+            )
+        return {**team, "abbreviation": abbr}, None
+
+    def _answer_injuries(self, text: str) -> QueryResponse:
+        team, missing = self._named_team(text)
+        if missing:
+            return missing
+        if team is not None:
+            abbr = team["abbreviation"]
+            full_name = str(team["team_name"])
+            name = _short_team_name(full_name)
+            rows = self.cube.get_player_injuries(team_abbreviation=abbr)
+            value = None
+            if rows:
+                value = _plural(len(rows), "player")
+                listed = ", ".join(
+                    f"{row.get('player_name')} ({_injury_status(row)})" for row in rows
+                )
+                answer = f"The {name} have {value} on the injury report: {listed}."
+            else:
+                answer = f"No {name} players are on the injury report."
+            return QueryResponse(
+                answer=answer,
+                value=value,
+                data=self._ask_rows([_injury_row(row) for row in rows], _INJURY_ASK_KEYS),
+                sql=f"cube:player_injuries team={abbr}",
+                entities=self._entities(("team", full_name), ("topic", "Injuries")),
+                follow_ups=self._team_follow_ups(name, abbr, [f"When do the {name} play next?"]),
+                show_data=len(rows) > 1,
+            )
+        player, missing = self._named_player(text)
+        if missing:
+            return missing
+        if player is None:
+            return self._missing_team(text, "Name a team or a player to check the injury report.")
+        full_name = str(player["full_name"])
+        rows = self.cube.get_player_injuries(player_id=player["player_id"])
+        if rows:
+            row = rows[0]
+            value = _injury_status(row)
+            updated = _short_game_date(row.get("update_date"))
+            answer = f"{full_name} is on the injury report: {row.get('description') or value}" + (
+                f" (updated {updated})." if updated else "."
+            )
+        else:
+            value = None
+            answer = f"{full_name} isn't on the injury report."
+        return QueryResponse(
+            answer=answer,
+            value=value,
+            data=self._ask_rows([_injury_row(row) for row in rows[:1]], _INJURY_ASK_KEYS),
+            sql=f"cube:player_injuries player_id={player['player_id']}",
+            entities=self._entities(("player", full_name), ("topic", "Injuries")),
+            follow_ups=self._player_follow_ups(full_name, ["{} last game", "{} stats"]),
+            show_data=False,
+        )
+
+    def _answer_schedule(self, text: str, header_season: str | None = None) -> QueryResponse:
+        today = self._today()
+        season = self._resolve_season(text, header_season)
+        team, missing = self._named_team(text)
+        if missing:
+            return missing
+        if team is None:
+            if not _TODAY.search(text):
+                return self._missing_team(text, "Name a team to see its next game.")
+            return self._answer_slate(today, season)
+        abbr = team["abbreviation"]
+        full_name = str(team["team_name"])
+        name = _short_team_name(full_name)
+        rows = [
+            row
+            for row in self.cube.get_games_schedule(
+                season=season, team_abbreviation=abbr, from_date=today.isoformat(), limit=5
+            )
+            if row.get("status") != "Final"
+        ]
+        games = [_schedule_row(row, abbr) for row in rows]
+        entities = self._entities(("team", full_name), ("topic", "Schedule"))
+        follow_ups = self._team_follow_ups(
+            name, abbr, [f"Who is injured on the {name}?", f"{name} record"]
+        )
+        if not games:
+            return QueryResponse(
+                answer=f"The {name} have no games scheduled.",
+                data=[],
+                sql=f"cube:games_schedule team={abbr} from={today.isoformat()}",
+                entities=entities,
+                follow_ups=follow_ups,
+            )
+        game = games[0]
+        is_today = game["game_date"] == today.isoformat()
+        value = "tonight" if is_today else (_short_game_date(game["game_date"]) or "next")
+        when = value if is_today else f"on {value}"
+        opponent = _short_team_name(str(game["opponent"] or ""))
+        matchup = (
+            f"host the {opponent}" if game["location"] == "home" else f"play at the {opponent}"
+        )
+        tv = f" ({game['national_tv']})" if game.get("national_tv") else ""
+        if _TODAY.search(text) and not is_today:
+            answer = f"The {name} don't play today. Next, they {matchup} {when}{tv}."
+        else:
+            answer = f"The {name} {matchup} {when}{tv}."
+        return QueryResponse(
+            answer=answer,
+            value=value,
+            data=self._ask_rows(games, _SCHEDULE_ASK_KEYS),
+            sql=f"cube:games_schedule team={abbr} from={today.isoformat()}",
+            entities=entities,
+            follow_ups=follow_ups,
+            show_data=len(games) > 1,
+            highlight_row=0,
+        )
+
+    def _answer_slate(self, today: date, season: str | None) -> QueryResponse:
+        rows = self.cube.get_games_schedule(
+            season=season, from_date=today.isoformat(), to_date=today.isoformat(), limit=50
+        )
+        entities = self._entities(("topic", "Today's games"))
+        sql = f"cube:games_schedule date={today.isoformat()}"
+        if not rows:
+            return QueryResponse(
+                answer="No games are scheduled today.", data=[], sql=sql, entities=entities
+            )
+        value = _plural(len(rows), "game")
+        listed = ", ".join(
+            f"{_short_team_name(str(row.get('away_team_name') or row.get('away_team') or ''))} at "
+            f"{_short_team_name(str(row.get('home_team_name') or row.get('home_team') or ''))}"
+            + (f" ({row['national_tv']})" if row.get("national_tv") else "")
+            for row in rows
+        )
+        return QueryResponse(
+            answer=f"{value} today: {listed}.",
+            value=value,
+            data=self._ask_rows(rows, _SLATE_ASK_KEYS),
+            sql=sql,
+            entities=entities,
+        )
+
+    def _answer_mvp(self, text: str, header_season: str | None = None) -> QueryResponse:
+        season = self._resolve_season(text, header_season)
+        player, missing = (
+            (None, None) if self._extract_team_abbrs(text) else self._named_player(text)
+        )
+        if missing:
+            return missing
+        if player is not None:
+            full_name = str(player["full_name"])
+            rows = [
+                row
+                for row in self.cube.get_player_mvp_scores(player["player_id"], season)
+                if row.get("season_type") == "Regular Season"
+            ]
+            entities = self._entities(("player", full_name), ("topic", "MVP ladder"))
+            if not rows or rows[0].get("mvp_rank") is None:
+                return QueryResponse(
+                    answer=f"{full_name} has no MVP score yet.",
+                    data=[],
+                    sql=None,
+                    entities=entities,
+                )
+            row = rows[0]
+            value = f"#{row['mvp_rank']}"
+            return QueryResponse(
+                answer=(
+                    f"{full_name} is {value} on the MVP ladder "
+                    f"(MVP score {row.get('mvp_score')}, {_plural(row.get('games_played') or 0, 'game')})."
+                ),
+                value=value,
+                data=self._ask_rows(rows[:1], _MVP_ASK_KEYS),
+                sql=f"cube:player_mvp_scores player_id={player['player_id']}",
+                entities=entities,
+                follow_ups=self._player_follow_ups(full_name, ["{} stats", "{} last game"]),
+                show_data=False,
+            )
+        ladder = self.cube.get_mvp_ladder(season=season, limit=5)
+        players = ladder.get("players") or []
+        entities = self._entities(("topic", "MVP ladder"))
+        if not players:
+            return QueryResponse(
+                answer="There is no MVP ladder yet.", data=[], sql=None, entities=entities
+            )
+        leader = players[0]
+        value = str(leader.get("full_name"))
+        answer = f"{value} leads the MVP ladder (MVP score {leader.get('mvp_score')})"
+        if len(players) > 1:
+            answer += f", ahead of {players[1].get('full_name')} ({players[1].get('mvp_score')})"
+        return QueryResponse(
+            answer=answer + ".",
+            value=value,
+            data=self._ask_rows(players, _MVP_ASK_KEYS),
+            sql=f"cube:player_mvp_scores ladder season={ladder.get('season')!r}",
+            entities=entities,
+            follow_ups=self._player_follow_ups(value, ["{} MVP rank", "{} stats"]),
+            highlight_row=0,
+        )
+
+    def _answer_leaders(self, text: str, header_season: str | None = None) -> QueryResponse:
+        stat = self._leader_stat(text)
+        if stat is None:
+            return QueryResponse(
+                answer="League leaders are by points, rebounds or assists per game.",
+                data=[],
+                sql=None,
+            )
+        if self._extract_conference(text):
+            # Answering the league's leader to "who leads the West" would be wrong.
+            return QueryResponse(
+                answer="League leaders are league-wide or for one team, not by conference.",
+                data=[],
+                sql=None,
+            )
+        team, missing = self._named_team(text)
+        if missing:
+            return missing
+        abbr = team["abbreviation"] if team else None
+        team_name = str(team["team_name"]) if team else None
+        scope = f"the {_short_team_name(team_name)}" if team_name else "the league"
+        result = self.cube.get_season_leaders(
+            stat, season=self._resolve_season(text, header_season), team_abbreviation=abbr, limit=5
+        )
+        players = result.get("players") or []
+        label = _SEASON_STAT_LABELS[stat]
+        entities = self._entities(("team", team_name), ("topic", f"{label} leaders"))
+        sql = f"cube:player_season_stats leaders stat={stat} min_games={result.get('min_games')}"
+        if not players:
+            return QueryResponse(
+                answer=f"No one has played enough games to lead {scope} yet.",
+                data=[],
+                sql=sql,
+                entities=entities,
+            )
+        leader = players[0]
+        value = f"{leader.get(stat)} {label}"
+        answer = f"{leader.get('full_name')} leads {scope} in {_LEADER_NOUNS[stat]} ({value})"
+        if len(players) > 1:
+            answer += f", ahead of {players[1].get('full_name')} ({players[1].get(stat)})"
+        answer += f". Players with at least {_plural(result.get('min_games') or 0, 'game')}."
+        return QueryResponse(
+            answer=answer,
+            value=value,
+            data=self._ask_rows(players, ("full_name", "team_abbreviation", "games_played", stat)),
+            sql=sql,
+            entities=entities,
+            follow_ups=self._player_follow_ups(
+                str(leader.get("full_name")), ["{} stats", "{} last game"]
+            ),
+            highlight_row=0,
+        )
+
+    def _answer_trends(self, text: str) -> QueryResponse:
+        team, missing = self._named_team(text)
+        if missing:
+            return missing
+        abbr = team["abbreviation"] if team else None
+        player, missing = (None, None) if team else self._named_player(text)
+        if missing:
+            return missing
+        if player is not None:
+            full_name = str(player["full_name"])
+            row = self.cube.get_player_trend(player["player_id"])
+            entities = self._entities(("player", full_name), ("topic", "Trend"))
+            if not row or not row.get("is_qualified"):
+                return QueryResponse(
+                    answer=f"{full_name} doesn't have enough games for a trend yet.",
+                    data=[],
+                    sql=None,
+                    entities=entities,
+                )
+            value = _TREND_LABELS.get(str(row.get("trend_direction")), "steady")
+            return QueryResponse(
+                answer=f"{full_name} is {value}: {_trend_line(row)}.",
+                value=value,
+                data=self._ask_rows([row], _TREND_ASK_KEYS),
+                sql=f"cube:player_trends player_id={player['player_id']}",
+                entities=entities,
+                follow_ups=self._player_follow_ups(full_name, ["{} last 5 games", "{} stats"]),
+                show_data=False,
+            )
+        direction = "down" if _TRENDING_DOWN.search(text) else "up"
+        team_name = str(team["team_name"]) if team else None
+        on_team = f" on the {_short_team_name(team_name)}" if team_name else ""
+        rows = self.cube.get_trending_players(direction, team_abbreviation=abbr, limit=5)
+        entities = self._entities(("team", team_name), ("topic", f"Trending {direction}"))
+        sql = f"cube:player_trends direction={direction}" + (f" team={abbr}" if abbr else "")
+        if not rows:
+            return QueryResponse(
+                answer=f"No one{on_team} is trending {direction} yet.",
+                data=[],
+                sql=sql,
+                entities=entities,
+            )
+        leader = rows[0]
+        value = str(leader.get("full_name"))
+        answer = f"{value} is trending {direction} the most{on_team}: {_trend_line(leader)}"
+        if len(rows) > 1:
+            answer += f". Next: {rows[1].get('full_name')} ({_signed(rows[1].get('mvp_game_score_change'))})"
+        return QueryResponse(
+            answer=answer + ".",
+            value=value,
+            data=self._ask_rows(rows, _TREND_ASK_KEYS),
+            sql=sql,
+            entities=entities,
+            follow_ups=self._player_follow_ups(value, ["{} last 5 games", "{} stats"]),
+            highlight_row=0,
+        )
+
+    def _answer_team_stats(self, text: str) -> QueryResponse:
+        team, missing = self._named_team(text)
+        if missing or team is None:
+            # Routing only sends a question here when a team is named.
+            return missing or QueryResponse(answer="Name a team.", data=[], sql=None)
+        abbr = team["abbreviation"]
+        full_name = str(team["team_name"])
+        name = _short_team_name(full_name)
+        split, split_label = self._team_split(text)
+        row = self.cube.get_team_stats(str(abbr), split)
+        entities = self._entities(("team", full_name), ("topic", "Team stats"))
+        sql = f"cube:team_stat_splits team={abbr} split={split}"
+        if row is None:
+            return QueryResponse(
+                answer=f"No stats for the {name}{split_label} yet.",
+                data=[],
+                sql=sql,
+                entities=entities,
+            )
+        follow_ups = self._team_follow_ups(
+            name, str(abbr), [f"{name} record", f"Who is on the {name} roster?"]
+        )
+        stat = self._team_stat(text)
+        if stat:
+            label = _TEAM_STAT_LABELS[stat]
+            if row.get(stat) is None:
+                return QueryResponse(
+                    answer=f"The {name} have no {label}{split_label} yet.",
+                    data=[],
+                    sql=sql,
+                    entities=entities,
+                )
+            value = _team_stat_value(stat, row[stat])
+            answer = (
+                f"The {_possessive(name)} {label}{split_label} is {value}"
+                f"{_rank_phrase(row.get(f'{stat}_rank'), row.get('team_count'))}."
+            )
+        else:
+            shown = [
+                key
+                for key in (
+                    "net_rating",
+                    "offensive_rating",
+                    "defensive_rating",
+                    "pace",
+                    "points_per_game",
+                )
+                if row.get(key) is not None
+            ]
+            if not shown:
+                return QueryResponse(
+                    answer=f"No stats for the {name}{split_label} yet.",
+                    data=[],
+                    sql=sql,
+                    entities=entities,
+                )
+            value = _team_stat_value(shown[0], row[shown[0]])
+            parts = [
+                f"{_TEAM_STAT_LABELS[key]} {_team_stat_value(key, row[key])}"
+                + _rank_phrase(row.get(f"{key}_rank"), row.get("team_count"), short=True)
+                for key in shown
+            ]
+            answer = f"The {name}{split_label}: " + ", ".join(parts) + "."
+        return QueryResponse(
+            answer=answer,
+            value=value,
+            data=self._ask_rows([row], _TEAM_STATS_ASK_KEYS),
+            sql=sql,
+            entities=entities,
+            follow_ups=follow_ups,
+            show_data=False,
+        )
+
+    def _answer_team_rank(self, text: str) -> QueryResponse:
+        # Routing sends a question here only when a team stat matched.
+        stat = self._team_stat(text) or "net_rating"
+        split, split_label = self._team_split(text)
+        worst = bool(_WORST.search(text))
+        rows = self.cube.get_team_stat_ranking(stat, split, worst=worst, limit=5)
+        label = _TEAM_STAT_LABELS[stat]
+        entities = self._entities(("topic", f"{label[0].upper()}{label[1:]} ranking"))
+        sql = f"cube:team_stat_splits rank={stat} split={split}" + (" worst" if worst else "")
+        if not rows:
+            return QueryResponse(answer="No team stats yet.", data=[], sql=sql, entities=entities)
+        top = rows[0]
+        name = _short_team_name(str(top.get("team_name") or ""))
+        value = _team_stat_value(stat, top.get(stat))
+        answer = (
+            f"The {name} rank{_rank_phrase(top.get(f'{stat}_rank'), top.get('team_count'), bare=True)}"
+            f" in {label}{split_label} ({value})."
+        )
+        return QueryResponse(
+            answer=answer,
+            value=value,
+            data=self._ask_rows(rows, ("abbreviation", "team_name", stat, f"{stat}_rank")),
+            sql=sql,
+            entities=entities,
+            follow_ups=self._team_follow_ups(
+                name, str(top.get("abbreviation") or ""), [f"{name} stats"]
+            ),
+            highlight_row=0,
+        )
+
+    def _answer_roster(self, text: str) -> QueryResponse:
+        team, missing = self._named_team(text)
+        if missing or team is None:
+            # Routing only sends a question here when a team is named.
+            return missing or QueryResponse(answer="Name a team.", data=[], sql=None)
+        abbr = team["abbreviation"]
+        full_name = str(team["team_name"])
+        name = _short_team_name(full_name)
+        rows = self.cube.get_team_roster(str(abbr))
+        entities = self._entities(("team", full_name), ("topic", "Roster"))
+        sql = f"cube:players roster team={abbr}"
+        if not rows:
+            return QueryResponse(
+                answer=f"No players are listed on the {name} roster.",
+                data=[],
+                sql=sql,
+                entities=entities,
+            )
+        value = _plural(len(rows), "player")
+        listed = ", ".join(str(row.get("full_name")) for row in rows)
+        return QueryResponse(
+            answer=f"The {name} have {value} on the roster: {listed}.",
+            value=value,
+            data=self._ask_rows(rows, ("full_name", "position")),
+            sql=sql,
+            entities=entities,
+            follow_ups=self._team_follow_ups(
+                name, str(abbr), [f"Who is injured on the {name}?", f"{name} stats"]
+            ),
+        )
+
+    def _answer_game_log(self, text: str, header_season: str | None = None) -> QueryResponse:
+        player, missing = self._named_player(text)
+        if missing:
+            return missing
+        if player is None:
+            return QueryResponse(
+                answer="Could not identify a player for the game question.", data=[], sql=None
+            )
+        full_name = str(player["full_name"])
+        season = self._resolve_season(text, header_season)
+        # Games played only: a DNP is a log row with no minutes, not a game.
+        logs = sorted(
+            (
+                _game_log_row(row)
+                for row in self.cube.get_player_game_log(player["player_id"], season)
+            ),
+            key=lambda row: str(row["game_date"] or ""),
+            reverse=True,
+        )
+        played = [row for row in logs if (row["minutes"] or 0) > 0]
+        count_match = _LAST_N.search(text)
+        wanted = 1
+        if count_match:
+            token = count_match.group(1).lower()
+            wanted = max(1, min(_MAX_LAST_N, _NUMBER_WORDS.get(token) or int(token)))
+        games = played[:wanted]
+        entities = self._entities(("player", full_name), ("topic", "Game log"))
+        follow_ups = self._player_follow_ups(full_name, ["{} stats", "Is {} injured?"])
+        sql = f"cube:player_game_logs player_id={player['player_id']} season={season!r}"
+        if not games:
+            return QueryResponse(
+                answer=f"No games yet for {full_name}.", data=[], sql=sql, entities=entities
+            )
+        if wanted == 1:
+            game = games[0]
+            value = _plural(game["points"] or 0, "point")
+            result = "win" if game["result"] == "W" else "loss"
+            where = "vs" if game["location"] == "home" else "at"
+            day = _short_game_date(game["game_date"])
+            answer = (
+                f"{full_name} had {value}, {_plural(game['rebounds'] or 0, 'rebound')} and "
+                f"{_plural(game['assists'] or 0, 'assist')} in a {result} {where} {game['opponent']}"
+                + (f" on {day}" if day else "")
+                + f" ({_plural(game['minutes'] or 0, 'minute')})."
+            )
+        else:
+            n = len(games)
+            averages = {
+                key: round(sum(game[key] or 0 for game in games) / n, 1)
+                for key in ("points", "rebounds", "assists")
+            }
+            wins = sum(1 for game in games if game["result"] == "W")
+            value = f"{averages['points']} PPG"
+            answer = (
+                f"{full_name} averaged {value}, {averages['rebounds']} RPG and "
+                f"{averages['assists']} APG over the last {_plural(n, 'game')} ({wins}-{n - wins})."
+            )
+        return QueryResponse(
+            answer=answer,
+            value=value,
+            data=self._ask_rows(games, _GAME_LOG_ASK_KEYS),
+            sql=sql,
+            entities=entities,
+            follow_ups=follow_ups,
+            show_data=len(games) > 1,
         )
 
     def _resolve_player(self, name: str) -> dict[str, Any] | None:
@@ -675,16 +1481,13 @@ class NaturalLanguageQueryService:
     ) -> list[dict[str, Any]]:
         return [self._ask_row(row, keys) for row in rows]
 
-    def _compare_ask_keys(self, question: str) -> tuple[str, ...]:
+    def _compare_stats(self, question: str) -> list[str]:
+        """The compare stats the question names, in pattern order."""
         selected: list[str] = []
-        seen: set[str] = set()
         for pattern, key in _COMPARE_STAT_PATTERNS:
-            if pattern.search(question) and key not in seen:
+            if pattern.search(question) and key not in selected:
                 selected.append(key)
-                seen.add(key)
-        if not selected:
-            return _COMPARE_ASK_KEYS
-        return ("full_name", *selected)
+        return selected
 
     def _answer_back_to_backs(
         self, question: str, header_season: str | None = None
@@ -773,17 +1576,31 @@ class NaturalLanguageQueryService:
                 data=[],
                 sql=None,
             )
+        # The stats the question names; none named ("Curry stats") means all three.
+        stats = [key for pattern, key in _SEASON_STAT_PATTERNS if pattern.search(question)]
+        stats = stats or list(_SEASON_STAT_LABELS)
         latest = rows[-1]
-        answer = (
-            f"{player['full_name']} PPG by season: "
-            + ", ".join(
-                f"{row.get('season')} {row.get('ppg')}" for row in rows if row.get("season")
-            )
-            + f" (latest {latest.get('season')}: {latest.get('ppg')} PPG)."
-        )
-        value = f"{latest.get('ppg')} PPG"
-        labeled = [{**row, "full_name": player["full_name"]} for row in rows]
         name = player["full_name"]
+        stats = [key for key in stats if latest.get(key) is not None]
+        if not stats:
+            return QueryResponse(answer=f"No averages yet for {name}.", data=[], sql=None)
+        figures = [f"{latest.get(key)} {_SEASON_STAT_LABELS[key]}" for key in stats]
+        value = figures[0] if len(figures) == 1 else ", ".join(figures[:-1]) + f" and {figures[-1]}"
+        if _SEASON_STATS.search(question) and len(stats) == 1:
+            key = stats[0]
+            label = _SEASON_STAT_LABELS[key]
+            answer = (
+                f"{name} {label} by season: "
+                + ", ".join(
+                    f"{row.get('season')} {row.get(key)}" for row in rows if row.get("season")
+                )
+                + f" (latest {latest.get('season')}: {value})."
+            )
+        else:
+            games = latest.get("games_played")
+            game_label = f", {_plural(games, 'game')}" if games else ""
+            answer = f"{name} averages {value} ({latest.get('season')}{game_label})."
+        labeled = [{**row, "full_name": name} for row in rows]
         return QueryResponse(
             answer=answer,
             value=value,
@@ -814,7 +1631,16 @@ class NaturalLanguageQueryService:
                 )
             resolved.append(player)
         ids = [p["player_id"] for p in resolved]
-        compare_keys = self._compare_ask_keys(question)
+        selected = self._compare_stats(question)
+        compare_keys = ("full_name", *selected) if selected else _COMPARE_ASK_KEYS
+        # The stat the answer leads with: the first one named, else scoring for
+        # "better", else games played.
+        if selected:
+            primary = selected[0]
+        elif _BETTER.search(question):
+            primary = "career_ppg"
+        else:
+            primary = "career_games_played"
         stat_keys = [key for key in compare_keys if key != "full_name"]
         rows = self.cube.compare_players(ids, stats=stat_keys)
         if len(rows) < 2:
@@ -823,25 +1649,16 @@ class NaturalLanguageQueryService:
                 data=rows,
                 sql=None,
             )
-        leader = rows[0]
-        runner = rows[1]
-        leader_games = int(leader.get("career_games_played") or 0)
-        runner_games = int(runner.get("career_games_played") or 0)
-        diff = leader_games - runner_games
-        value = None
-        if leader_games == 0:
-            answer = f"No games yet this season for {leader['full_name']} or {runner['full_name']}."
-        elif diff == 0:
-            answer = (
-                f"{leader['full_name']} and {runner['full_name']} have played "
-                f"the same number of games ({leader_games})."
-            )
-        else:
-            value = f"{diff} more games"
-            answer = (
-                f"{leader['full_name']} has played {value} "
-                f"({leader_games}) than {runner['full_name']} ({runner_games})."
-            )
+        # Highest first; a player with no figure sorts last.
+        rows = sorted(
+            rows,
+            key=lambda row: (
+                row.get(primary) is None,
+                -float(row.get(primary) or 0),
+                str(row.get("full_name") or ""),
+            ),
+        )
+        answer, value = self._compare_sentence(rows[0], rows[1], primary)
         names = [str(row["full_name"]) for row in rows]
         follow_ups: list[str] = []
         for name in names[:2]:
@@ -850,12 +1667,41 @@ class NaturalLanguageQueryService:
             answer=answer,
             value=value,
             data=self._ask_rows(rows, compare_keys),
-            sql="cube:players compare ordered by career_games_played",
+            sql=f"cube:players compare ordered by {primary}",
             entities=self._entities(
                 *(("player", name) for name in names), ("topic", "Season compare")
             ),
             follow_ups=follow_ups,
         )
+
+    def _compare_sentence(
+        self, leader: dict[str, Any], runner: dict[str, Any], primary: str
+    ) -> tuple[str, str | None]:
+        lead_name, run_name = leader["full_name"], runner["full_name"]
+        lead_value, run_value = leader.get(primary), runner.get(primary)
+        if not lead_value:
+            return f"No games yet this season for {lead_name} or {run_name}.", None
+        if primary in _PER_GAME_COMPARE:
+            label = _PER_GAME_COMPARE[primary]
+            value = f"{lead_value} {label}"
+            if run_value is None:
+                return f"{lead_name} averages {value}; {run_name} has no games yet.", value
+            if lead_value == run_value:
+                return f"{lead_name} and {run_name} both average {value}.", value
+            return f"{lead_name} averages {value}, ahead of {run_name} ({run_value}).", value
+        singular, plural = _COUNT_COMPARE[primary]
+        lead_count, run_count = int(lead_value), int(run_value or 0)
+        diff = lead_count - run_count
+        if diff == 0:
+            verb = (
+                "played the same number of"
+                if primary == "career_games_played"
+                else "the same number of"
+            )
+            return f"{lead_name} and {run_name} have {verb} {plural} ({lead_count}).", None
+        value = f"{diff} more {singular if diff == 1 else plural}"
+        verb = "has played" if primary == "career_games_played" else "has"
+        return f"{lead_name} {verb} {value} ({lead_count}) than {run_name} ({run_count}).", value
 
     def _answer_team_record(self, question: str, header_season: str | None = None) -> QueryResponse:
         abbr = self._extract_team_abbr(question)
@@ -1181,24 +2027,44 @@ class NaturalLanguageQueryService:
                 data=[],
                 sql=None,
             )
-        leader = min(
-            rows,
-            key=lambda row: (
-                int(row.get("conference_rank") or 99),
-                str(row.get("team_name") or ""),
-            ),
-        )
-        conf_label = conference or leader.get("conference") or "league"
+        best_worst = _BEST_RECORD.search(question)
+        worst = bool(best_worst and best_worst.group(1).lower() == "worst")
+        if conference and not best_worst:
+            leader = min(
+                rows,
+                key=lambda row: (
+                    int(row.get("conference_rank") or 99),
+                    str(row.get("team_name") or ""),
+                ),
+            )
+        else:
+            # With no conference named, conference_rank says nothing about the
+            # league: both #1 seeds have it. Rank by record instead.
+            def by_record(row: dict[str, Any]) -> tuple[float, int, str]:
+                pct = float(row.get("win_pct") or 0.0)
+                return (
+                    pct if worst else -pct,
+                    int(row.get("conference_rank") or 99),
+                    str(row.get("team_name") or ""),
+                )
+
+            leader = min(rows, key=by_record)
         leader_name = _short_team_name(str(leader.get("team_name") or ""))
-        answer = (
-            f"The {leader_name} lead the {conf_label} "
-            f"({leader.get('wins')}-{leader.get('losses')})."
-        )
+        record = f"({leader.get('wins')}-{leader.get('losses')})"
+        where = f"the {conference}" if conference else "the league"
+        if best_worst:
+            answer = f"The {leader_name} have the {'worst' if worst else 'best'} record in {where} {record}."
+        elif conference:
+            answer = f"The {leader_name} lead the {conference} {record}."
+        else:
+            answer = f"The {leader_name} have the best record in the league {record}."
         leader_abbr = str(leader.get("abbreviation") or "")
         follow_ups = self._team_follow_ups(leader_name, leader_abbr, [f"{leader_name} record"])
         if conference:
             other = "East" if conference == "West" else "West"
             follow_ups.append(f"Who leads the {other}?")
+        else:
+            follow_ups += ["Who leads the West?", "Who leads the East?"]
         return QueryResponse(
             answer=answer,
             value=f"The {leader_name}",
@@ -1387,6 +2253,93 @@ class NaturalLanguageQueryService:
             follow_ups=follow_ups,
             show_data=False,
         )
+
+
+def _plural(count: float, word: str) -> str:
+    number = int(count) if float(count).is_integer() else count
+    return f"{number} {word}{'' if number == 1 else 's'}"
+
+
+def _ordinal(rank: int) -> str:
+    suffix = "th" if 10 <= rank % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(rank % 10, "th")
+    return f"{rank}{suffix}"
+
+
+def _rank_phrase(rank: Any, count: Any, *, short: bool = False, bare: bool = False) -> str:
+    """ ", 1st of 30" / " (1st)" / " 1st of 30"; empty without a rank."""
+    if rank is None:
+        return ""
+    of = f" of {count}" if count else ""
+    if short:
+        return f" ({_ordinal(int(rank))})"
+    return f"{'' if bare else ','} {_ordinal(int(rank))}{of}"
+
+
+def _signed(value: Any) -> str:
+    return "n/a" if value is None else f"{float(value):+.1f}"
+
+
+def _team_stat_value(stat: str, value: Any) -> str:
+    if value is None:
+        return "n/a"
+    number = float(value)
+    if stat == "three_point_pct":
+        return f"{number * 100:.1f}%"
+    if stat == "net_rating":
+        return f"{number:+.1f}"
+    return f"{number:.1f}"
+
+
+def _trend_line(row: dict[str, Any]) -> str:
+    return (
+        f"MVP game score {row.get('mvp_game_score_last_10')} over the last 10 games, "
+        f"{_signed(row.get('mvp_game_score_change'))} on the games before "
+        f"({row.get('mvp_game_score_baseline')})"
+    )
+
+
+def _to_number(value: Any) -> float | None:
+    """Cube returns game log and schedule numbers as strings."""
+    if value is None or value == "":
+        return None
+    try:
+        number = float(value)
+    except TypeError, ValueError:
+        return None
+    return int(number) if number.is_integer() else number
+
+
+def _injury_status(row: dict[str, Any]) -> str:
+    """ "Out (Ankle) - Left ankle sprain" -> "Out"."""
+    description = str(row.get("description") or "").strip()
+    return description.split(" (")[0].split(" - ")[0].strip() or "listed"
+
+
+def _injury_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {**row, "update_date": str(row.get("update_date") or "")[:10] or None}
+
+
+def _schedule_row(row: dict[str, Any], abbr: str) -> dict[str, Any]:
+    home = str(row.get("home_team") or "").upper() == abbr
+    return {
+        "game_date": str(row.get("game_date") or "")[:10] or None,
+        "opponent": row.get("away_team_name" if home else "home_team_name"),
+        "location": "home" if home else "away",
+        "national_tv": row.get("national_tv"),
+    }
+
+
+def _game_log_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "game_date": str(row.get("game_date") or "")[:10] or None,
+        "opponent": row.get("opponent"),
+        "location": row.get("location"),
+        "result": row.get("result"),
+        "minutes": _to_number(row.get("minutes")),
+        "points": _to_number(row.get("points")),
+        "rebounds": _to_number(row.get("rebounds")),
+        "assists": _to_number(row.get("assists")),
+    }
 
 
 def _extract_flow_margin(question: str) -> int | None:

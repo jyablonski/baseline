@@ -1,0 +1,115 @@
+cubes:
+  - name: team_stat_splits
+    sql_table: gold.fct_team_stat_splits
+    description: >
+      Each team's ratings, pace, scoring and shooting for the current Regular Season
+      in four splits (season, last_10, home, away), with league ranks within the
+      split (1 = best; pace ranks fastest first and has no better direction). Ratings
+      are per 100 possessions and cover games_with_possessions games, which can be
+      fewer than games.
+
+    joins:
+      - name: teams
+        sql: "{CUBE}.team_id = {teams}.team_id"
+        relationship: many_to_one
+
+    dimensions:
+      - name: id
+        sql: "CAST(team_id AS VARCHAR) || '-' || split"
+        type: string
+        primary_key: true
+        public: true
+
+      - name: team_id
+        sql: team_id
+        type: string
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: split
+        sql: split
+        type: string
+        description: season, last_10, home or away
+
+      - name: games
+        sql: games
+        type: number
+
+      - name: wins
+        sql: wins
+        type: number
+
+      - name: losses
+        sql: losses
+        type: number
+
+      - name: games_with_possessions
+        sql: games_with_possessions
+        type: number
+
+      - name: team_count
+        sql: team_count
+        type: number
+        description: Teams ranked in this split
+
+      - name: offensive_rating
+        sql: offensive_rating
+        type: number
+
+      - name: offensive_rating_rank
+        sql: offensive_rating_rank
+        type: number
+
+      - name: defensive_rating
+        sql: defensive_rating
+        type: number
+
+      - name: defensive_rating_rank
+        sql: defensive_rating_rank
+        type: number
+
+      - name: net_rating
+        sql: net_rating
+        type: number
+
+      - name: net_rating_rank
+        sql: net_rating_rank
+        type: number
+
+      - name: pace
+        sql: pace
+        type: number
+
+      - name: pace_rank
+        sql: pace_rank
+        type: number
+
+      - name: points_per_game
+        sql: points_per_game
+        type: number
+
+      - name: points_per_game_rank
+        sql: points_per_game_rank
+        type: number
+
+      - name: opponent_points_per_game
+        sql: opponent_points_per_game
+        type: number
+
+      - name: opponent_points_per_game_rank
+        sql: opponent_points_per_game_rank
+        type: number
+
+      - name: three_point_pct
+        sql: three_point_pct
+        type: number
+
+      - name: three_point_pct_rank
+        sql: three_point_pct_rank
+        type: number
+
+    measures:
+      - name: count
+        type: count

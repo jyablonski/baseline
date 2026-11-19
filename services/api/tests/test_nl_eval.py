@@ -222,6 +222,91 @@ class FakeCubeAnalytics:
     def get_player_game_log(self, player_id: str, season: str | None = None) -> list[dict]:
         return [{"player_id": player_id, "points": 30, "season": season}]
 
+    def get_mvp_ladder(self, season: str | None = None, limit: int | None = None) -> dict:
+        return {
+            "season": season or "2025-26",
+            "players": [
+                {
+                    "mvp_rank": 1,
+                    "full_name": "Stephen Curry",
+                    "mvp_score": 30.1,
+                    "games_played": 40,
+                },
+                {"mvp_rank": 2, "full_name": "LeBron James", "mvp_score": 28.4, "games_played": 38},
+            ],
+        }
+
+    def get_season_leaders(self, stat: str = "ppg", **kwargs) -> dict:
+        return {
+            "min_games": 30,
+            "players": [
+                {
+                    "full_name": "Stephen Curry",
+                    "team_abbreviation": "GSW",
+                    "games_played": 40,
+                    stat: 30.1,
+                },
+                {
+                    "full_name": "LeBron James",
+                    "team_abbreviation": "LAL",
+                    "games_played": 38,
+                    stat: 27.0,
+                },
+            ],
+        }
+
+    def get_trending_players(self, direction: str = "up", **kwargs) -> list[dict]:
+        return [
+            {
+                "full_name": "Stephen Curry",
+                "trend_direction": direction,
+                "mvp_game_score_last_10": 28.1,
+                "mvp_game_score_baseline": 22.6,
+                "mvp_game_score_change": 5.5 if direction == "up" else -5.5,
+            }
+        ]
+
+    def get_player_trend(self, player_id: str) -> dict | None:
+        if str(player_id) != PLAYER_CURRY:
+            return {"is_qualified": False}
+        return {"is_qualified": True, **self.get_trending_players()[0]}
+
+    def get_team_stats(self, team_abbreviation: str, split: str = "season") -> dict | None:
+        if self.find_team(team_abbreviation) is None:
+            return None
+        return {
+            "split": split,
+            "team_count": 30,
+            "net_rating": 5.2,
+            "net_rating_rank": 4,
+            "offensive_rating": 118.0,
+            "offensive_rating_rank": 3,
+            "defensive_rating": None,
+            "points_per_game": 116.4,
+            "points_per_game_rank": 6,
+        }
+
+    def get_team_stat_ranking(self, stat: str, split: str = "season", **kwargs) -> list[dict]:
+        return [
+            {
+                "abbreviation": "OKC",
+                "team_name": "Oklahoma City Thunder",
+                stat: 105.2,
+                f"{stat}_rank": 1,
+                "team_count": 30,
+            }
+        ]
+
+    def get_team_roster(self, team_abbreviation: str) -> list[dict]:
+        return [{"full_name": "Stephen Curry", "position": "Point Guard"}]
+
+    def get_player_mvp_scores(self, player_id: str, season: str | None = None) -> list[dict]:
+        if str(player_id) != PLAYER_CURRY:
+            return []
+        return [
+            {"mvp_rank": 1, "season_type": "Regular Season", "mvp_score": 30.1, "games_played": 40}
+        ]
+
     def get_career_stats(self, player_id: str) -> dict | None:
         return self.get_player(player_id)
 
@@ -1295,3 +1380,334 @@ def test_player_follow_ups_use_the_shortest_name_that_reads_back() -> None:
     assert engine._player_follow_ups("Anthony Edwards", ["{} salary"]) == ["Anthony Edwards salary"]
     # "Seth Curry" reads back as Stephen, so there is no safe follow-up.
     assert engine._player_follow_ups("Seth Curry", ["{} salary"]) == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Who wins tonight, Warriors or Lakers?",
+        "Who will win Warriors vs Lakers?",
+        "Will the Warriors win tonight?",
+        "Are the Lakers going to win?",
+        "Warriors odds tonight",
+        "Who is favored, Celtics or Lakers?",
+    ],
+)
+def test_prediction_questions_are_refused(question: str) -> None:
+    """Rules answers report what happened; "wins" must not become a record answer."""
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.classify(question) == "refuse"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Who leads the league in scoring?",
+        "Who leads the West in rebounds?",
+        "Who has the best record in assists?",
+    ],
+)
+def test_player_leader_questions_are_not_standings(question: str) -> None:
+    """ "leads" / "leading the" are standings words; a player stat makes it a
+    player leaders question, never a team's standing."""
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.classify(question) == "leaders"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Who has the best record?",
+        "Best record in the West",
+        "Who has the worst record?",
+        "Who leads the league?",
+    ],
+)
+def test_best_and_worst_record_are_standings(question: str) -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.classify(question) == "standings"
+
+
+@pytest.mark.unit
+def test_wins_and_leads_still_route_without_a_prediction_or_player_stat() -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.classify("Who leads the West?") == "standings"
+    assert engine.classify("Warriors record at home") == "arena_city"
+    assert engine.classify("Warriors wins in Chicago") == "arena_city"
+    assert engine.classify("Which team has the longest win streak?") == "streak"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Who has more points per game, Curry or LeBron?",
+        "Is Curry better than LeBron?",
+        "Curry or LeBron, who scores more?",
+        "Who averages more assists, LeBron or Curry?",
+    ],
+)
+def test_two_players_without_compare_keywords_are_a_compare(question: str) -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.classify(question) == "compare"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "question",
+    [
+        "How many rebounds does Curry average?",
+        "Curry stats",
+        "What is Kawhi averaging?",
+        "Kawhi assists per game",
+    ],
+)
+def test_one_player_and_an_average_is_season_stats(question: str) -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.classify(question) == "season_stats"
+
+
+@pytest.mark.unit
+def test_team_names_never_read_as_loose_player_questions() -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.classify("Who has more wins, Warriors or Lakers?") == "arena_city"
+    assert engine.classify("Warriors stats") == "team_stats"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "question",
+    ["Did the Warriors blow any leads?", "Did the Lakers blow a 20-point lead?"],
+)
+def test_blow_a_lead_is_the_flow_family(question: str) -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.classify(question) == "blown_leads"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("question", "stats"),
+    [
+        ("Compare LeBron vs Curry rebounds per game", ["career_rpg"]),
+        ("Compare LeBron vs Curry points per game", ["career_ppg"]),
+        ("Compare LeBron vs Curry total points", ["total_points"]),
+        ("Compare LeBron vs Curry games", ["career_games_played"]),
+    ],
+)
+def test_per_game_does_not_also_ask_for_a_count(question: str, stats: list[str]) -> None:
+    """ "per game" once also matched games played, and "points per game" total points."""
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine._compare_stats(question) == stats
+
+
+@pytest.mark.unit
+def test_compare_answer_leads_with_the_asked_stat() -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    ppg = engine.answer("Compare LeBron vs Curry PPG")
+    assert ppg.answer == "LeBron James averages 27.1 PPG, ahead of Stephen Curry (24.3)."
+    assert ppg.value == "27.1 PPG"
+    # Ordered by the asked stat, not games played.
+    rpg = engine.answer("Who has more rebounds, Curry or LeBron?")
+    assert rpg.value == "7.5 RPG"
+    assert [row["full_name"] for row in rpg.data] == ["LeBron James", "Stephen Curry"]
+
+
+@pytest.mark.unit
+def test_compare_sentence_ties_and_missing_figures() -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    lebron = {"full_name": "LeBron James", "career_ppg": 25.0, "teams_played_for": 1}
+    curry = {"full_name": "Stephen Curry", "career_ppg": 25.0, "teams_played_for": 1}
+    assert engine._compare_sentence(lebron, curry, "career_ppg") == (
+        "LeBron James and Stephen Curry both average 25.0 PPG.",
+        "25.0 PPG",
+    )
+    assert engine._compare_sentence(lebron, {**curry, "career_ppg": None}, "career_ppg") == (
+        "LeBron James averages 25.0 PPG; Stephen Curry has no games yet.",
+        "25.0 PPG",
+    )
+    assert engine._compare_sentence(lebron, curry, "teams_played_for") == (
+        "LeBron James and Stephen Curry have the same number of teams (1).",
+        None,
+    )
+    assert engine._compare_sentence(
+        {**lebron, "teams_played_for": 2}, curry, "teams_played_for"
+    ) == (
+        "LeBron James has 1 more team (2) than Stephen Curry (1).",
+        "1 more team",
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("question", "family"),
+    [
+        ("Is Curry injured?", "injuries"),
+        ("Who is hurt on the Lakers?", "injuries"),
+        ("Is Kawhi questionable?", "injuries"),
+        # A player playing tonight is an injury question; a team, the schedule.
+        ("Is Curry playing tonight?", "injuries"),
+        ("Are the Warriors playing tonight?", "schedule"),
+        ("When do the Warriors play next?", "schedule"),
+        ("Lakers next game", "schedule"),
+        ("Celtics schedule", "schedule"),
+        ("Who plays tonight?", "schedule"),
+        ("What games are on today?", "schedule"),
+        ("Who is leading the MVP race?", "mvp"),
+        ("Curry MVP rank", "mvp"),
+        # The ladder reports the season so far; it is not a game prediction.
+        ("Who will win MVP?", "mvp"),
+        ("How did Curry play last night?", "game_log"),
+        ("Kawhi last 5 games", "game_log"),
+        ("LeBron game log", "game_log"),
+        # Team questions about last night aren't a player's game log.
+        ("How did the Warriors play last night?", "refuse"),
+        ("Who leads the West today?", "standings"),
+    ],
+)
+def test_tier_three_routing(question: str, family: str) -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.classify(question) == family
+
+
+@pytest.mark.unit
+def test_injuries_and_schedule_need_a_name() -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.answer("Who is injured?").answer == (
+        "Name a team or a player to check the injury report."
+    )
+    assert engine.answer("When is the next game?").answer == "Name a team to see its next game."
+
+
+@pytest.mark.unit
+def test_game_log_skips_games_not_played_and_caps_the_count() -> None:
+    class _LogCube(_AllTeamsCube):
+        def get_player_game_log(self, player_id: str, season: str | None = None) -> list[dict]:
+            played = [
+                {
+                    "game_date": f"2025-11-{day:02d}",
+                    "opponent": "BOS",
+                    "location": "home",
+                    "result": "W",
+                    "minutes": "30",
+                    "points": "20",
+                    "rebounds": "5",
+                    "assists": "5",
+                }
+                for day in range(1, 15)
+            ]
+            dnp = {"game_date": "2025-11-20", "minutes": "0", "points": "0"}
+            return [dnp, *played]
+
+    engine = NaturalLanguageQueryService(_LogCube())
+    last = engine.answer("Curry last game")
+    assert last.data[0]["game_date"] == "2025-11-14"
+    assert engine.answer("Curry last 25 games").answer.endswith("over the last 10 games (10-0).")
+
+
+@pytest.mark.unit
+def test_mvp_answers_without_a_score() -> None:
+    class _NoMvpCube(_AllTeamsCube):
+        def get_mvp_ladder(self, season: str | None = None, limit: int | None = None) -> dict:
+            return {"season": None, "players": []}
+
+    engine = NaturalLanguageQueryService(_NoMvpCube())
+    assert engine.answer("Who is the MVP?").answer == "There is no MVP ladder yet."
+    assert engine.answer("LeBron MVP rank").answer == "LeBron James has no MVP score yet."
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("question", "family"),
+    [
+        ("Who leads the league in scoring?", "leaders"),
+        ("Who scores the most points per game?", "leaders"),
+        ("Top rebounders", "leaders"),
+        ("Who leads the Warriors in assists?", "leaders"),
+        ("Who's hot?", "trends"),
+        ("Who is in a slump?", "trends"),
+        ("Is Curry trending up?", "trends"),
+        ("Who is hot on the Lakers?", "trends"),
+        ("Warriors offensive rating", "team_stats"),
+        ("Lakers pace at home", "team_stats"),
+        ("Celtics points allowed", "team_stats"),
+        ("Which team has the best defense?", "team_rank"),
+        ("Which team scores the most?", "team_rank"),
+        ("Fastest pace", "team_rank"),
+        ("Who is on the Lakers roster?", "roster"),
+        ("Who plays for the Celtics?", "roster"),
+        # Near misses that keep their old families.
+        ("Did the Lakers blow a 20-point lead?", "blown_leads"),
+        ("Lakers blown leads of 20 points", "blown_leads"),
+        ("Which team has the hottest streak?", "streak"),
+        ("Who has the best record?", "standings"),
+        ("Who leads the West?", "standings"),
+        ("Curry points per game", "season_stats"),
+        ("Who is injured on the Lakers?", "injuries"),
+        ("Who plays tonight?", "schedule"),
+    ],
+)
+def test_tier_four_routing(question: str, family: str) -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.classify(question) == family
+
+
+@pytest.mark.unit
+def test_tier_four_answers_read_the_operations() -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    leaders = engine.answer("Who leads the league in assists?")
+    assert leaders.answer == (
+        "Stephen Curry leads the league in assists (30.1 APG), ahead of LeBron James (27.0)."
+        " Players with at least 30 games."
+    )
+    assert engine.answer("Who leads the league in steals?").answer == (
+        "League leaders are by points, rebounds or assists per game."
+    )
+    cold = engine.answer("Who is cold?")
+    assert cold.answer.startswith("Stephen Curry is trending down the most: ")
+    assert "-5.5 on the games before" in cold.answer
+    assert engine.answer("Is LeBron trending?").answer == (
+        "LeBron James doesn't have enough games for a trend yet."
+    )
+    # A stat the split has no value for says so rather than printing "None".
+    assert engine.answer("Warriors defensive rating").answer == (
+        "The Warriors have no defensive rating yet."
+    )
+    assert engine.answer("Warriors stats at home").answer == (
+        "The Warriors at home: net rating +5.2 (4th), offensive rating 118.0 (3rd),"
+        " points per game 116.4 (6th)."
+    )
+    assert engine.classify("Which team has the best 3-point percentage?") == "team_rank"
+    assert engine.answer("Who is on the Warriors roster?").value == "1 player"
+
+
+@pytest.mark.unit
+def test_team_stat_values_read_as_the_pages_do() -> None:
+    from services.nl_query import _team_stat_value
+
+    assert _team_stat_value("three_point_pct", 0.417) == "41.7%"
+    assert _team_stat_value("net_rating", -3.25) == "-3.2"
+    assert _team_stat_value("net_rating", 4) == "+4.0"
+    assert _team_stat_value("pace", 99.04) == "99.0"
+    assert _team_stat_value("pace", None) == "n/a"
+
+
+@pytest.mark.unit
+def test_ordinals() -> None:
+    from services.nl_query import _ordinal
+
+    assert [_ordinal(n) for n in (1, 2, 3, 4, 11, 12, 13, 21, 22, 101, 111)] == [
+        "1st",
+        "2nd",
+        "3rd",
+        "4th",
+        "11th",
+        "12th",
+        "13th",
+        "21st",
+        "22nd",
+        "101st",
+        "111th",
+    ]
