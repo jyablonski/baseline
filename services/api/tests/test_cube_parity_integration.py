@@ -8,27 +8,19 @@ the model in services/cube, and fails when they disagree.
 
 from __future__ import annotations
 
-import re
-import time
-import urllib.error
-import urllib.request
 from collections.abc import Iterator
 from uuid import UUID
 
 import pytest
-from baseline_analytics import CubeAnalytics, CubeClient
-from conftest import POSTGRES_NETWORK_ALIAS
+from baseline_analytics import CubeAnalytics
 from sqlalchemy.orm import Session, sessionmaker
 
 from repositories.players import PlayersRepository
 from repositories.standings import StandingsRepository
 from repositories.teams import TeamsRepository
-from testing.postgres_tc import POSTGRES_DB, POSTGRES_PASSWORD, POSTGRES_USER, REPO_ROOT
 
 pytestmark = pytest.mark.integration
 
-CUBE_DIR = REPO_ROOT / "services" / "cube"
-CUBE_SECRET = "parity-test-secret"
 SEASON = "2024-25"
 TEAMS = {
     "GSW": UUID("7bf8726a-a852-452d-b81f-14839127c5fb"),
@@ -39,57 +31,6 @@ PLAYERS = {
     "Stephen Curry": UUID("00000000-0000-4000-8000-000000000101"),
     "Kawhi Leonard": UUID("00000000-0000-4000-8000-000000000102"),
 }
-
-
-def _cube_image() -> str:
-    """The image services/cube builds on, so the test follows a version bump."""
-    dockerfile = (CUBE_DIR / "Dockerfile").read_text(encoding="utf-8")
-    match = re.search(r"^FROM (cubejs/cube:\S+)", dockerfile, re.MULTILINE)
-    assert match, "services/cube/Dockerfile no longer starts from cubejs/cube"
-    return match.group(1)
-
-
-def _wait_until_ready(base_url: str, timeout: float = 120.0) -> None:
-    deadline = time.monotonic() + timeout
-    while True:
-        try:
-            with urllib.request.urlopen(f"{base_url}/readyz", timeout=5) as response:
-                if response.status == 200:
-                    return
-        except urllib.error.URLError, OSError:
-            pass
-        if time.monotonic() > deadline:
-            raise TimeoutError(f"Cube did not become ready at {base_url}")
-        time.sleep(1)
-
-
-@pytest.fixture(scope="module")
-def cube(postgres_engine, postgres_network) -> Iterator[CubeAnalytics]:
-    from testcontainers.core.container import DockerContainer
-
-    container = (
-        DockerContainer(_cube_image())
-        .with_network(postgres_network)
-        .with_env("CUBEJS_DB_TYPE", "postgres")
-        .with_env("CUBEJS_DB_HOST", POSTGRES_NETWORK_ALIAS)
-        .with_env("CUBEJS_DB_PORT", "5432")
-        .with_env("CUBEJS_DB_NAME", POSTGRES_DB)
-        .with_env("CUBEJS_DB_USER", POSTGRES_USER)
-        .with_env("CUBEJS_DB_PASS", POSTGRES_PASSWORD)
-        .with_env("CUBEJS_API_SECRET", CUBE_SECRET)
-        .with_env("CUBEJS_DEV_MODE", "true")
-        # The model as it is on disk, not as it was in the last built image.
-        .with_volume_mapping(str(CUBE_DIR / "model"), "/cube/conf/model", "ro")
-        .with_volume_mapping(str(CUBE_DIR / "cube.js"), "/cube/conf/cube.js", "ro")
-        .with_exposed_ports(4000)
-    )
-    container.start()
-    try:
-        base_url = f"http://{container.get_container_host_ip()}:{container.get_exposed_port(4000)}"
-        _wait_until_ready(base_url)
-        yield CubeAnalytics(CubeClient(base_url, CUBE_SECRET, timeout=60))
-    finally:
-        container.stop()
 
 
 @pytest.fixture

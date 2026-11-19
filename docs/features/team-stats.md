@@ -26,7 +26,7 @@ related:
 
 ## Surfaces
 
-REST only: `GET /api/v1/teams/{id}/stats` (Overview tiles and the Stats tab) and the three ratings on `GET /api/v1/standings` (the standings tables show Net). The roster tab's per-player numbers come from `fct_player_game_logs` directly (`GET /api/v1/teams/{id}/roster`).
+REST: `GET /api/v1/teams/{id}/stats` (Overview tiles and the Stats tab) and the three ratings on `GET /api/v1/standings` (the standings tables show Net). Cube `team_stat_splits` serves the same mart, with ratings, pace, scoring and 3-point percentage and their ranks, to Ask ("Warriors offensive rating", "Which team has the best defense?") and MCP's `query_cube`; there is no named MCP tool for it. The roster tab's per-player numbers come from `fct_player_game_logs` directly (`GET /api/v1/teams/{id}/roster`).
 
 ## Invariants
 

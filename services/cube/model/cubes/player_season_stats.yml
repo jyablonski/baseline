@@ -51,6 +51,11 @@ cubes:
       - name: count
         type: count
 
+      # The leaders qualifier is relative to the most games anyone has played.
+      - name: max_games_played
+        sql: games_played
+        type: max
+
       - name: avg_ppg
         sql: ppg
         type: avg

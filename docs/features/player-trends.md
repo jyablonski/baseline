@@ -36,7 +36,7 @@ The API folds the wide columns into a `stats` list (`trend_from_row` in `queries
 - `GET /api/v1/players/{player_id}/trend`: `data` is null until the player qualifies; 404 only for an unknown player.
 - `GET /api/v1/teams/{team_id}/trends`: qualified players whose `dim_players.team_id` is the team, biggest riser first; empty until any qualify.
 - Each stat: `{stat, last_10, baseline, season, change, z, changed, games}`.
-- Not in Cube, MCP or Ask.
+- Cube `player_trends` over the same mart, for Ask ("Who's hot?", "Is Curry trending up?") and MCP's `query_cube`. Ask reads qualified rows only, like the routes: an unqualified player gets "doesn't have enough games for a trend yet". There is no named MCP tool for it.
 
 ## Knobs
 

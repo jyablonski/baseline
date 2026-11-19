@@ -7,6 +7,7 @@ Every suite runs from the repo root through `make`. `make test` runs all of them
 | `make test-lib`          | Shared Cube client, operations, named tools  | no                           |
 | `make test-api`          | FastAPI routers, repositories, services      | for `integration` tests only |
 | `make test-parity`       | Only the API-vs-Cube parity checks           | yes                          |
+| `make test-ask-eval`     | Only the Ask answer eval                     | yes                          |
 | `make test-scraper`      | Basketball-Reference / odds / Reddit parsers | for `integration` tests only |
 | `make test-migrate`      | Alembic revision chain, `upgrade head`       | for `integration` tests only |
 | `make test-mcp`          | FastMCP server wiring over the shared tools  | no                           |
@@ -45,9 +46,15 @@ It is deliberately not an installed dependency. It is test-only and must never r
 
 The pages read `gold` with SQL; Ask, Chat and MCP read it through Cube. Four families are defined on both sides: standings, team records, player season averages, and back-to-backs. `services/api/tests/test_cube_parity_integration.py` runs both against the same seeded Postgres and fails when a number differs.
 
-It starts a real Cube container beside the Testcontainers Postgres, on a shared Docker network, using the image version from `services/cube/Dockerfile` and the model mounted from `services/cube/model`. So it also catches a cube YAML that no longer compiles or no longer matches the gold columns. It is an ordinary `integration` test: `make test-api` runs it, CI runs it in the `api` job of the `python` matrix, and it skips without Docker. `make test-parity` runs it alone.
+It starts a real Cube container (the session-scoped `cube` fixture in `services/api/tests/conftest.py`) beside the Testcontainers Postgres, on a shared Docker network, using the image version from `services/cube/Dockerfile` and the model mounted from `services/cube/model`. So it also catches a cube YAML that no longer compiles or no longer matches the gold columns. It is an ordinary `integration` test: `make test-api` runs it, CI runs it in the `api` job of the `python` matrix, and it skips without Docker. `make test-parity` runs it alone.
 
 When adding a metric that both a page and a Cube operation report, add a case there. The gold tables in this fixture are hand-written (`testing/analytics_integration.sql`), not built by dbt, so logic that lives in a dbt model is covered by the dbt e2e below, not here.
+
+## Ask answer eval
+
+`services/api/tests/test_nl_answers_integration.py` asks Ask's rules engine real questions over the same real Cube and seeded gold, and checks the answers. `test_nl_eval.py` covers routing against a fake Cube, so it can't tell when an answer is wrong; this file can. Each case is a question with its expected family, `value`, `entities`, the asked row (`highlight_row`, plus a few of its numbers) and phrases the sentence must contain. It never compares the whole sentence, so rewording an answer doesn't break it. Expected values are worked out by hand from `testing/analytics_integration_seed.sql`, never copied from a run. Cases pass the seed's season (`2024-25`) as the request season, because Cube operations default to the current one. The seed dates injuries and upcoming games from Postgres `CURRENT_DATE`, which is UTC in the container, so the eval sets the engine's "today" from the database rather than the clock, and schedule cases compute their expected dates from it.
+
+It shares the parity checks' Cube container, runs in `make test-api` and the CI `api` job, and skips without Docker. `make test-ask-eval` runs it alone. When adding or changing a rules family, add cases here; if a case needs rows the seed lacks, add them to the shared seed and keep the other integration suites green. It covers the rules backend only: the LLM path is off ([0006](decisions/0006-ask-rules-backend-default.md)), and a model eval would be scheduled and scored by pass rate, not a PR gate.
 
 ## dbt
 

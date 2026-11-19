@@ -1,6 +1,6 @@
 .PHONY: up down stop logs \
 	test test-api test-scraper test-mcp test-cube test-ml test-frontend test-frontend-e2e test-dbt \
-	test-migrate test-lib test-parity \
+	test-migrate test-lib test-parity test-ask-eval \
 	build build-multiarch ensure-buildx-builder remove-buildx-builder sync db-migrate migrate \
 	pipeline-status pipeline-enable pipeline-disable scrape dbt ml ml-train ml-snapshot ml-eval ml-backfill refresh \
 	refresh-daily-once seed-demo seed-demo-clean \
@@ -426,6 +426,9 @@ test-api: ## API tests with coverage (Testcontainers suites skip without Docker)
 
 test-parity: ## Only the API-vs-Cube parity checks (real Cube container; also part of test-api)
 	cd services/api && uv sync --group dev && uv run pytest tests/test_cube_parity_integration.py --no-cov
+
+test-ask-eval: ## Only the Ask answer eval: questions through the rules engine and a real Cube (also part of test-api)
+	cd services/api && uv sync --group dev && uv run pytest tests/test_nl_answers_integration.py --no-cov
 
 test-scraper: ## Scraper tests with coverage (Testcontainers suites skip without Docker)
 	cd services/scraper && uv sync --group dev && uv run pytest

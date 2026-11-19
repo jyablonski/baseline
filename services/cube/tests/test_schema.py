@@ -43,6 +43,8 @@ def test_cube_and_view_names() -> None:
             "teams",
             "team_games",
             "player_season_stats",
+            "player_trends",
+            "team_stat_splits",
             "player_contracts",
             "team_payroll",
             "games_schedule",

@@ -842,3 +842,123 @@ def test_team_flow_defaults_to_the_ten_point_measures() -> None:
     assert (flow["min_margin"], flow["blown_leads"]) == (10, 0)
     assert "comeback_games" not in flow
     assert len(client.queries) == 2
+
+
+@pytest.mark.unit
+def test_season_leaders_qualify_on_seventy_percent_of_the_most_games() -> None:
+    client = ScriptedCubeClient(
+        [
+            [{"max_games_played": "20"}],
+            [
+                {
+                    "player_id": str(PLAYER_CURRY),
+                    "full_name": "Stephen Curry",
+                    "abbreviation": "GSW",
+                    "games_played": "18",
+                    "ppg": "30.1",
+                }
+            ],
+        ]
+    )
+    result = CubeAnalytics(client).get_season_leaders(
+        "PPG", season="2025-26", team_abbreviation="gsw"
+    )
+
+    assert result["min_games"] == 14
+    assert result["players"][0]["ppg"] == 30.1
+    assert result["players"][0]["games_played"] == 18
+    max_query, leaders_query = client.queries
+    assert {"member": "teams.abbreviation", "operator": "equals", "values": ["GSW"]} in max_query[
+        "filters"
+    ]
+    assert {
+        "member": "player_season_stats.games_played",
+        "operator": "gte",
+        "values": ["14"],
+    } in leaders_query["filters"]
+    assert next(iter(leaders_query["order"])) == "player_season_stats.ppg"
+
+
+@pytest.mark.unit
+def test_season_leaders_without_games_and_unknown_stats() -> None:
+    analytics = CubeAnalytics(ScriptedCubeClient([[{"max_games_played": None}]]))
+    assert analytics.get_season_leaders("rpg", season="2025-26")["players"] == []
+    with pytest.raises(ValueError, match="stat must be one of"):
+        analytics.get_season_leaders("blocks")
+
+
+@pytest.mark.unit
+def test_trends_filter_qualified_rows_and_order_by_direction() -> None:
+    row = {
+        "player_id": str(PLAYER_CURRY),
+        "full_name": "Stephen Curry",
+        "is_qualified": "true",
+        "trend_direction": "up",
+        "trend_rank": "1",
+        "mvp_game_score_change": "5.5",
+    }
+    client = ScriptedCubeClient([[row], [], [row], []])
+    analytics = CubeAnalytics(client)
+
+    up = analytics.get_trending_players("up", team_abbreviation="gsw")
+    assert up[0]["is_qualified"] is True
+    assert up[0]["trend_rank"] == 1
+    assert up[0]["mvp_game_score_change"] == 5.5
+    assert analytics.get_trending_players("down") == []
+    assert analytics.get_player_trend(PLAYER_CURRY)["full_name"] == "Stephen Curry"
+    assert analytics.get_player_trend(PLAYER_LEBRON) is None
+
+    up_query, down_query = client.queries[:2]
+    assert {
+        "member": "player_trends.is_qualified",
+        "operator": "equals",
+        "values": ["true"],
+    } in up_query["filters"]
+    assert up_query["order"] == {"player_trends.trend_rank": "asc"}
+    assert down_query["order"] == {"player_trends.trend_rank": "desc"}
+    with pytest.raises(ValueError, match="direction"):
+        analytics.get_trending_players("sideways")
+
+
+@pytest.mark.unit
+def test_team_stats_ranking_and_roster() -> None:
+    stats = {
+        "team_id": str(TEAM_GSW),
+        "abbreviation": "GSW",
+        "split": "season",
+        "games": "20",
+        "team_count": "30",
+        "offensive_rating": "118.2",
+        "offensive_rating_rank": "3",
+    }
+    client = ScriptedCubeClient(
+        [
+            [stats],
+            [],
+            [stats],
+            [{"player_id": str(PLAYER_CURRY), "full_name": "Stephen Curry", "abbreviation": "GSW"}],
+        ]
+    )
+    analytics = CubeAnalytics(client)
+
+    row = analytics.get_team_stats("gsw")
+    assert row is not None
+    assert row["offensive_rating"] == 118.2
+    assert row["offensive_rating_rank"] == 3
+    assert row["team_count"] == 30
+    assert analytics.get_team_stats("GSW", "last_10") is None
+    ranked = analytics.get_team_stat_ranking("offensive_rating", worst=True)
+    assert ranked[0]["abbreviation"] == "GSW"
+    assert analytics.get_team_roster("GSW")[0]["full_name"] == "Stephen Curry"
+
+    ranking_query = client.queries[2]
+    assert ranking_query["order"] == {
+        "team_stat_splits.offensive_rating_rank": "desc",
+        "teams.team_name": "asc",
+    }
+    with pytest.raises(ValueError, match="split"):
+        analytics.get_team_stats("GSW", "playoffs")
+    with pytest.raises(ValueError, match="stat"):
+        analytics.get_team_stat_ranking("blocks")
+    with pytest.raises(ValueError, match="split"):
+        analytics.get_team_stat_ranking("pace", split="playoffs")
