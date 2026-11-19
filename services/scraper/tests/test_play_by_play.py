@@ -234,15 +234,19 @@ FOULS_PBP_HTML = """
     <td>Technical foul by <a href="/players/d/doncilu01.html">L. Dončić</a></td>
     <td></td><td>110-114</td><td></td><td></td>
   </tr>
+  <tr>
+    <td>0:20.0</td><td></td><td></td><td>110-114</td><td></td>
+    <td>Rescinded technical foul by <a href="/players/d/doncilu01.html">L. Dončić</a></td>
+  </tr>
 </tbody></table>
 """
 
 
 @pytest.mark.unit
 def test_fouls_are_credited_to_the_foulers_team() -> None:
-    """BRef files personal / shooting / take / flagrant fouls in the fouled
-    team's column, and offensive / loose-ball / technical fouls in the
-    fouler's. Away is LAL, home is CHA."""
+    """BRef files personal / shooting / take / flagrant fouls and rescinded
+    technicals in the opponent's column, and offensive / loose-ball / technical
+    fouls in the fouler's. Away is LAL, home is CHA."""
     rows = parse_play_by_play_html(
         FOULS_PBP_HTML,
         game_id=uuid4(),
@@ -256,6 +260,7 @@ def test_fouls_are_credited_to_the_foulers_team() -> None:
         ("vandeja01", "LAL"),
         ("doncilu01", "LAL"),
         ("willizi02", "LAL"),
+        ("doncilu01", "LAL"),
         ("doncilu01", "LAL"),
     ]
 
