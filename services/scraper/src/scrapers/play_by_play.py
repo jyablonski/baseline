@@ -102,6 +102,8 @@ def _linked_identity(row: Tag) -> tuple[list[tuple[str, str]], str | None]:
 
 _DRAWN_FOUL_RE = re.compile(r"\bfoul(?: type \d)? by .+\(\s*drawn by", re.IGNORECASE)
 _FOULER_COLUMN_FOULS = ("offensive", "loose ball")
+# Opponent's column even without a "drawn by" player.
+_OPPONENT_COLUMN_FOULS = ("personal take foul by", "rescinded technical foul by")
 
 
 def _filed_under_fouled_team(description: str) -> bool:
@@ -110,10 +112,12 @@ def _filed_under_fouled_team(description: str) -> bool:
     Checked against a season of rows: personal, shooting, take, flagrant and
     away-from-play fouls sit with the team that drew them; offensive and
     loose-ball fouls, and technicals (no "drawn by"), sit with the fouler's.
-    A rescinded technical sits with the opponent, like the free throw it cancels.
+    A take foul sits with the fouled team even when it names no one who drew
+    it, and a rescinded technical with the opponent, like the free throw it
+    cancels.
     """
     text = description.strip().lower()
-    if text.startswith("rescinded technical foul by"):
+    if text.startswith(_OPPONENT_COLUMN_FOULS):
         return True
     return bool(_DRAWN_FOUL_RE.search(text)) and not text.startswith(_FOULER_COLUMN_FOULS)
 

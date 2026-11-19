@@ -238,6 +238,10 @@ FOULS_PBP_HTML = """
     <td>0:20.0</td><td></td><td></td><td>110-114</td><td></td>
     <td>Rescinded technical foul by <a href="/players/d/doncilu01.html">L. Dončić</a></td>
   </tr>
+  <tr>
+    <td>0:10.0</td><td></td><td></td><td>110-114</td><td></td>
+    <td>Personal take foul by <a href="/players/d/doncilu01.html">L. Dončić</a></td>
+  </tr>
 </tbody></table>
 """
 
@@ -260,6 +264,7 @@ def test_fouls_are_credited_to_the_foulers_team() -> None:
         ("vandeja01", "LAL"),
         ("doncilu01", "LAL"),
         ("willizi02", "LAL"),
+        ("doncilu01", "LAL"),
         ("doncilu01", "LAL"),
         ("doncilu01", "LAL"),
     ]
