@@ -110,8 +110,11 @@ def _filed_under_fouled_team(description: str) -> bool:
     Checked against a season of rows: personal, shooting, take, flagrant and
     away-from-play fouls sit with the team that drew them; offensive and
     loose-ball fouls, and technicals (no "drawn by"), sit with the fouler's.
+    A rescinded technical sits with the opponent, like the free throw it cancels.
     """
     text = description.strip().lower()
+    if text.startswith("rescinded technical foul by"):
+        return True
     return bool(_DRAWN_FOUL_RE.search(text)) and not text.startswith(_FOULER_COLUMN_FOULS)
 
 

@@ -37,7 +37,12 @@ PLAYER_DIRECTORY_TABLE_ID = "players"
 
 
 def team_roster_url(bref_abbreviation: str, season: str | None = None) -> str:
-    year = season_start_year(season or current_season())
+    """BRef names a team-season page for the season's *ending* year: 2026-27 -> 2027.
+
+    The start year is last season's page, whose roster lists last season's
+    teams and none of this season's rookies.
+    """
+    year = season_start_year(season or current_season()) + 1
     return f"{BREF_BASE_URL}/teams/{bref_abbreviation.upper()}/{year}.html"
 
 

@@ -12,6 +12,7 @@ from scrapers.players import (
     parse_roster_html,
     player_directory_url,
     player_profile_url,
+    team_roster_url,
 )
 from scrapers.teams import scrape_teams
 
@@ -42,6 +43,12 @@ def test_scrape_teams_uses_repo_catalog(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr("scrapers.teams.get_session", lambda: _session(session))
     monkeypatch.setattr("scrapers.teams.seed_team_catalog", lambda _session: 30)
     assert scrape_teams() == 30
+
+
+@pytest.mark.unit
+def test_team_roster_url_is_the_seasons_ending_year() -> None:
+    """2026-27 is BRef's 2027 page; the 2026 page is last season's roster."""
+    assert team_roster_url("SAS", "2026-27").endswith("/teams/SAS/2027.html")
 
 
 @pytest.mark.unit
