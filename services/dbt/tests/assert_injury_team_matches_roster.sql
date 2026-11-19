@@ -1,12 +1,15 @@
--- An injured player's team on the injury report must be his team on
+-- An active player's team on the injury report must be his team on
 -- dim_players. The two come from separate Basketball-Reference pages, so a
--- mismatch means one of them put him on the wrong roster.
+-- mismatch means one of them put him on the wrong roster. Inactive players
+-- are left out: the report keeps listing a waived player under the team that
+-- waived him for days after no roster lists him.
 with injuries as (
     select * from {{ ref('fct_player_injuries') }}
 ),
 
 players as (
     select * from {{ ref('dim_players') }}
+    where is_active
 )
 
 select
