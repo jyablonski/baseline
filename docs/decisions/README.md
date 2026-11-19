@@ -14,3 +14,4 @@ Each record has a status (`Accepted`, or `Superseded by NNNN`), the date it was 
 | [0006](0006-ask-rules-backend-default.md)    | Ask runs on the rules backend; the LLM path stays off                                                |
 | [0007](0007-trends-against-earlier-games.md) | Player trends compare the last 10 with the games before them                                         |
 | [0008](0008-trend-baseline-and-noise.md)     | Trends compare with the previous 20 games this season, and count a change only past the usual swings |
+| [0009](0009-active-means-on-a-roster.md)     | A player is active, and on a team, only as a current roster says                                     |

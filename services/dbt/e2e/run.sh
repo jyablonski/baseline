@@ -307,7 +307,8 @@ BEGIN
   -- so every one is checked against answers worked out by hand from seed.sql.
   -- Margins are the winner's (half, q4); a dash is a period with no scoring.
   --   10/22: GSW trailed 2-5 in Q1 (LAC blew 3), then an 11-0 run; nothing
-  --     was scored in Q2 or Q3.
+  --     was scored in Q2 or Q3, and a Q4 stretch reaches the 120-110 final
+  --     with GSW up 10.
   --   10/23: CHI never led. Wire to wire, one tie, LAC's closing 4-0.
   --   10/25: GSW led by 12 in Q2 and LAC trailed 9 entering Q4. The 14-2 GSW
   --     run beats LAC's 11-0 by net margin.
@@ -330,7 +331,7 @@ BEGIN
   INTO flow_check
   FROM gold.fct_game_flow;
   IF flow_check IS DISTINCT FROM
-       '2024-10-22 LAC@GSW blown=3 by=LAC back=GSW q=1 half=- q4=- changes=0 ties=2 ot=0 final=4 w2w=false run=GSW 11-0 max=8/3'
+       '2024-10-22 LAC@GSW blown=3 by=LAC back=GSW q=1 half=- q4=- changes=0 ties=2 ot=0 final=4 w2w=false run=GSW 11-0 max=10/3'
        ' | 2024-10-23 LAC@CHI blown=0 by=- back=- q=- half=3 q4=- changes=0 ties=1 ot=0 final=4 w2w=true run=LAC 4-0 max=0/7'
        ' | 2024-10-25 GSW@LAC blown=12 by=GSW back=LAC q=2 half=-10 q4=-9 changes=2 ties=1 ot=0 final=4 w2w=false run=GSW 14-2 max=5/12'
        ' | 2025-04-20 LAC@GSW blown=2 by=LAC back=GSW q=4 half=- q4=0 changes=4 ties=2 ot=1 final=5 w2w=false run=LAC 5-0 max=3/2'

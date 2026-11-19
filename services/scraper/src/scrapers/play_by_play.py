@@ -100,6 +100,21 @@ def _linked_identity(row: Tag) -> tuple[list[tuple[str, str]], str | None]:
     return players, team_abbreviation
 
 
+_DRAWN_FOUL_RE = re.compile(r"\bfoul(?: type \d)? by .+\(\s*drawn by", re.IGNORECASE)
+_FOULER_COLUMN_FOULS = ("offensive", "loose ball")
+
+
+def _filed_under_fouled_team(description: str) -> bool:
+    """Whether BRef put this foul in the fouled team's column, not the fouler's.
+
+    Checked against a season of rows: personal, shooting, take, flagrant and
+    away-from-play fouls sit with the team that drew them; offensive and
+    loose-ball fouls, and technicals (no "drawn by"), sit with the fouler's.
+    """
+    text = description.strip().lower()
+    return bool(_DRAWN_FOUL_RE.search(text)) and not text.startswith(_FOULER_COLUMN_FOULS)
+
+
 def _live_score(value: str | None) -> tuple[int | None, int | None]:
     match = re.fullmatch(r"\s*(\d+)\s*-\s*(\d+)\s*", value or "")
     if not match:
@@ -148,6 +163,12 @@ def parse_play_by_play_html(
                 if cell.get_text(" ", strip=True) and candidate_team:
                     team = candidate_team
                     break
+            if team and _filed_under_fouled_team(description):
+                team = (
+                    home_bref_abbreviation
+                    if team == away_bref_abbreviation
+                    else away_bref_abbreviation
+                )
             score_home, score_away = _live_score(
                 cells[3].get_text(" ", strip=True) if len(cells) >= 4 else None
             )
@@ -388,14 +409,14 @@ def scrape_play_by_play(
                     player_external_id = raw.pop("player_external_id", None)
                     player_name = raw.pop("player_name", None)
                     if player_external_id and player_name:
+                        # No team_id: a row's column is only an inference of the
+                        # actor's team, and the roster scrape owns players.team_id.
                         raw["player_id"] = ensure_player(
                             session,
                             provider=BREF_PROVIDER,
                             external_id=player_external_id,
                             full_name=player_name,
                             source_url=play_by_play_url(external_id),
-                            team_id=team_id,
-                            is_active=True,
                         )
                     secondary_external_id = raw.pop("secondary_player_external_id", None)
                     secondary_name = raw.pop("secondary_player_name", None)
@@ -408,7 +429,6 @@ def scrape_play_by_play(
                             external_id=secondary_external_id,
                             full_name=secondary_name,
                             source_url=play_by_play_url(external_id),
-                            is_active=True,
                         )
                     row = map_play_by_play_action(
                         raw, game_id=game.game_id, season=game.season, scraped_at=stamp

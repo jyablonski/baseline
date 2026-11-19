@@ -28,7 +28,7 @@ sources:
           - name: score_away
             description: Away score after the action; null on rows where it is not shown.
           - name: team_id
-            description: Team credited with the action (Baseline team UUID).
+            description: Team credited with the action (Baseline team UUID). For a foul, the fouler's team; Basketball-Reference files personal, shooting, take, flagrant and away-from-play fouls in the fouled team's column, and the scraper swaps them back. Rows scraped before that swap still carry the fouled team.
           - name: player_id
             description: Primary player (Baseline player UUID).
           - name: secondary_player_id

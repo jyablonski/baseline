@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
 from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any
@@ -15,7 +16,7 @@ from identity import (
     is_abbreviated_player_name,
     seed_team_catalog,
 )
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from db import get_session
 from models import Player, PlayerExternalId
@@ -134,7 +135,6 @@ def parse_roster_html(html: str, *, team_id: Any, source_url: str) -> list[dict[
                 "last_name": last or first,
                 "full_name": name,
                 "player_name_normalized": normalize_player_name(name),
-                "is_active": True,
                 "jersey_number": _cell_text(row, "number"),
                 "position": _cell_text(row, "pos"),
                 "height": _cell_text(row, "height"),
@@ -196,14 +196,20 @@ def scrape_players(
     from catalog.teams import TEAM_CATALOG
 
     all_rows: list[dict[str, Any]] = []
+    incomplete_teams: list[str] = []
     for entry in TEAM_CATALOG:
         url = team_roster_url(entry.bref_abbreviation, target_season)
         try:
-            all_rows.extend(parse_roster_html(fetch(url), team_id=entry.team_id, source_url=url))
+            team_rows = parse_roster_html(fetch(url), team_id=entry.team_id, source_url=url)
         except BrefRateLimitedError:
             raise
         except Exception:
             logger.exception("BRef roster scrape failed for %s", url)
+            incomplete_teams.append(entry.bref_abbreviation)
+            continue
+        if not team_rows:
+            incomplete_teams.append(entry.bref_abbreviation)
+        all_rows.extend(team_rows)
 
     directory_names: dict[str, str] = {}
     for letter in sorted({row["external_id"][0] for row in all_rows if row.get("external_id")}):
@@ -289,6 +295,7 @@ def scrape_players(
     )
 
     written = 0
+    roster_player_ids: set[uuid.UUID] = set()
     with get_session() as session:
         seed_team_catalog(session, scraped_at=scraped_at)
         for external_id in existing_abbreviated:
@@ -314,13 +321,14 @@ def scrape_players(
                 full_name=row.pop("full_name"),
                 source_url=row.pop("source_url"),
                 team_id=row.pop("team_id"),
-                is_active=row.pop("is_active"),
+                from_roster=True,
                 metadata={
                     key: value
                     for key, value in row.items()
                     if key not in {"first_name", "last_name"}
                 },
             )
+            roster_player_ids.add(player_id)
             player = session.get(Player, player_id)
             if player is None:
                 continue
@@ -329,6 +337,23 @@ def scrape_players(
                     setattr(player, key, value)
             player.scraped_at = scraped_at
             written += 1
+        # Active means on a current roster, so a player no team lists (waived,
+        # unsigned) goes inactive. Only after every page loaded with players:
+        # one failed page would otherwise bench that whole team.
+        if target_season == current_season():
+            if incomplete_teams:
+                logger.warning(
+                    "Roster scrape incomplete for %s; leaving is_active unchanged",
+                    ", ".join(incomplete_teams),
+                )
+            else:
+                benched = session.execute(
+                    update(Player)
+                    .where(Player.is_active.is_(True), Player.player_id.not_in(roster_player_ids))
+                    .values(is_active=False, scraped_at=scraped_at)
+                    .returning(Player.player_id)
+                ).all()
+                logger.info("Marked %s players on no roster inactive", len(benched))
     logger.info("Upserted %s BRef roster players for %s", written, target_season)
     return written
 

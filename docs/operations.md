@@ -29,13 +29,13 @@ make refresh             # scrape → dbt → ml
 
 `enabled` is the master switch. `season_active` gates the NBA steps only. Both are also switches on the `/admin` Settings tab (`PUT /api/v1/admin/pipeline`), which change only that one column and record who flipped it in `reason`; the season window, scrape mode, and target season stay CLI-only:
 
-|                             | NBA steps                                                         | Contracts | Transactions | Reddit  |
-| --------------------------- | ----------------------------------------------------------------- | --------- | ------------ | ------- |
-| `enabled` + `season_active` | slate, Finals logs, their PBP, standings, injuries, odds if keyed | yes       | yes          | yes     |
-| `enabled` only              | skipped                                                           | yes       | yes          | yes     |
-| not `enabled`               | skipped                                                           | skipped   | skipped      | skipped |
+|                             | NBA steps                                                         | Rosters + contracts | Transactions | Reddit  |
+| --------------------------- | ----------------------------------------------------------------- | ------------------- | ------------ | ------- |
+| `enabled` + `season_active` | slate, Finals logs, their PBP, standings, injuries, odds if keyed | yes                 | yes          | yes     |
+| `enabled` only              | skipped                                                           | yes                 | yes          | yes     |
+| not `enabled`               | skipped                                                           | skipped             | skipped      | skipped |
 
-Contracts, transactions, and Reddit are not season-gated. Roster and payroll movement peaks in the offseason — free agency, trades, extensions — so gating those on `season_active` staled the data exactly when it changed fastest.
+Rosters, contracts, transactions, and Reddit are not season-gated. Roster and payroll movement peaks in the offseason — free agency, trades, extensions — so gating those on `season_active` staled the data exactly when it changed fastest. The roster scrape (30 team pages) runs just before contracts: it alone sets each player's team and whether he is active ([0009](decisions/0009-active-means-on-a-roster.md)).
 
 `FORCE=1` bypasses both. A skipped run exits 0 and does **not** run dbt.
 
@@ -74,7 +74,7 @@ Each stage posts to Slack at most once, and a failed stage stops the ones after 
 - **Catch-up gave up** — silent on every hourly attempt. The last one (`FINAL_HOUR_UTC`, default 21, matching the cron) posts once if last night's games are still missing data, listing each game and what it lacks. A dbt or ml failure in a catch-up run alerts as it does in the refresh.
 - **Scrape succeeded but a source is degraded** — one post when any source attempted this run has been unhealthy `SOURCE_ALERT_STREAK` runs in a row. When the scrape also failed, these lines ride along in its failure post instead.
 
-**Unhealthy** means failed, or succeeded with zero rows from a source that always has some (`standings`, `injuries`, `odds`, `player_game_logs`, `play_by_play`, `contracts`, `reddit`), recorded as `expectation = 'below'` in `source.scrape_source_runs`. One empty night is usually "not published yet"; a streak is a parser that stopped matching, which is why only the streak alerts. Skipped runs (off-days, the off-season, a missing key) neither extend nor break a streak, and a source that was not attempted this run never alerts on old history. The same streak is the **Streak** column on `/admin`.
+**Unhealthy** means failed, or succeeded with zero rows from a source that always has some (`standings`, `injuries`, `odds`, `player_game_logs`, `play_by_play`, `players`, `contracts`, `reddit`), recorded as `expectation = 'below'` in `source.scrape_source_runs`. One empty night is usually "not published yet"; a streak is a parser that stopped matching, which is why only the streak alerts. Skipped runs (off-days, the off-season, a missing key) neither extend nor break a streak, and a source that was not attempted this run never alerts on old history. The same streak is the **Streak** column on `/admin`.
 
 A successful refresh is otherwise silent. The freshness check below covers the one case none of this can see: a refresh that never starts.
 

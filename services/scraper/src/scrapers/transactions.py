@@ -100,11 +100,10 @@ def _resolve_participant(
 ) -> dict[str, Any] | None:
     """Attach a canonical id, or skip the row if the identity will not resolve.
 
-    Resolve-only on purpose. ``ensure_player`` would create the player and
-    stamp ``is_active=True``, so a log entry reading "waived X" would mark X
-    active — transactions reference players, they do not define rosters. A
-    player unseen by ``scrape-players`` is skipped here and picked up on a
-    later run once the roster scrape knows about them.
+    Resolve-only on purpose. ``ensure_player`` would create a player from a log
+    entry such as "waived X" — transactions reference players, they do not
+    define rosters. A player unseen by ``scrape-players`` is skipped here and
+    picked up on a later run once the roster scrape knows about them.
 
     Skipping rather than raising matches injuries.py: an unknown slug is a data
     gap, not a reason to fail a run that collected everything else.

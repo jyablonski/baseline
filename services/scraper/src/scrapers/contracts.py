@@ -85,7 +85,6 @@ def scrape_contracts(
                 full_name=row["player_name"],
                 source_url=row["source_url"],
                 team_id=team_id,
-                is_active=True,
             )
             canonical_players.append(
                 {

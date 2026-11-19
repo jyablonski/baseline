@@ -289,7 +289,6 @@ def _scrape_games(
                     full_name=row.pop("full_name"),
                     source_url=boxscore_url(external_id),
                     team_id=team_id,
-                    is_active=True,
                 )
                 if active_player_ids is not None and player_id not in active_player_ids:
                     continue

@@ -329,6 +329,9 @@ def scrape_daily_cmd() -> None:
     n_broadcasts = alert.try_run("broadcasts", scrape_broadcasts, optional=True)
     if n_broadcasts is not None:
         click.echo(f"Broadcasts: {n_broadcasts}")
+    n_players = alert.try_run("players", scrape_players)
+    if n_players is not None:
+        click.echo(f"Rosters: {n_players} players")
     contracts = alert.try_run("contracts", scrape_contracts)
     if contracts is not None:
         n_contracts, n_payroll = contracts

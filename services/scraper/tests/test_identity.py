@@ -111,6 +111,84 @@ def test_ensure_player_creates_and_reuses_provider_identity() -> None:
 
 
 @pytest.mark.unit
+def test_ensure_player_moves_team_only_for_the_roster() -> None:
+    """A contracts page still lists players a team waived and pays; that
+    team must not replace the one his current roster names."""
+    session = FakeSession()
+    roster_team, waiving_team, new_signing_team = uuid4(), uuid4(), uuid4()
+    player_id = ensure_player(
+        session,
+        provider=BREF_PROVIDER,
+        external_id="peavymi01",
+        full_name="Micah Peavy",
+        team_id=roster_team,
+        from_roster=True,
+    )
+    ensure_player(
+        session,
+        provider=BREF_PROVIDER,
+        external_id="peavymi01",
+        full_name="Micah Peavy",
+        team_id=waiving_team,
+    )
+    assert session.rows[(Player, player_id)].team_id == roster_team
+
+    ensure_player(
+        session,
+        provider=BREF_PROVIDER,
+        external_id="peavymi01",
+        full_name="Micah Peavy",
+        team_id=new_signing_team,
+        from_roster=True,
+    )
+    assert session.rows[(Player, player_id)].team_id == new_signing_team
+
+
+@pytest.mark.unit
+def test_only_a_roster_makes_a_player_active() -> None:
+    """Active means on a current roster. A player first seen on a contracts
+    page (waived, still paid) is not, and a later contracts or box-score
+    mention must not revive one the roster scrape benched."""
+    session = FakeSession()
+    player_id = ensure_player(
+        session, provider=BREF_PROVIDER, external_id="loverla01", full_name="Lawson Lovering"
+    )
+    assert session.rows[(Player, player_id)].is_active is False
+
+    ensure_player(
+        session,
+        provider=BREF_PROVIDER,
+        external_id="loverla01",
+        full_name="Lawson Lovering",
+        from_roster=True,
+    )
+    assert session.rows[(Player, player_id)].is_active is True
+
+    session.rows[(Player, player_id)].is_active = False
+    ensure_player(
+        session, provider=BREF_PROVIDER, external_id="loverla01", full_name="Lawson Lovering"
+    )
+    assert session.rows[(Player, player_id)].is_active is False
+
+
+@pytest.mark.unit
+def test_ensure_player_fills_a_missing_team() -> None:
+    session = FakeSession()
+    player_id = ensure_player(
+        session, provider=BREF_PROVIDER, external_id="newgu01", full_name="New Guy"
+    )
+    team_id = uuid4()
+    ensure_player(
+        session,
+        provider=BREF_PROVIDER,
+        external_id="newgu01",
+        full_name="New Guy",
+        team_id=team_id,
+    )
+    assert session.rows[(Player, player_id)].team_id == team_id
+
+
+@pytest.mark.unit
 def test_ensure_player_requires_external_key_and_records_review() -> None:
     session = FakeSession()
     with pytest.raises(IdentityResolutionError, match="provider key"):
