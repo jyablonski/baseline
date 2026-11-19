@@ -265,9 +265,9 @@ def resolve_player_id(
 ) -> uuid.UUID | None:
     """Look up a player by provider key without creating or mutating one.
 
-    ``ensure_player`` is the write path and always stamps ``is_active``, which
-    is wrong for callers that merely *reference* a player. A transactions log
-    naming a waived player must not flip that player back to active.
+    ``ensure_player`` is the write path and creates a player it has not seen,
+    which is wrong for callers that merely *reference* one: a transactions log
+    names players who are on no roster.
     """
     external_id = external_id.strip().lower()
     row = _pending_external_id(session, PlayerExternalId, provider, external_id) or session.get(
@@ -313,13 +313,21 @@ def ensure_player(
     full_name: str,
     source_url: str | None = None,
     team_id: uuid.UUID | None = None,
-    is_active: bool = True,
     metadata: dict[str, Any] | None = None,
+    from_roster: bool = False,
 ) -> uuid.UUID:
     """Resolve a player by a provider key or create a new registry row.
 
     A provider key is mandatory for automatic creation. Names are retained as
     display metadata and are never used as a silent identity fallback.
+
+    Only the roster scrape passes ``from_roster``, which moves the player to
+    ``team_id`` and marks him active: a current roster is the one page that
+    says who plays where today. Every other page names a team that may not be
+    his (a contracts page keeps players it waived and still pays, a
+    play-by-play row can sit in the opponent's column, a backfilled box score
+    is an old team), so without ``from_roster`` ``team_id`` only fills an empty
+    team, and a new player starts inactive until a roster lists him.
     """
     external_id = external_id.strip().lower()
     existing = _pending_external_id(
@@ -333,8 +341,10 @@ def ensure_player(
         player.full_name = canonical_name
         first, last = _split_player_name(canonical_name)
         player.first_name, player.last_name = first, last
-        player.team_id = team_id or player.team_id
-        player.is_active = is_active
+        if team_id is not None and (from_roster or player.team_id is None):
+            player.team_id = team_id
+        if from_roster:
+            player.is_active = True
         player.scraped_at = datetime.now()
         _upsert_player_external_id(
             session,
@@ -363,7 +373,7 @@ def ensure_player(
             first_name=first,
             last_name=last,
             full_name=full_name,
-            is_active=is_active,
+            is_active=from_roster,
             team_id=team_id,
         )
     )

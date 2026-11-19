@@ -43,7 +43,6 @@ def scrape_injuries(*, fetch_html: Callable[[str], str] | None = None) -> int:
                 full_name=row["player_name"],
                 source_url=row["source_url"],
                 team_id=team_id,
-                is_active=True,
             )
             canonical_rows.append(
                 {

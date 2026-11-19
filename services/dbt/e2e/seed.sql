@@ -205,8 +205,12 @@ INSERT INTO source.play_by_play (
     ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '2024-25', 9, 9, 1, 'PT6M00.00S',
      13, 5, '7bf8726a-a852-452d-b81f-14839127c5fb', '11111111-1111-4111-8111-111111111111', 'Made Shot', '2pt',
      'Curry 8'' Driving Layup (13 PTS)', NULL, NOW()),
-    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '2024-25', 10, 10, 4, 'PT0M00.00S',
-     16, 8, '7bf8726a-a852-452d-b81f-14839127c5fb', '11111111-1111-4111-8111-111111111111', 'Made Shot', '3pt',
+    -- Stretch so the game ends on its real 120-110 (see the note below).
+    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '2024-25', 10, 10, 4, 'PT1M00.00S',
+     117, 107, NULL, NULL, 'Made Shot', NULL,
+     'Stretch, GSW 104 LAC 102', NULL, NOW()),
+    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '2024-25', 11, 11, 4, 'PT0M00.00S',
+     120, 110, '7bf8726a-a852-452d-b81f-14839127c5fb', '11111111-1111-4111-8111-111111111111', 'Made Shot', '3pt',
      'Curry 24'' 3PT (16 PTS)', NULL, NOW());
 
 -- Scripted flows with hand-computed answers, asserted exactly in run.sh.

@@ -943,3 +943,113 @@ def test_catch_up_gaps_and_missing_play_by_play(db_session_factory) -> None:
     # The box-score-only game is offered for play-by-play even though the
     # daily box-score selection no longer sees it.
     assert games_missing_play_by_play(date(2027, 11, 5)) == [str(night_before), str(box_score_only)]
+
+
+_ROSTER_PAGE = """
+<table id="roster"><tbody>
+  <tr><th data-stat="player"><a href="/players/c/curryst01.html">Stephen Curry</a></th>
+  <td data-stat="pos">PG</td></tr>
+</tbody></table>
+"""
+_DIRECTORY_PAGE = """
+<table id="players"><tbody>
+  <tr><th data-stat="player"><a href="/players/c/curryst01.html">Stephen Curry</a></th></tr>
+</tbody></table>
+"""
+WAIVED_PLAYER = UUID("00000000-0000-4000-8000-000000000311")
+
+
+def _seed_waived_player(team_id: UUID) -> None:
+    with get_session() as session:
+        upsert_rows(
+            session,
+            Player,
+            [
+                {
+                    "player_id": WAIVED_PLAYER,
+                    "first_name": "Lawson",
+                    "last_name": "Lovering",
+                    "full_name": "Lawson Lovering",
+                    "is_active": True,
+                    "team_id": team_id,
+                    "scraped_at": datetime.now(UTC),
+                }
+            ],
+            ["player_id"],
+        )
+        upsert_rows(
+            session,
+            PlayerExternalId,
+            [
+                {
+                    "player_id": WAIVED_PLAYER,
+                    "provider": "basketball-reference",
+                    "external_id": "loverla01",
+                }
+            ],
+            ["provider", "external_id"],
+        )
+
+
+def _roster_fetch(failing_url_part: str | None = None):
+    def fetch(url: str) -> str:
+        if failing_url_part and failing_url_part in url:
+            raise RuntimeError("page did not load")
+        if "/players/c/" in url:
+            return _DIRECTORY_PAGE
+        return _ROSTER_PAGE
+
+    return fetch
+
+
+def _is_active(player_id: UUID) -> bool:
+    with get_session() as session:
+        return bool(session.get(Player, player_id).is_active)
+
+
+@pytest.mark.integration
+def test_roster_scrape_benches_players_no_team_lists(db_session_factory, monkeypatch) -> None:
+    """Lovering was waived: no roster lists him, so he is no longer active,
+    while the player every roster lists stays active on that team."""
+    import catalog.teams
+
+    from scrapers.players import scrape_players
+
+    entry = catalog.teams.TEAM_CATALOG[0]
+    monkeypatch.setattr("catalog.teams.TEAM_CATALOG", (entry,))
+    with get_session() as session:
+        from identity import seed_team_catalog
+
+        seed_team_catalog(session, scraped_at=datetime.now(UTC))
+    _seed_waived_player(entry.team_id)
+
+    assert scrape_players(fetch_html=_roster_fetch()) == 1
+
+    assert _is_active(WAIVED_PLAYER) is False
+    with get_session() as session:
+        crosswalk = session.get(PlayerExternalId, ("basketball-reference", "curryst01"))
+        curry = session.get(Player, crosswalk.player_id)
+        assert curry.is_active is True
+        assert curry.team_id == entry.team_id
+
+
+@pytest.mark.integration
+def test_incomplete_roster_scrape_leaves_active_players_alone(
+    db_session_factory, monkeypatch
+) -> None:
+    """One team page failing must not bench that team's whole roster."""
+    import catalog.teams
+
+    from scrapers.players import scrape_players
+
+    first, second = catalog.teams.TEAM_CATALOG[0], catalog.teams.TEAM_CATALOG[1]
+    monkeypatch.setattr("catalog.teams.TEAM_CATALOG", (first, second))
+    with get_session() as session:
+        from identity import seed_team_catalog
+
+        seed_team_catalog(session, scraped_at=datetime.now(UTC))
+    _seed_waived_player(second.team_id)
+
+    scrape_players(fetch_html=_roster_fetch(f"/teams/{second.bref_abbreviation}/"))
+
+    assert _is_active(WAIVED_PLAYER) is True

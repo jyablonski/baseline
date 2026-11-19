@@ -64,6 +64,7 @@ from scrapers.injuries import scrape_injuries
 from scrapers.odds import scrape_odds
 from scrapers.play_by_play import games_missing_play_by_play, scrape_play_by_play
 from scrapers.player_game_logs import scrape_logs_for_games, scrape_player_game_logs
+from scrapers.players import scrape_players
 from scrapers.reddit import DEFAULT_SUBREDDIT, scrape_reddit
 from scrapers.standings import scrape_standings
 from scrapers.transactions import scrape_transactions
@@ -203,12 +204,12 @@ def decide_action(
         return ("season", f"Scrape season {config.target_season}.")
     return (
         "daily",
-        "Scrape today's slate (Final + upcoming), logs, PBP for those Finals, standings, injuries, contracts, odds, broadcasts.",
+        "Scrape today's slate (Final + upcoming), logs, PBP for those Finals, standings, injuries, rosters, contracts, odds, broadcasts.",
     )
 
 
-def should_run_contracts(config: PipelineConfig, *, force: bool = False) -> bool:
-    """Contracts and payroll follow ``enabled`` alone, like reddit.
+def should_run_rosters_and_contracts(config: PipelineConfig, *, force: bool = False) -> bool:
+    """Rosters, contracts and payroll follow ``enabled`` alone, like reddit.
 
     Deliberately not behind ``season_active``: free agency, trades, and
     extensions all move payroll while the season gate is shut, so gating
@@ -391,6 +392,12 @@ def _contract_rows(result: tuple[int, int]) -> int:
     return sum(result)
 
 
+def execute_rosters(alert: SyncAlert | None = None) -> int | None:
+    """Current team rosters: each player's team and whether he is on one."""
+    collector = alert if alert is not None else SyncAlert("players")
+    return collector.try_run("players", scrape_players)
+
+
 def execute_contracts(alert: SyncAlert | None = None) -> tuple[int, int] | None:
     """Remaining-year player contracts and the team payroll rollup."""
     collector = alert if alert is not None else SyncAlert("contracts")
@@ -461,6 +468,7 @@ EXPECTS_ROWS = frozenset(
         "odds",
         "play_by_play",
         "player_game_logs",
+        "players",
         "reddit",
         "standings",
     }
@@ -542,7 +550,7 @@ def run_pipeline_scrape(
         config = load_config(session)
         nba_action, detail = decide_action(config, force=force, today=day)
         run_reddit = should_run_reddit(config, force=force)
-        run_contracts = should_run_contracts(config, force=force)
+        run_contracts = should_run_rosters_and_contracts(config, force=force)
         run_transactions = should_run_transactions(config, force=force)
         action = compose_run_action(nba_action, run_reddit, run_contracts, run_transactions)
         run_id = start_run(session, triggered_by=by, scrape_action=action)
@@ -585,6 +593,11 @@ def run_pipeline_scrape(
         elif run_reddit or run_contracts or run_transactions:
             parts.append(detail)
         if run_contracts:
+            # Before contracts: the roster scrape alone sets a player's team
+            # and whether he is active, and contracts only fill gaps.
+            n_players = execute_rosters(alert)
+            if n_players is not None:
+                parts.append(f"rosters: {n_players} players.")
             contracts = execute_contracts(alert)
             if contracts is not None:
                 n_contracts, n_payroll = contracts

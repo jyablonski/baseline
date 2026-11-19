@@ -29,8 +29,8 @@ from pipeline import (
     run_catch_up,
     run_pipeline_scrape,
     set_enabled,
-    should_run_contracts,
     should_run_reddit,
+    should_run_rosters_and_contracts,
     should_run_transactions,
     start_run,
     update_run_dbt_exit,
@@ -212,13 +212,13 @@ def test_should_run_reddit_when_pipeline_allowed() -> None:
 
 
 @pytest.mark.unit
-def test_should_run_contracts_ignores_season_active() -> None:
+def test_should_run_rosters_and_contracts_ignores_season_active() -> None:
     """Payroll moves in the offseason, so contracts follow ``enabled`` alone."""
-    assert should_run_contracts(_config(enabled=True, season_active=False)) is True
-    assert should_run_contracts(_config(enabled=True, season_active=True)) is True
-    assert should_run_contracts(_config(enabled=False)) is False
-    assert should_run_contracts(_config(enabled=False, season_active=True)) is False
-    assert should_run_contracts(_config(enabled=False), force=True) is True
+    assert should_run_rosters_and_contracts(_config(enabled=True, season_active=False)) is True
+    assert should_run_rosters_and_contracts(_config(enabled=True, season_active=True)) is True
+    assert should_run_rosters_and_contracts(_config(enabled=False)) is False
+    assert should_run_rosters_and_contracts(_config(enabled=False, season_active=True)) is False
+    assert should_run_rosters_and_contracts(_config(enabled=False), force=True) is True
 
 
 @pytest.mark.unit

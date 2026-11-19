@@ -160,7 +160,11 @@ def test_scrape_play_by_play_resolves_player_and_upserts(monkeypatch: pytest.Mon
         "scrapers.play_by_play.resolve_team_id",
         lambda _session, code: team_id if code == "GSW" else None,
     )
-    monkeypatch.setattr("scrapers.play_by_play.ensure_player", lambda *args, **kwargs: uuid4())
+    ensured: list[dict] = []
+    monkeypatch.setattr(
+        "scrapers.play_by_play.ensure_player",
+        lambda *args, **kwargs: ensured.append(kwargs) or uuid4(),
+    )
     monkeypatch.setattr(
         "scrapers.play_by_play.upsert_rows",
         lambda _s, _m, rows, _c: captured.append(rows) or len(rows),
@@ -169,16 +173,20 @@ def test_scrape_play_by_play_resolves_player_and_upserts(monkeypatch: pytest.Mon
         game_ids=[game_id],
         fetch_actions=lambda external_id: [
             {
+                # BRef files a foul under the fouled team's column, so the
+                # row's team is GSW while the fouler plays for LAL.
                 "action_number": 1,
                 "team_bref_abbreviation": "GSW",
-                "player_external_id": "curryst01",
-                "player_name": "Stephen Curry",
-                "description": "shot",
+                "player_external_id": "doncilu01",
+                "player_name": "Luka Dončić",
+                "description": "Personal foul by L. Dončić",
             }
         ],
     )
     assert written == 1
     assert captured[0][0]["team_id"] == team_id
+    # The fouler must keep his roster team rather than take the row's team.
+    assert ensured[0].get("team_id") is None
 
 
 ASSISTED_PBP_HTML = """
@@ -194,6 +202,62 @@ ASSISTED_PBP_HTML = """
   </tr>
 </tbody></table>
 """
+
+
+FOULS_PBP_HTML = """
+<table id="pbp"><tbody>
+  <tr class="thead" id="q4"><th colspan="6">4th Q</th></tr>
+  <tr>
+    <td>1:12.0</td><td></td><td></td><td>110-114</td><td></td>
+    <td>Personal foul by <a href="/players/d/doncilu01.html">L. Dončić</a>
+      (drawn by <a href="/players/d/diabamo01.html">M. Diabaté</a> )</td>
+  </tr>
+  <tr>
+    <td>1:05.0</td><td></td><td></td><td>110-114</td><td></td>
+    <td>Flagrant foul type 1 by <a href="/players/v/vandeja01.html">J. Vanderbilt</a>
+      (drawn by <a href="/players/m/millebr02.html">B. Miller</a> )</td>
+  </tr>
+  <tr>
+    <td>0:58.0</td>
+    <td>Offensive foul by <a href="/players/d/doncilu01.html">L. Dončić</a>
+      (drawn by <a href="/players/j/jamessi01.html">S. James</a> )</td>
+    <td></td><td>110-114</td><td></td><td></td>
+  </tr>
+  <tr>
+    <td>0:40.0</td>
+    <td>Loose ball foul by <a href="/players/w/willizi02.html">Z. Williams</a>
+      (drawn by <a href="/players/d/diabamo01.html">M. Diabaté</a> )</td>
+    <td></td><td>110-114</td><td></td><td></td>
+  </tr>
+  <tr>
+    <td>0:31.0</td>
+    <td>Technical foul by <a href="/players/d/doncilu01.html">L. Dončić</a></td>
+    <td></td><td>110-114</td><td></td><td></td>
+  </tr>
+</tbody></table>
+"""
+
+
+@pytest.mark.unit
+def test_fouls_are_credited_to_the_foulers_team() -> None:
+    """BRef files personal / shooting / take / flagrant fouls in the fouled
+    team's column, and offensive / loose-ball / technical fouls in the
+    fouler's. Away is LAL, home is CHA."""
+    rows = parse_play_by_play_html(
+        FOULS_PBP_HTML,
+        game_id=uuid4(),
+        season="2026-27",
+        home_bref_abbreviation="CHO",
+        away_bref_abbreviation="LAL",
+    )
+    teams = [(row["player_external_id"], row["team_bref_abbreviation"]) for row in rows]
+    assert teams == [
+        ("doncilu01", "LAL"),
+        ("vandeja01", "LAL"),
+        ("doncilu01", "LAL"),
+        ("willizi02", "LAL"),
+        ("doncilu01", "LAL"),
+    ]
 
 
 def _mangle(value: str) -> str:

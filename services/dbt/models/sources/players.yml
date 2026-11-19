@@ -16,7 +16,7 @@ sources:
           - name: full_name
             description: Display name as Basketball-Reference shows it.
           - name: is_active
-            description: Set true whenever a roster, injury, contract, or play-by-play scrape writes the player; never reset to false.
+            description: True while a current Basketball-Reference roster lists the player. Only the roster scrape sets it, and a complete roster scrape sets it false for anyone no team lists (waived, unsigned). See docs/decisions/0009.
           - name: jersey_number
             description: Roster jersey number, as text.
           - name: position

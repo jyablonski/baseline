@@ -21,7 +21,7 @@ models:
                 min_value: 1
                 max_value: 200
       - name: is_active
-        description: Set true whenever a roster, injury, contract, or play-by-play scrape writes the player. Nothing sets it back to false, so it means seen in a current-season scrape at some point, not on a roster today.
+        description: True while a current Basketball-Reference roster lists the player; false once a complete roster scrape finds him on no team (waived, unsigned). Only the roster scrape sets it.
         data_tests:
           - dbt_expectations.expect_column_values_to_not_be_null
       - name: position
