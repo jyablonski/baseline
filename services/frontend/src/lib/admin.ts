@@ -7,6 +7,8 @@
  * from a "use client" file.
  */
 
+import type { FeedbackKind } from "@/lib/feedback";
+
 export type PipelineGate = {
   enabled: boolean;
   season_active: boolean;
@@ -472,4 +474,71 @@ export async function promoteAdminModel(
     );
   }
   return ((await response.json()) as { data: ChampionChange }).data;
+}
+
+export type FeedbackItem = {
+  feedback_id: string;
+  kind: FeedbackKind;
+  message: string;
+  reply_email: string | null;
+  page_path: string | null;
+  signed_in: boolean;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+export type FeedbackPage = {
+  data: FeedbackItem[];
+  meta: { total: number; limit: number; offset: number };
+};
+
+async function adminRequest<T>(path: string, init: { method?: string; body?: unknown } = {}) {
+  const token = process.env.ADMIN_API_TOKEN;
+  if (!token) {
+    throw new AdminApiError("ADMIN_API_TOKEN is not set.", 503);
+  }
+  const response = await fetch(`${adminApiBase()}/api/v1/admin${path}`, {
+    method: init.method ?? "GET",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const detail = await response
+      .json()
+      .then((body: { detail?: unknown }) => body.detail)
+      .catch(() => undefined);
+    throw new AdminApiError(
+      typeof detail === "string"
+        ? detail
+        : `Admin API returned ${response.status} ${response.statusText}`,
+      response.status
+    );
+  }
+  return (await response.json()) as T;
+}
+
+/** Reports from /feedback, open first. Resolved ones only when asked for. */
+export async function fetchAdminFeedback(options: {
+  includeResolved: boolean;
+  limit: number;
+  offset: number;
+}): Promise<FeedbackPage> {
+  const query = new URLSearchParams({
+    include_resolved: String(options.includeResolved),
+    limit: String(options.limit),
+    offset: String(options.offset),
+  });
+  return adminRequest<FeedbackPage>(`/feedback?${query}`);
+}
+
+export async function setAdminFeedbackResolved(
+  feedbackId: string,
+  resolved: boolean
+): Promise<FeedbackItem> {
+  const body = await adminRequest<{ data: FeedbackItem }>(
+    `/feedback/${encodeURIComponent(feedbackId)}`,
+    { method: "PUT", body: { resolved } }
+  );
+  return body.data;
 }

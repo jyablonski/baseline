@@ -77,7 +77,11 @@ const GAMES = [
 const flags = new Map([
   ["chatbot", { enabled: true, description: "Signed-in chat at /chat.", updated_by: null }],
   ["picks", { enabled: true, description: "Signed-in game picks.", updated_by: null }],
+  ["feedback", { enabled: true, description: "The public /feedback form.", updated_by: null }],
 ]);
+// Reports from /feedback, newest last. The hourly limit is per client address.
+const FEEDBACK_IP_LIMIT = 2;
+const feedback = [];
 function accountUser(userId, user) {
   return {
     user_id: userId,
@@ -405,6 +409,21 @@ function admin(request, path, body) {
       },
     ];
   }
+  if (path === "/feedback" && request.method === "GET") {
+    const all = new URL(request.url, "http://stub").searchParams.get("include_resolved") === "true";
+    const data = feedback
+      .filter((report) => all || !report.resolved_at)
+      .toReversed()
+      .sort((left, right) => Number(Boolean(left.resolved_at)) - Number(Boolean(right.resolved_at)))
+      .map(publicReport);
+    return [200, { data, meta: { total: data.length, limit: 50, offset: 0 } }];
+  }
+  if (path.startsWith("/feedback/") && request.method === "PUT") {
+    const report = feedback.find((row) => row.feedback_id === path.slice("/feedback/".length));
+    if (!report) return [404, { detail: "Unknown report." }];
+    report.resolved_at = body.resolved ? (report.resolved_at ?? new Date().toISOString()) : null;
+    return [200, { data: publicReport(report) }];
+  }
   if (path === "/flags" && request.method === "GET") return [200, flagRows()];
   if (path.startsWith("/flags/") && request.method === "PUT") {
     const flag = flags.get(decodeURIComponent(path.slice("/flags/".length)));
@@ -416,6 +435,37 @@ function admin(request, path, body) {
   return [404, { detail: "Not found." }];
 }
 
+/** A report as the admin API returns it: never the address. */
+function publicReport(report) {
+  const shown = { ...report };
+  delete shown.ip;
+  return shown;
+}
+
+/** POST /feedback: the guards in the API's order, minus the daily cap. */
+function sendFeedback(request, body) {
+  if (bearer(request) !== ACCOUNTS_TOKEN) return [401, { detail: "Invalid credentials." }];
+  if (!flags.get("feedback").enabled) return [503, { detail: "Feedback is turned off right now." }];
+  if (body.website) return [201, { data: { received: true } }];
+  const ip = request.headers["x-baseline-client-ip"];
+  if (!ip) return [400, { detail: "Missing client address." }];
+  if (feedback.filter((report) => report.ip === ip).length >= FEEDBACK_IP_LIMIT) {
+    return [429, { detail: "That is a lot of feedback in one hour. Try again a little later." }];
+  }
+  feedback.push({
+    feedback_id: randomUUID(),
+    kind: body.kind,
+    message: body.message,
+    reply_email: body.reply_email ?? null,
+    page_path: body.page_path ?? null,
+    signed_in: Boolean(request.headers["x-baseline-user"]),
+    created_at: new Date().toISOString(),
+    resolved_at: null,
+    ip,
+  });
+  return [201, { data: { received: true } }];
+}
+
 /** Test-only controls. The real API has nothing like them. */
 function control(path, body) {
   if (path === "/reset") {
@@ -424,9 +474,11 @@ function control(path, body) {
     users.clear();
     subjects.clear();
     requests.length = 0;
+    feedback.length = 0;
     return [200, { ok: true }];
   }
   if (path === "/requests") return [200, requests];
+  if (path === "/feedback") return [200, feedback];
   if (path === "/seed") {
     userFor(body.user_id);
     return [200, { ok: true }];
@@ -492,6 +544,8 @@ const server = createServer(async (request, response) => {
     result = control(pathname.slice("/__stub".length), body);
   } else if (pathname.startsWith("/api/v1/account")) {
     result = account(request, pathname.slice("/api/v1/account".length), body);
+  } else if (pathname === "/api/v1/feedback" && request.method === "POST") {
+    result = sendFeedback(request, body);
   } else if (pathname.startsWith("/api/v1/admin")) {
     result = admin(request, pathname.slice("/api/v1/admin".length), body);
   } else if (pathname.startsWith("/api/v1")) {

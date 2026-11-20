@@ -66,6 +66,7 @@ export function useFeatures() {
   return {
     chatbot: flags.chatbot === true,
     picks: flags.picks === true,
+    feedback: flags.feedback === true,
     isLoading: query.isPending,
   };
 }

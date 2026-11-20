@@ -31,13 +31,22 @@ describe("privacy page", () => {
     expect(headings()).toEqual([
       "What is kept when you sign in",
       "Cookies",
+      "Feedback",
       "How it is used",
       "Deleting your data",
     ]);
     expect(policy).not.toHaveTextContent(/chat/i);
     expect(policy).toHaveTextContent(/make picks or follow teams\./);
     expect(policy).toHaveTextContent(/The teams you follow, if any\./);
-    expect(policy).toHaveTextContent(/nothing is collected about visitors who do not sign in/);
+    expect(policy).toHaveTextContent(
+      /nothing is collected about visitors who do not sign in, unless they send feedback/
+    );
+    expect(policy).toHaveTextContent(/one-way hash of your IP address/);
+    expect(policy).toHaveTextContent(/The address itself is not stored/);
+    expect(within(policy).getByRole("link", { name: "feedback page" })).toHaveAttribute(
+      "href",
+      "/feedback"
+    );
     expect(policy).toHaveTextContent(/Your email address is not stored/);
     expect(policy).toHaveTextContent(/It is not sold/);
     expect(within(policy).getByRole("link", { name: "account page" })).toHaveAttribute(

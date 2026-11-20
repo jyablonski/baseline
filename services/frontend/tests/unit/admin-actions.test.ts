@@ -15,6 +15,7 @@ const setFlag = vi.hoisted(() => vi.fn());
 const setPipeline = vi.hoisted(() => vi.fn());
 const enqueue = vi.hoisted(() => vi.fn());
 const promote = vi.hoisted(() => vi.fn());
+const resolveFeedback = vi.hoisted(() => vi.fn());
 const cookieSet = vi.hoisted(() => vi.fn());
 const revalidate = vi.hoisted(() => vi.fn());
 
@@ -27,6 +28,7 @@ vi.mock("@/lib/admin", async () => {
     ...actual,
     enqueueAdminJob: enqueue,
     promoteAdminModel: promote,
+    setAdminFeedbackResolved: resolveFeedback,
     setAdminFlag: setFlag,
     setAdminPipeline: setPipeline,
   };
@@ -36,6 +38,7 @@ import {
   promoteModelAction,
   remindModelAction,
   requestJobAction,
+  setFeedbackResolvedAction,
   setFlagAction,
   setPipelineAction,
 } from "@/app/admin/actions";
@@ -366,5 +369,72 @@ describe("remindModelAction", () => {
     session.current = null;
     await remindModelAction(reminder());
     expect(cookieSet).not.toHaveBeenCalled();
+  });
+});
+
+const REPORT_ID = "00000000-0000-4000-8000-000000000001";
+
+function feedbackForm(id?: string, resolved?: string): FormData {
+  const data = new FormData();
+  if (id !== undefined) data.set("feedback_id", id);
+  if (resolved !== undefined) data.set("resolved", resolved);
+  return data;
+}
+
+describe("setFeedbackResolvedAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("ADMIN_GITHUB_LOGINS", "allowed-user");
+    session.current = { user: { provider: "github", login: "allowed-user" } };
+  });
+
+  it("refuses anyone who is not the operator", async () => {
+    for (const user of [null, { user: { provider: "github", login: "stranger" } }]) {
+      session.current = user;
+      await expect(
+        setFeedbackResolvedAction(null, feedbackForm(REPORT_ID, "true"))
+      ).resolves.toEqual({ ok: false, message: "Not authorised." });
+    }
+    expect(resolveFeedback).not.toHaveBeenCalled();
+  });
+
+  it("rejects a form without a report id or a clear value", async () => {
+    for (const data of [
+      feedbackForm(),
+      feedbackForm(REPORT_ID),
+      feedbackForm("../flags/chatbot", "true"),
+      feedbackForm(REPORT_ID, "maybe"),
+    ]) {
+      await expect(setFeedbackResolvedAction(null, data)).resolves.toEqual({
+        ok: false,
+        message: "Unknown report.",
+      });
+    }
+    expect(resolveFeedback).not.toHaveBeenCalled();
+  });
+
+  it("resolves and reopens, then revalidates the console", async () => {
+    resolveFeedback.mockResolvedValue({ resolved_at: "2026-11-19T12:00:00Z" });
+    await expect(setFeedbackResolvedAction(null, feedbackForm(REPORT_ID, "true"))).resolves.toEqual(
+      { ok: true, message: "Resolved." }
+    );
+    expect(resolveFeedback).toHaveBeenCalledWith(REPORT_ID, true);
+    expect(revalidate).toHaveBeenCalledWith("/admin");
+
+    resolveFeedback.mockResolvedValue({ resolved_at: null });
+    await expect(
+      setFeedbackResolvedAction(null, feedbackForm(REPORT_ID, "false"))
+    ).resolves.toEqual({ ok: true, message: "Reopened." });
+  });
+
+  it("passes an API message through and hides anything unexpected", async () => {
+    resolveFeedback.mockRejectedValue(new AdminApiError("Unknown report.", 404));
+    await expect(setFeedbackResolvedAction(null, feedbackForm(REPORT_ID, "true"))).resolves.toEqual(
+      { ok: false, message: "Unknown report." }
+    );
+    resolveFeedback.mockRejectedValue(new Error("ECONNREFUSED"));
+    await expect(setFeedbackResolvedAction(null, feedbackForm(REPORT_ID, "true"))).resolves.toEqual(
+      { ok: false, message: "Could not update the report." }
+    );
   });
 });

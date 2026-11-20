@@ -10,6 +10,7 @@ import {
   isJobType,
   isPipelineSwitch,
   promoteAdminModel,
+  setAdminFeedbackResolved,
   setAdminFlag,
   setAdminPipeline,
 } from "@/lib/admin";
@@ -185,4 +186,39 @@ export async function remindModelAction(formData: FormData): Promise<void> {
     maxAge: 60 * 60 * 24 * 365,
   });
   revalidatePath("/admin");
+}
+
+// Report ids are UUIDs; anything else never reaches the API.
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Resolve or reopen a feedback report. Same gate as the others. */
+export async function setFeedbackResolvedAction(
+  _previous: JobActionState,
+  formData: FormData
+): Promise<JobActionState> {
+  const session = await auth();
+  if (!isAdminUser(session?.user)) {
+    return { ok: false, message: "Not authorised." };
+  }
+
+  const feedbackId = formData.get("feedback_id");
+  const resolved = formData.get("resolved");
+  if (
+    typeof feedbackId !== "string" ||
+    !UUID_SHAPE.test(feedbackId) ||
+    (resolved !== "true" && resolved !== "false")
+  ) {
+    return { ok: false, message: "Unknown report." };
+  }
+
+  try {
+    const report = await setAdminFeedbackResolved(feedbackId, resolved === "true");
+    revalidatePath("/admin");
+    return { ok: true, message: report.resolved_at ? "Resolved." : "Reopened." };
+  } catch (error) {
+    if (error instanceof AdminApiError) {
+      return { ok: false, message: error.message };
+    }
+    return { ok: false, message: "Could not update the report." };
+  }
 }

@@ -47,7 +47,7 @@ export default function AboutPage() {
         </ul>
       </Section>
 
-      <Section title="How the data gets here">
+      <Section title="Data">
         <p>
           The sources are scraped everyday around <RefreshTime />, picking up the previous
           day&apos;s games and the upcoming slate. The data is then transformed and enriched into
@@ -57,11 +57,21 @@ export default function AboutPage() {
           Coverage defaults to the latest season only. Preseason games are not included.
         </p>
         <p className="mt-3">
-          Every source, what Baseline adds on top, and how its scores and win models are calculated:{" "}
+          Every source, what Baseline adds on top, and how its scores and win models are calculated.
+        </p>
+        <p className="mt-3">
           <Link className="underline underline-offset-2" href="/data">
             About the data
           </Link>
-          .
+        </p>
+      </Section>
+
+      <Section title="Feedback">
+        <p>Spotted a wrong number, hit a bug, or have an idea?</p>
+        <p className="mt-3">
+          <Link className="underline underline-offset-2" href="/feedback">
+            Send feedback
+          </Link>
         </p>
       </Section>
 

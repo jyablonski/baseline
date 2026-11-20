@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     chat_max_turns: int = 6
     # Rows of a tool result the model sees. The browser still gets every row.
     chat_model_row_cap: int = 50
+    # Reports one IP address may send per rolling hour, and all senders per ET
+    # day. The daily cap bounds the table and Slack if the per-IP guard is beaten.
+    feedback_ip_hourly_limit: int = 5
+    feedback_global_daily_limit: int = 100
+    # One post per stored feedback report. Unset skips Slack, never the report.
+    slack_webhook_url: str | None = None
 
     @property
     def sqlalchemy_url(self) -> str:

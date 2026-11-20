@@ -58,6 +58,7 @@ EXPECTED_SOURCE_TABLES = {
     "picks",
     "user_follows",
     "feature_flags",
+    "feedback",
 }
 
 
@@ -399,4 +400,4 @@ def test_upgrade_head_is_idempotent(migrated_engine: Engine) -> None:
 def test_upgrade_head_seeds_the_feature_flags(migrated_engine: Engine) -> None:
     with migrated_engine.connect() as conn:
         rows = conn.execute(text("SELECT flag_key, enabled FROM source.feature_flags")).all()
-    assert {row[0]: row[1] for row in rows} == {"chatbot": True, "picks": True}
+    assert {row[0]: row[1] for row in rows} == {"chatbot": True, "feedback": True, "picks": True}

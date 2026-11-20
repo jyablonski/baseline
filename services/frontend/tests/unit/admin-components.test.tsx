@@ -13,6 +13,7 @@ vi.mock("@/app/admin/actions", () => ({
   promoteModelAction: vi.fn(),
   remindModelAction: vi.fn(),
   requestJobAction: vi.fn(),
+  setFeedbackResolvedAction: vi.fn(),
   setFlagAction: vi.fn(),
   setPipelineAction: vi.fn(),
 }));
@@ -28,6 +29,7 @@ import { AdminTabs } from "@/components/admin/admin-tabs";
 import { DbtBuildStatus, DBT_FAILED_NODES_CAP } from "@/components/admin/dbt-build-status";
 import { SignInButtons } from "@/components/account/sign-in-buttons";
 import { FeatureFlags } from "@/components/admin/feature-flags";
+import { FeedbackPanel } from "@/components/admin/feedback-panel";
 import { JobButtons } from "@/components/admin/job-buttons";
 import { ModelsPanel } from "@/components/admin/models-panel";
 import { PipelineSwitches } from "@/components/admin/pipeline-switches";
@@ -36,7 +38,14 @@ import { RunsPager } from "@/components/admin/runs-pager";
 import { Section } from "@/components/admin/section";
 import { Meter, Status, StatusDot } from "@/components/admin/status";
 import { VmDiagnostics } from "@/components/admin/vm-diagnostics";
-import type { DbtStatus, Diagnostics, PipelineGate, PipelineRun } from "@/lib/admin";
+import type {
+  DbtStatus,
+  Diagnostics,
+  FeedbackItem,
+  FeedbackPage,
+  PipelineGate,
+  PipelineRun,
+} from "@/lib/admin";
 import type { ReviewItem } from "@/lib/admin-status";
 import { buildModelReview } from "@/lib/model-review";
 
@@ -575,6 +584,7 @@ describe("AdminTabs", () => {
       "/admin",
       "/admin?tab=pipeline",
       "/admin?tab=models",
+      "/admin?tab=feedback",
       "/admin?tab=infrastructure",
       "/admin?tab=settings",
     ]);
@@ -598,6 +608,108 @@ describe("AdminTabs", () => {
     );
     expect(screen.getByLabelText("2 to review")).toHaveClass("bg-warn");
     expect(screen.getByLabelText("1 to review")).toHaveClass("bg-destructive");
+  });
+
+  it("counts open feedback in a neutral badge, and shows none at zero", () => {
+    const { rerender } = render(<AdminTabs active="overview" items={[]} openFeedback={3} />);
+    const badge = screen.getByLabelText("3 open");
+    expect(badge).toHaveClass("bg-ink-3");
+    expect(screen.getByRole("link", { name: /Feedback/ })).toContainElement(badge);
+    rerender(<AdminTabs active="overview" items={[]} openFeedback={0} />);
+    expect(screen.queryByLabelText(/open$/)).toBeNull();
+  });
+});
+
+describe("FeedbackPanel", () => {
+  afterEach(() => {
+    actionState.current = null;
+  });
+
+  const report = (overrides: Partial<FeedbackItem> = {}): FeedbackItem => ({
+    feedback_id: "00000000-0000-4000-8000-000000000001",
+    kind: "data",
+    message: "Curry's 3PA\nlooks doubled.",
+    reply_email: null,
+    page_path: "/data",
+    signed_in: false,
+    created_at: new Date().toISOString(),
+    resolved_at: null,
+    ...overrides,
+  });
+  const page = (data: FeedbackItem[], total = data.length): FeedbackPage => ({
+    data,
+    meta: { total, limit: 50, offset: 0 },
+  });
+
+  it("shows each report as text, with its page, sender and a resolve button", () => {
+    render(
+      <FeedbackPanel
+        page={page([
+          report(),
+          report({
+            feedback_id: "00000000-0000-4000-8000-000000000002",
+            kind: "bug",
+            message: "<b>not bold</b>",
+            reply_email: "fan@example.com",
+            signed_in: true,
+            page_path: null,
+          }),
+        ])}
+        includeResolved={false}
+      />
+    );
+    expect(screen.getByRole("heading", { name: "Open reports" })).toBeInTheDocument();
+    const first = screen.getByTestId("feedback-00000000-0000-4000-8000-000000000001");
+    expect(within(first).getByText(/A wrong number/)).toHaveTextContent(/anonymous/);
+    expect(within(first).getByRole("link", { name: "/data" })).toHaveAttribute("href", "/data");
+    expect(first.querySelector('input[name="resolved"]')).toHaveValue("true");
+    expect(within(first).getByRole("button", { name: "Resolve" })).toBeInTheDocument();
+
+    const second = screen.getByTestId("feedback-00000000-0000-4000-8000-000000000002");
+    // Visitor-written markup stays text.
+    expect(within(second).getByText("<b>not bold</b>")).toBeInTheDocument();
+    expect(second.querySelector("b")).toBeNull();
+    expect(within(second).getByText(/signed in/)).toBeInTheDocument();
+    expect(within(second).getByRole("link", { name: "fan@example.com" })).toHaveAttribute(
+      "href",
+      "mailto:fan@example.com"
+    );
+    expect(screen.getByRole("link", { name: "Include resolved" })).toHaveAttribute(
+      "href",
+      "/admin?tab=feedback&all=1"
+    );
+  });
+
+  it("offers to reopen a resolved report and to go back to open ones", () => {
+    render(
+      <FeedbackPanel
+        page={page([report({ resolved_at: new Date().toISOString() })], 80)}
+        includeResolved
+      />
+    );
+    expect(screen.getByRole("heading", { name: "All reports" })).toBeInTheDocument();
+    expect(screen.getByText("First 1 of 80")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reopen" })).toBeInTheDocument();
+    expect(screen.getByText(/resolved/, { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Show open only" })).toHaveAttribute(
+      "href",
+      "/admin?tab=feedback"
+    );
+  });
+
+  it("says when there is nothing, and when the list could not load", () => {
+    const { rerender } = render(<FeedbackPanel page={page([])} includeResolved={false} />);
+    expect(screen.getByText("Nothing open.")).toBeInTheDocument();
+    rerender(<FeedbackPanel page={page([])} includeResolved />);
+    expect(screen.getByText("No reports yet.")).toBeInTheDocument();
+    rerender(<FeedbackPanel page={null} includeResolved={false} />);
+    expect(screen.getByText("Could not load the reports.")).toBeInTheDocument();
+  });
+
+  it("shows a failed resolve", () => {
+    actionState.current = { ok: false, message: "Unknown report." };
+    render(<FeedbackPanel page={page([report()])} includeResolved={false} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Unknown report.");
   });
 });
 

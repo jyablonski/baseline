@@ -6,6 +6,7 @@ from routers import (
     admin,
     chat,
     features,
+    feedback,
     games,
     injuries,
     picks,
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix="/api/v1/account", tags=["account"])
     app.include_router(picks.router, prefix="/api/v1/account", tags=["account"])
     app.include_router(features.router, prefix="/api/v1/features", tags=["features"])
+    app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["feedback"])
 
     @app.get("/health")
     def health():

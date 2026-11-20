@@ -480,6 +480,7 @@ function run(overrides: Partial<PipelineRun> = {}): PipelineRun {
 describe("admin tabs", () => {
   it("falls back to the overview for anything it does not know", () => {
     expect(parseAdminTab("pipeline")).toBe("pipeline");
+    expect(parseAdminTab("feedback")).toBe("feedback");
     expect(parseAdminTab(["settings", "pipeline"])).toBe("settings");
     expect(parseAdminTab("nope")).toBe("overview");
     expect(parseAdminTab(undefined)).toBe("overview");

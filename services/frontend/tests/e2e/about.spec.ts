@@ -17,12 +17,23 @@ test("About lists ingest sources without salary jargon or 2010-11 copy", async (
   await expect(about.getByText(/transformed and enriched/)).toContainText(
     /scraped everyday around [78]:00 AM ET, picking up the previous day's games and the upcoming slate/
   );
-  await expect(page.getByRole("heading", { name: "How the data gets here" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Data", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Coverage" })).toHaveCount(0);
   const pipeline = page.locator("section", {
-    has: page.getByRole("heading", { name: "How the data gets here" }),
+    has: page.getByRole("heading", { name: "Data", exact: true }),
   });
   await expect(pipeline.getByText(/Coverage defaults to the latest season/)).toBeVisible();
+  await expect(pipeline.getByRole("link", { name: "About the data" })).toHaveAttribute(
+    "href",
+    "/data"
+  );
+  const feedback = page.locator("section", {
+    has: page.getByRole("heading", { name: "Feedback" }),
+  });
+  await expect(feedback.getByRole("link", { name: "Send feedback" })).toHaveAttribute(
+    "href",
+    "/feedback"
+  );
   await expect(page.getByRole("heading", { name: "About the salary figures" })).toHaveCount(0);
   await expectNo2010Range(page);
   await expect(about).not.toContainText("—");
@@ -38,7 +49,8 @@ test("About has no stack or background section", async ({ page }) => {
   await expect(about.getByText(/running in some form since 2021/)).toHaveCount(0);
   await expect(about.getByRole("heading", { level: 2 })).toHaveText([
     "Sources",
-    "How the data gets here",
+    "Data",
+    "Feedback",
     "Developer",
     "Version",
   ]);

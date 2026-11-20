@@ -6,6 +6,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/compon
 import { AdminTable } from "@/components/admin/admin-table";
 import {
   AdminApiError,
+  fetchAdminFeedback,
   fetchAdminFlags,
   fetchAdminHealth,
   fetchAdminModels,
@@ -43,6 +44,7 @@ import {
 import { AdminTabs, TAB_LABEL } from "@/components/admin/admin-tabs";
 import { JobButtons } from "@/components/admin/job-buttons";
 import { FeatureFlags } from "@/components/admin/feature-flags";
+import { FeedbackPanel } from "@/components/admin/feedback-panel";
 import { ModelsPanel } from "@/components/admin/models-panel";
 import { PipelineSwitches } from "@/components/admin/pipeline-switches";
 import { DbtBuildStatus } from "@/components/admin/dbt-build-status";
@@ -63,10 +65,16 @@ export const revalidate = 0;
 
 export const metadata: Metadata = { title: "Admin" };
 
+const FEEDBACK_PAGE_SIZE = 50;
+
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string | string[]; runs?: string | string[] }>;
+  searchParams: Promise<{
+    tab?: string | string[];
+    runs?: string | string[];
+    all?: string | string[];
+  }>;
 }) {
   // Defence in depth: middleware already gates this route, but a page that
   // renders operational data should not depend on one matcher regex being
@@ -83,6 +91,19 @@ export default async function AdminPage({
   // Started alongside health, for the review badge on every tab. A failure here
   // costs the Models tab only, never the health view.
   const modelsRequest = fetchAdminModels().catch(() => null);
+  // Open reports, for the Feedback badge on every tab and the tab's default list.
+  // Only that list needs rows; the badge reads meta.total.
+  const includeResolved = tab === "feedback" && params.all === "1";
+  const openFeedbackRequest = fetchAdminFeedback({
+    includeResolved: false,
+    limit: tab === "feedback" && !includeResolved ? FEEDBACK_PAGE_SIZE : 1,
+    offset: 0,
+  }).catch(() => null);
+  const allFeedbackRequest = includeResolved
+    ? fetchAdminFeedback({ includeResolved: true, limit: FEEDBACK_PAGE_SIZE, offset: 0 }).catch(
+        () => null
+      )
+    : null;
 
   let health;
   // Null when an older page of runs could not be read: only that table suffers.
@@ -123,6 +144,7 @@ export default async function AdminPage({
   }
 
   const modelReview = await modelsRequest;
+  const openFeedback = await openFeedbackRequest;
   const models = modelReview ? buildModelReview(modelReview) : null;
   const remindedFor = (await cookies()).get(MODEL_REMINDER_COOKIE)?.value;
   const modelItem = models ? modelReviewItem(models, remindedFor) : null;
@@ -147,7 +169,7 @@ export default async function AdminPage({
         </div>
       </header>
 
-      <AdminTabs active={tab} items={items} />
+      <AdminTabs active={tab} items={items} openFeedback={openFeedback?.meta.total ?? 0} />
 
       {tab === "overview" ? <Overview health={health} items={items} /> : null}
       {tab === "pipeline" ? (
@@ -161,6 +183,12 @@ export default async function AdminPage({
             <Empty>Could not load the models.</Empty>
           </div>
         )
+      ) : null}
+      {tab === "feedback" ? (
+        <FeedbackPanel
+          page={includeResolved ? await allFeedbackRequest : openFeedback}
+          includeResolved={includeResolved}
+        />
       ) : null}
       {tab === "infrastructure" ? <VmDiagnostics diagnostics={health.diagnostics} /> : null}
       {tab === "settings" ? <Settings pipeline={health.pipeline} /> : null}

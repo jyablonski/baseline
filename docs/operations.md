@@ -132,6 +132,7 @@ Sessions issued before Google sign-in was added carry no provider and are refuse
 
 - `chatbot` — the signed-in chat at `/chat`. Off makes `POST /api/v1/account/chat` return 503 and puts Ask back in the nav.
 - `picks` — game picks on `/schedule` and `/picks`. Off hides them and makes the picks routes return 503. Existing picks are kept.
+- `feedback` — the public form at `/feedback`. Off makes `POST /api/v1/feedback` return 503 and shows the contact email instead. The switch to reach for if spam gets past the honeypot and rate limits ([features/feedback.md](features/feedback.md)).
 
 The API enforces a flag, the UI only reflects it, so a page left open after a flag is switched off still gets refused. `GET /api/v1/features` is the public read, and it reports what the UI should offer rather than the raw flags: `chatbot` is true only when the flag is on **and** `NLP_LLM_API_KEY` is set.
 
@@ -141,7 +142,7 @@ Which of Chat or Ask the header shows, and what answers inside Chat, is in [feat
 
 ## Accounts, chat, and picks
 
-Sign-in, accounts, time zones and follows are in [features/accounts-and-follows.md](features/accounts-and-follows.md); chat quotas and logging in [features/ask-and-chat.md](features/ask-and-chat.md); picks and how they are graded in [features/picks.md](features/picks.md). `ACCOUNTS_API_TOKEN` must be set (server-side only, separate from `ADMIN_API_TOKEN`); with it unset sign-in and `/admin` still work, and chat and picks report that accounts are unavailable.
+Sign-in, accounts, time zones and follows are in [features/accounts-and-follows.md](features/accounts-and-follows.md); chat quotas and logging in [features/ask-and-chat.md](features/ask-and-chat.md); picks and how they are graded in [features/picks.md](features/picks.md). `ACCOUNTS_API_TOKEN` must be set (server-side only, separate from `ADMIN_API_TOKEN`); with it unset sign-in and `/admin` still work, chat and picks report that accounts are unavailable, and `/feedback` shows the contact email instead of the form. The API also reads `SLACK_WEBHOOK_URL` (through `.env`) to post each feedback report.
 
 To block an account: `UPDATE source.users SET status = 'blocked' WHERE user_id = '<id>'`. To review usage: `SELECT usage_day, backend, outcome, count(*), sum(input_tokens), sum(output_tokens) FROM source.chat_usage GROUP BY 1, 2, 3 ORDER BY 1 DESC`. A user can delete their own account, with its picks and usage rows, from `/account`.
 

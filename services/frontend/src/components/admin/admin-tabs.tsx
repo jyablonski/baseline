@@ -7,6 +7,7 @@ export const TAB_LABEL: Record<AdminTab, string> = {
   overview: "Overview",
   pipeline: "Pipeline",
   models: "Models",
+  feedback: "Feedback",
   infrastructure: "Infrastructure",
   settings: "Settings",
 };
@@ -16,7 +17,16 @@ export const TAB_LABEL: Record<AdminTab, string> = {
  * tabs: the page is a server component, a tab stays bookmarkable, and it
  * survives the job buttons' router.refresh() polling.
  */
-export function AdminTabs({ active, items }: { active: AdminTab; items: ReviewItem[] }) {
+export function AdminTabs({
+  active,
+  items,
+  openFeedback = 0,
+}: {
+  active: AdminTab;
+  items: ReviewItem[];
+  /** Open reports. A neutral count: feedback never makes the console unhealthy. */
+  openFeedback?: number;
+}) {
   return (
     <nav aria-label="Admin sections" className="flex flex-wrap border-b border-rule-strong">
       {ADMIN_TABS.map((tab) => {
@@ -42,6 +52,14 @@ export function AdminTabs({ active, items }: { active: AdminTab; items: ReviewIt
                 )}
               >
                 {flagged.length}
+              </span>
+            ) : null}
+            {tab === "feedback" && openFeedback > 0 ? (
+              <span
+                aria-label={`${openFeedback} open`}
+                className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink-3 px-1 text-[11px] font-medium text-background"
+              >
+                {openFeedback}
               </span>
             ) : null}
           </Link>

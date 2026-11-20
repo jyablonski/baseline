@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { Footer } from "@/components/layout/footer";
 
 describe("footer", () => {
-  it("links to the policies and a contact address, over the disclaimer", () => {
+  it("links to the policies and the feedback form, over the disclaimer", () => {
     render(<Footer />);
 
     const footer = screen.getByRole("contentinfo");
@@ -16,7 +16,7 @@ describe("footer", () => {
     expect(within(footer).getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms");
     expect(within(footer).getByRole("link", { name: "Contact" })).toHaveAttribute(
       "href",
-      expect.stringMatching(/^mailto:/)
+      "/feedback"
     );
     expect(footer).toHaveTextContent("Not affiliated with the NBA or its teams.");
     expect(footer).not.toHaveTextContent(/picks/i);

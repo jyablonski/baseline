@@ -1,6 +1,6 @@
 # AGENTS — services/api
 
-FastAPI `/api/v1/*` over `gold` (plus the API-owned `source` tables: users, chat usage, picks, feature flags, admin jobs). Every page in the frontend reads through it, so a broken query or a renamed field is a broken page.
+FastAPI `/api/v1/*` over `gold` (plus the API-owned `source` tables: users, chat usage, picks, feature flags, feedback, admin jobs). Every page in the frontend reads through it, so a broken query or a renamed field is a broken page.
 
 What each route does is documented per feature in [docs/features/](../../docs/features/). This file is how the service is put together, how its SQL is written, and what to check before calling a change done.
 
