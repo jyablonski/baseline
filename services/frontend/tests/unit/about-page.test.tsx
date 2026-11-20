@@ -32,7 +32,7 @@ describe("about page", () => {
     expect(within(sources!).getByText("The Odds API")).toBeInTheDocument();
     expect(within(sources!).getByText(/r\/nba posts and their top\s+comments/)).toBeInTheDocument();
 
-    expect(screen.getByRole("heading", { name: "How the data gets here" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Data" })).toBeInTheDocument();
     // 12:00 UTC is 8:00 AM Eastern in summer and 7:00 AM in winter.
     expect(screen.getByText(/transformed and enriched/)).toHaveTextContent(
       /scraped everyday around [78]:00 AM ET, picking up the previous day's games and the upcoming slate\. The data is then transformed and enriched/
@@ -41,23 +41,28 @@ describe("about page", () => {
     expect(screen.queryByRole("heading", { name: "Background" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 2 }).map((node) => node.textContent)).toEqual([
       "Sources",
-      "How the data gets here",
+      "Data",
+      "Feedback",
       "Developer",
       "Version",
     ]);
     expect(screen.queryByRole("heading", { name: "Coverage" })).not.toBeInTheDocument();
-    const pipeline = screen
-      .getByRole("heading", { name: "How the data gets here" })
-      .closest("section");
+    const pipeline = screen.getByRole("heading", { name: "Data" }).closest("section");
     expect(pipeline).toBeTruthy();
     expect(
       within(pipeline!).getByText(
         "Coverage defaults to the latest season only. Preseason games are not included."
       )
     ).toBeInTheDocument();
-    expect(within(pipeline!).getByRole("link", { name: "About the data" })).toHaveAttribute(
+    // The link sits on its own line, apart from the sentence that introduces it.
+    const dataLink = within(pipeline!).getByRole("link", { name: "About the data" });
+    expect(dataLink).toHaveAttribute("href", "/data");
+    expect(dataLink.parentElement).toHaveTextContent(/^About the data$/);
+
+    const feedback = screen.getByRole("heading", { name: "Feedback" }).closest("section");
+    expect(within(feedback!).getByRole("link", { name: "Send feedback" })).toHaveAttribute(
       "href",
-      "/data"
+      "/feedback"
     );
   });
 

@@ -9,12 +9,13 @@ import {
   googleOwner,
   resetStub,
   signInAs,
+  stubFeedback,
   stubRequests,
   visitor,
 } from "./session";
 
 /**
- * Accounts, picks, chat and feature flags, end to end.
+ * Accounts, picks, chat, feedback and feature flags, end to end.
  *
  * No window.fetch mocking here. The browser talks to the stub API directly for
  * public data, and every signed-in action goes browser -> server action ->
@@ -468,6 +469,106 @@ test.describe("models", () => {
     await expect(page.getByRole("status")).toContainText("elo-v2 is live");
     await expect(page.getByTestId("model-elo-v2").getByText("Live")).toBeVisible();
     await expect(page.getByText(/The schedule still shows/)).toBeVisible();
+  });
+});
+
+// --- feedback -----------------------------------------------------------------
+
+async function sendFeedback(page: Page, message: string) {
+  await page.getByLabel("What happened?").fill(message);
+  await page.getByRole("button", { name: "Send" }).click();
+}
+
+test.describe("feedback", () => {
+  test("a visitor reports a wrong number from /data without signing in", async ({ page }) => {
+    await page.goto("/data");
+    await page.getByRole("link", { name: "Report it" }).click();
+    await expect(page).toHaveURL(/\/feedback\?kind=data&from=%2Fdata$/);
+    await expect(page.getByRole("radio", { name: "A wrong number" })).toBeChecked();
+    await expect(page.getByRole("link", { name: "/data" })).toBeVisible();
+
+    await page.getByLabel(/Email/).fill("fan@example.com");
+    await sendFeedback(page, "Curry's 3PA looks doubled on the Nov 3 game.");
+    await expect(page.getByRole("status")).toHaveText("Thanks, got it.");
+
+    const [report] = await stubFeedback();
+    expect(report).toMatchObject({
+      kind: "data",
+      message: "Curry's 3PA looks doubled on the Nov 3 game.",
+      reply_email: "fan@example.com",
+      page_path: "/data",
+      signed_in: false,
+    });
+    expect(report.ip).toBeTruthy();
+  });
+
+  test("the footer's Contact link opens the form", async ({ page }) => {
+    await page.goto("/about");
+    await page.getByRole("contentinfo").getByRole("link", { name: "Contact" }).click();
+    await expect(page).toHaveURL(/\/feedback$/);
+    await expect(page.getByRole("radio", { name: "Something else" })).toBeChecked();
+  });
+
+  test("a signed-in report is credited, and the hourly limit is explained", async ({
+    page,
+    context,
+  }) => {
+    await signInAs(context, visitor());
+    for (const attempt of ["First report about the site.", "Second report about the site."]) {
+      await page.goto("/feedback?kind=bug");
+      await sendFeedback(page, attempt);
+      await expect(page.getByRole("status")).toHaveText("Thanks, got it.");
+    }
+    expect((await stubFeedback()).every((report) => report.signed_in)).toBe(true);
+
+    await page.goto("/feedback?kind=bug");
+    await sendFeedback(page, "Third report about the site.");
+    await expect(page.getByText(/a lot of feedback in one hour/)).toHaveAttribute("role", "alert");
+    // What was typed survives the refusal.
+    await expect(page.getByLabel("What happened?")).toHaveValue("Third report about the site.");
+  });
+
+  test("the owner reads and resolves reports in admin", async ({ page, browser }) => {
+    await page.goto("/feedback?kind=idea&from=/teams");
+    await sendFeedback(page, "Show each team's pace on the standings.");
+    await expect(page.getByRole("status")).toBeVisible();
+
+    const ownerContext = await browser.newContext();
+    await signInAs(ownerContext, githubOwner);
+    const admin = await ownerContext.newPage();
+    await admin.goto("/admin");
+    await expect(admin.getByLabel("1 open")).toBeVisible();
+    await admin.getByRole("link", { name: /Feedback/ }).click();
+    await expect(admin).toHaveURL(/tab=feedback/);
+    const report = admin.locator('[data-testid^="feedback-"]');
+    await expect(report).toContainText("Show each team's pace on the standings.");
+    await expect(report).toContainText(/An idea .* anonymous/);
+    await expect(report.getByRole("link", { name: "/teams" })).toHaveAttribute("href", "/teams");
+
+    await report.getByRole("button", { name: "Resolve" }).click();
+    await expect(admin.getByText("Nothing open.")).toBeVisible();
+    await expect(admin.getByLabel("1 open")).toHaveCount(0);
+    await admin.getByRole("link", { name: "Include resolved" }).click();
+    await expect(admin.getByRole("button", { name: "Reopen" })).toBeVisible();
+
+    await ownerContext.close();
+  });
+
+  test("switching feedback off closes the form and offers the email address", async ({
+    page,
+    browser,
+  }) => {
+    const ownerContext = await browser.newContext();
+    await signInAs(ownerContext, githubOwner);
+    const admin = await ownerContext.newPage();
+    await admin.goto("/admin?tab=settings");
+    await admin.getByTestId("flag-feedback").getByRole("switch").click();
+    await expect(admin.getByText("feedback is now off.")).toBeVisible();
+
+    await page.goto("/feedback");
+    await expect(page.getByText(/The form is closed right now/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send" })).toHaveCount(0);
+    await ownerContext.close();
   });
 });
 

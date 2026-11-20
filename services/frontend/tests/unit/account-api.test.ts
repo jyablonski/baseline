@@ -11,6 +11,7 @@ import {
   saveTimezone,
   setTeamFollow,
   sendChat,
+  submitFeedback,
 } from "@/lib/account-api";
 
 type FetchMock = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -140,6 +141,40 @@ describe("user-scoped calls", () => {
     });
     await sendChat("u-7", [{ role: "user", content: "hi" }]);
     expect(JSON.parse(lastCall().init.body as string).season).toBeNull();
+  });
+});
+
+describe("submitFeedback", () => {
+  const report = {
+    kind: "data" as const,
+    message: "Curry's 3PA looks doubled.",
+    reply_email: null,
+    page_path: "/data",
+    website: "",
+  };
+
+  it("posts outside /account with the token, the client address and no user", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: { received: true } }, 201));
+    await submitFeedback(report, { clientIp: "203.0.113.7" });
+    const { url, init, headers } = lastCall();
+    expect(url).toBe("http://api:8000/api/v1/feedback");
+    expect(init.method).toBe("POST");
+    expect(headers.Authorization).toBe("Bearer server-secret");
+    expect(headers["X-Baseline-Client-IP"]).toBe("203.0.113.7");
+    expect(headers).not.toHaveProperty("X-Baseline-User");
+    expect(JSON.parse(init.body as string)).toEqual(report);
+  });
+
+  it("names the account when one is signed in, and raises the API's reason", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: { received: true } }, 201));
+    await submitFeedback(report, { clientIp: "203.0.113.7", userId: "u-1" });
+    expect(lastCall().headers["X-Baseline-User"]).toBe("u-1");
+
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "Try again later." }, 429));
+    await expect(submitFeedback(report, { clientIp: "203.0.113.7" })).rejects.toMatchObject({
+      message: "Try again later.",
+      status: 429,
+    });
   });
 });
 

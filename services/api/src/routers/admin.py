@@ -6,15 +6,19 @@ publicly. The Next.js /admin page holds the token server-side and is itself
 gated by GitHub OAuth, so the token never reaches a browser.
 """
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from dependencies import (
     get_admin_repository,
+    get_feedback_repository,
     get_flags_repository,
     get_predictions_repository,
     require_admin_token,
 )
 from repositories.admin import AdminRepository, JobAlreadyPendingError
+from repositories.feedback import FeedbackRepository
 from repositories.flags import FlagsRepository
 from repositories.predictions import (
     ModelNotScoredError,
@@ -29,11 +33,14 @@ from schemas import (
     ItemResponse,
     JobRequest,
     ModelReview,
+    PaginatedResponse,
+    PaginationMeta,
     PipelineGate,
     PipelineGateUpdate,
     PipelineRun,
 )
 from schemas.account import FeatureFlag, FlagUpdate
+from schemas.feedback import FeedbackItem, FeedbackUpdate
 
 router = APIRouter(dependencies=[Depends(require_admin_token)])
 
@@ -122,6 +129,34 @@ def set_admin_flag(
     if flag is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown feature flag.")
     return ItemResponse(data=FeatureFlag.model_validate(flag))
+
+
+@router.get("/feedback", response_model=PaginatedResponse[FeedbackItem])
+def list_admin_feedback(
+    include_resolved: bool = Query(False),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repo: FeedbackRepository = Depends(get_feedback_repository),
+) -> PaginatedResponse[FeedbackItem]:
+    """Reports from /feedback, open ones first, newest first within each."""
+    rows, total = repo.list_feedback(include_resolved=include_resolved, limit=limit, offset=offset)
+    return PaginatedResponse(
+        data=[FeedbackItem.model_validate(row) for row in rows],
+        meta=PaginationMeta(total=total, limit=limit, offset=offset),
+    )
+
+
+@router.put("/feedback/{feedback_id}", response_model=ItemResponse[FeedbackItem])
+def set_admin_feedback(
+    feedback_id: UUID,
+    request: FeedbackUpdate,
+    repo: FeedbackRepository = Depends(get_feedback_repository),
+) -> ItemResponse[FeedbackItem]:
+    """Mark a report resolved, or reopen it."""
+    row = repo.set_resolved(feedback_id, resolved=request.resolved)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown report.")
+    return ItemResponse(data=FeedbackItem.model_validate(row))
 
 
 @router.get("/models", response_model=ItemResponse[ModelReview])

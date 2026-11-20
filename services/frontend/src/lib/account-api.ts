@@ -7,6 +7,7 @@
  * deliberately not a NEXT_PUBLIC_ variable. Do not import this from a
  * "use client" file.
  */
+import type { FeedbackKind } from "@/lib/feedback";
 import type { AccountProfile, ChatReply, ChatTurn, Follow, PickSheet } from "@/lib/types";
 
 export class AccountApiError extends Error {
@@ -33,19 +34,28 @@ function accountApiBase(): string {
 
 async function accountFetch<T>(
   path: string,
-  options: { userId?: string; method?: string; body?: unknown; timeoutMs?: number } = {}
+  options: {
+    userId?: string;
+    method?: string;
+    body?: unknown;
+    timeoutMs?: number;
+    headers?: Record<string, string>;
+    /** Every route here sits under /account except the anonymous /feedback. */
+    prefix?: string;
+  } = {}
 ): Promise<T> {
   const token = process.env.ACCOUNTS_API_TOKEN;
   if (!token) throw new AccountApiError(UNAVAILABLE, 503);
 
   let response: Response;
   try {
-    response = await fetch(`${accountApiBase()}/api/v1/account${path}`, {
+    response = await fetch(`${accountApiBase()}${options.prefix ?? "/api/v1/account"}${path}`, {
       method: options.method ?? "GET",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         ...(options.userId ? { "X-Baseline-User": options.userId } : {}),
+        ...options.headers,
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       cache: "no-store",
@@ -179,5 +189,32 @@ export async function sendChat(
     body: { messages, season: season || null },
     // A tool loop is several model calls; the default would cut it short.
     timeoutMs: 90_000,
+  });
+}
+
+export type FeedbackReport = {
+  kind: FeedbackKind;
+  message: string;
+  reply_email: string | null;
+  page_path: string | null;
+  /** The honeypot. Empty for every person; the API drops the report when it is not. */
+  website: string;
+};
+
+/**
+ * Send a report from /feedback. Anyone may, so the user id is optional; the
+ * client address is not, because the API rate-limits on it (as a hash).
+ */
+export async function submitFeedback(
+  report: FeedbackReport,
+  context: { clientIp: string; userId?: string }
+): Promise<void> {
+  await accountFetch<unknown>("", {
+    prefix: "/api/v1/feedback",
+    method: "POST",
+    body: report,
+    userId: context.userId,
+    headers: { "X-Baseline-Client-IP": context.clientIp },
+    timeoutMs: 10_000,
   });
 }

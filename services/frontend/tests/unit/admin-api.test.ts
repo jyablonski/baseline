@@ -4,10 +4,12 @@ import {
   AdminApiError,
   JOB_TYPES,
   enqueueAdminJob,
+  fetchAdminFeedback,
   fetchAdminFlags,
   fetchAdminHealth,
   fetchAdminModels,
   promoteAdminModel,
+  setAdminFeedbackResolved,
   setAdminFlag,
   setAdminPipeline,
   isJobType,
@@ -260,6 +262,80 @@ describe("feature flags client", () => {
     );
     await expect(setAdminFlag("chatbot", true, "me")).rejects.toMatchObject({
       message: "Admin API returned 422 Unprocessable",
+    });
+  });
+});
+
+describe("feedback client", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  const report = {
+    feedback_id: "00000000-0000-4000-8000-000000000001",
+    kind: "bug",
+    message: "Broken.",
+    reply_email: null,
+    page_path: null,
+    signed_in: false,
+    created_at: "2026-11-19T12:00:00Z",
+    resolved_at: null,
+  };
+
+  it("fails closed with a 503 when no admin token is configured", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      fetchAdminFeedback({ includeResolved: false, limit: 50, offset: 0 })
+    ).rejects.toMatchObject({ status: 503 });
+    await expect(setAdminFeedbackResolved("x", true)).rejects.toMatchObject({ status: 503 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("lists reports with the admin token and the paging in the query", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "admin-secret");
+    vi.stubEnv("ADMIN_API_URL", "http://api:8000");
+    const page = { data: [report], meta: { total: 1, limit: 50, offset: 0 } };
+    const fetchMock = vi.fn<FetchMock>(async () => jsonResponse(page));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      fetchAdminFeedback({ includeResolved: true, limit: 50, offset: 0 })
+    ).resolves.toEqual(page);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(
+      "http://api:8000/api/v1/admin/feedback?include_resolved=true&limit=50&offset=0"
+    );
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer admin-secret");
+    expect(init?.cache).toBe("no-store");
+  });
+
+  it("resolves a report and passes an API message through", async () => {
+    vi.stubEnv("ADMIN_API_TOKEN", "admin-secret");
+    vi.stubEnv("ADMIN_API_URL", "http://api:8000");
+    const fetchMock = vi.fn<FetchMock>(async () => jsonResponse({ data: report }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(setAdminFeedbackResolved("a/b", true)).resolves.toEqual(report);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://api:8000/api/v1/admin/feedback/a%2Fb");
+    expect(init?.method).toBe("PUT");
+    expect(JSON.parse(init?.body as string)).toEqual({ resolved: true });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<FetchMock>(async () => jsonResponse({ detail: "Unknown report." }, 404))
+    );
+    await expect(setAdminFeedbackResolved("x", true)).rejects.toMatchObject({
+      message: "Unknown report.",
+      status: 404,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<FetchMock>(async () => new Response("nope", { status: 502, statusText: "Bad Gateway" }))
+    );
+    await expect(setAdminFeedbackResolved("x", true)).rejects.toMatchObject({
+      message: "Admin API returned 502 Bad Gateway",
     });
   });
 });

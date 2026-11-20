@@ -184,7 +184,14 @@ export function overallLevel(health: AdminHealth): Level {
   return worstOf(levels);
 }
 
-export const ADMIN_TABS = ["overview", "pipeline", "models", "infrastructure", "settings"] as const;
+export const ADMIN_TABS = [
+  "overview",
+  "pipeline",
+  "models",
+  "feedback",
+  "infrastructure",
+  "settings",
+] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 
 /** `?tab=` is user-editable, so anything unknown falls back to the overview. */

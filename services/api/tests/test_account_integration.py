@@ -66,7 +66,17 @@ def extra_games(postgres_engine):
         # GSW 99, LAC 104: a GSW pick lost.
         (GAME_LOST, "CURRENT_DATE - 2", "NULL", "Final", 99, 104),
         # Still 'Scheduled' because the scrape has not caught up, but tip has passed.
-        (GAME_TIPPED, "CURRENT_DATE - 1", "TIME '19:30'", "Scheduled", None, None),
+        # Yesterday in Eastern time, not CURRENT_DATE - 1: the database runs on UTC,
+        # and under EST 19:30 ET is 00:30 UTC the next day, so from 00:00 to 00:30
+        # UTC that "yesterday" tip is still in the future.
+        (
+            GAME_TIPPED,
+            "(NOW() AT TIME ZONE 'America/New_York')::date - 1",
+            "TIME '19:30'",
+            "Scheduled",
+            None,
+            None,
+        ),
     ]
     with postgres_engine.begin() as conn:
         for game_id, game_date, start_time, status, home_score, away_score in rows:
@@ -618,14 +628,14 @@ def test_no_database_transaction_is_held_open_across_the_model_call(
 def test_flags_are_listed_publicly_and_default_on(make_client) -> None:
     response = make_client(nlp_llm_api_key="sk-test").get("/api/v1/features")
     assert response.status_code == 200
-    assert response.json()["data"] == {"chatbot": True, "picks": True}
+    assert response.json()["data"] == {"chatbot": True, "feedback": True, "picks": True}
 
 
 def test_the_chatbot_is_not_offered_until_a_model_key_is_set(make_client) -> None:
     """No key means the site shows Ask instead of Chat, whatever the flag says."""
     for key in (None, "", "   "):
         features = make_client(nlp_llm_api_key=key).get("/api/v1/features").json()["data"]
-        assert features == {"chatbot": False, "picks": True}
+        assert features == {"chatbot": False, "feedback": True, "picks": True}
 
 
 def test_admin_can_switch_the_chatbot_off_and_back_on(make_client, monkeypatch) -> None:
@@ -644,7 +654,11 @@ def test_admin_can_switch_the_chatbot_off_and_back_on(make_client, monkeypatch) 
     assert off.status_code == 200
     assert off.json()["data"]["enabled"] is False
     assert off.json()["data"]["updated_by"] == "jyablonski"
-    assert client.get("/api/v1/features").json()["data"] == {"chatbot": False, "picks": True}
+    assert client.get("/api/v1/features").json()["data"] == {
+        "chatbot": False,
+        "feedback": True,
+        "picks": True,
+    }
 
     blocked = _ask(client, headers, "What is Curry's salary?")
     assert blocked.status_code == 503

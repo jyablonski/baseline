@@ -41,7 +41,7 @@ Prefer [docs/](docs/) and root [README.md](README.md) over inventing behavior.
 - `services/mcp` — FastMCP server over Cube: registers every tool in `baseline_analytics.tools` (named wrappers + `query_cube`; no gold SQL); stdio locally, Streamable HTTP in production behind Caddy at `https://<host>/mcp` with `MCP_API_TOKEN`. Not published to the host: a bearer token needs TLS
 - `services/cube` — Cube YAML over gold; required for Ask/MCP (`make up` / Tilt locally). Also runs on the prod overlay, internal only (1 GB `mem_limit`, port 4000 not published)
 - Schemas: `source` (ingest + pipeline gate), `silver` (dbt staging), `gold` (dims/facts)
-- `source.users`, `source.chat_usage`, `source.picks`, `source.feature_flags` are written by the API, not scraped. They are never a dbt source or a Cube model. Picks join to gold for grading; nothing flows from them into `silver` or `gold`
+- `source.users`, `source.chat_usage`, `source.picks`, `source.feature_flags`, `source.feedback` are written by the API, not scraped. They are never a dbt source or a Cube model. Picks join to gold for grading; nothing flows from them into `silver` or `gold`
 - Init: `db/init.sql` creates those schemas empty; Alembic fills `source`
 
 ## Python / imports

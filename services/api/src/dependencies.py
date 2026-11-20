@@ -12,6 +12,7 @@ from config import Settings, get_settings
 from db import SessionLocal
 from repositories.account import AccountRepository
 from repositories.admin import AdminRepository
+from repositories.feedback import FeedbackRepository
 from repositories.flags import FlagsRepository
 from repositories.games import GamesRepository
 from repositories.injuries import InjuriesRepository
@@ -74,6 +75,10 @@ def get_admin_repository(db: Session = Depends(get_db)) -> AdminRepository:
 
 def get_account_repository(db: Session = Depends(get_db)) -> AccountRepository:
     return AccountRepository(db)
+
+
+def get_feedback_repository(db: Session = Depends(get_db)) -> FeedbackRepository:
+    return FeedbackRepository(db)
 
 
 def get_flags_repository(db: Session = Depends(get_db)) -> FlagsRepository:

@@ -90,7 +90,7 @@ describe("data page", () => {
     expect(screen.getByText(/split into points of spread/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Report it" })).toHaveAttribute(
       "href",
-      expect.stringMatching(/^mailto:/)
+      "/feedback?kind=data&from=%2Fdata"
     );
   });
 

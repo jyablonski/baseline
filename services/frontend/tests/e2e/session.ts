@@ -87,6 +87,16 @@ export const resetStub = () => stub("/reset", {});
 export const blockUser = (userId: string) => stub("/block", { user_id: userId });
 export const stubRequests = (): Promise<StubRequest[]> => stub("/requests");
 
+type StubFeedback = {
+  kind: string;
+  message: string;
+  reply_email: string | null;
+  page_path: string | null;
+  signed_in: boolean;
+  ip: string;
+};
+export const stubFeedback = (): Promise<StubFeedback[]> => stub("/feedback");
+
 export function accountNav(page: Page) {
   return page.getByRole("navigation", { name: "Account" });
 }

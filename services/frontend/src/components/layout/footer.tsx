@@ -1,13 +1,11 @@
 import { Fragment } from "react";
 import Link from "next/link";
 
-import { CONTACT_EMAIL } from "@/lib/contact";
-
 const FOOTER_LINKS = [
   { href: "/about", label: "About" },
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
-  { href: `mailto:${CONTACT_EMAIL}`, label: "Contact" },
+  { href: "/feedback", label: "Contact" },
 ];
 
 export function Footer() {
@@ -25,16 +23,9 @@ export function Footer() {
                   ·
                 </span>
               ) : null}
-              {/* next/link is for routes; the mailto is a plain anchor. */}
-              {item.href.startsWith("/") ? (
-                <Link href={item.href} className="hover:text-foreground">
-                  {item.label}
-                </Link>
-              ) : (
-                <a href={item.href} className="hover:text-foreground">
-                  {item.label}
-                </a>
-              )}
+              <Link href={item.href} className="hover:text-foreground">
+                {item.label}
+              </Link>
             </Fragment>
           ))}
         </nav>

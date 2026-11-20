@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 
 import { DeveloperCard } from "@/components/layout/developer-card";
 import { RefreshTime } from "@/components/layout/refresh-time";
@@ -9,7 +10,7 @@ import { ErrorState, LoadingState } from "@/components/query-state";
 import { KpiCard, KpiStrip } from "@/components/ui/kpi-card";
 import { useProfile } from "@/hooks/use-profile";
 import { api, queryErrorMessage } from "@/lib/api";
-import { CONTACT_EMAIL } from "@/lib/contact";
+import { feedbackHref } from "@/lib/feedback";
 import { formatNumber, formatProbability } from "@/lib/format";
 import { latestSeason, MODEL_NOTES, modelLabel, usesInjuries } from "@/lib/predictions";
 import { formatInstant } from "@/lib/timezones";
@@ -358,12 +359,9 @@ export default function DataPage() {
         </ul>
         <p className="mt-3 text-sm text-ink-2">
           Spot a wrong number?{" "}
-          <a
-            className="underline underline-offset-2"
-            href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Baseline data issue")}`}
-          >
+          <Link className="underline underline-offset-2" href={feedbackHref("data", "/data")}>
             Report it
-          </a>{" "}
+          </Link>{" "}
           with the game or player and what looks off.
         </p>
       </DataSection>
