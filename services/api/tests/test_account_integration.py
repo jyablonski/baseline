@@ -66,7 +66,17 @@ def extra_games(postgres_engine):
         # GSW 99, LAC 104: a GSW pick lost.
         (GAME_LOST, "CURRENT_DATE - 2", "NULL", "Final", 99, 104),
         # Still 'Scheduled' because the scrape has not caught up, but tip has passed.
-        (GAME_TIPPED, "CURRENT_DATE - 1", "TIME '19:30'", "Scheduled", None, None),
+        # Yesterday in Eastern time, not CURRENT_DATE - 1: the database runs on UTC,
+        # and under EST 19:30 ET is 00:30 UTC the next day, so from 00:00 to 00:30
+        # UTC that "yesterday" tip is still in the future.
+        (
+            GAME_TIPPED,
+            "(NOW() AT TIME ZONE 'America/New_York')::date - 1",
+            "TIME '19:30'",
+            "Scheduled",
+            None,
+            None,
+        ),
     ]
     with postgres_engine.begin() as conn:
         for game_id, game_date, start_time, status, home_score, away_score in rows:
