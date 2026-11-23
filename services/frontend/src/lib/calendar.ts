@@ -18,6 +18,29 @@ function isoOf(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+/** The date `delta` days from `date`. */
+export function shiftDay(date: string, delta: number) {
+  const shifted = utcDate(date);
+  shifted.setUTCDate(shifted.getUTCDate() + delta);
+  return isoOf(shifted);
+}
+
+/** Whole days from `from` to `to`; negative when `to` is earlier. */
+export function daysBetween(from: string, to: string) {
+  return Math.round((utcDate(to).getTime() - utcDate(from).getTime()) / 86_400_000);
+}
+
+/**
+ * The seven days of the week strip holding `date`. Weeks are counted from
+ * `today`, which sits in the middle of its own, so picking any day already on
+ * the strip never moves it and ← / → step a whole week.
+ */
+export function stripWeek(date: string, today: string) {
+  const offset = Math.floor((daysBetween(today, date) + 3) / 7);
+  const start = shiftDay(today, offset * 7 - 3);
+  return Array.from({ length: 7 }, (_, index) => shiftDay(start, index));
+}
+
 /** The month `delta` months from `month`. */
 export function shiftMonth(month: string, delta: number) {
   const [year, index] = month.split("-").map(Number);
@@ -81,7 +104,7 @@ export function formatMonthShort(month: string) {
 }
 
 /** A real calendar date: "2026-02-30" parses, but rolls over to March. */
-function isCalendarDate(value: string) {
+export function isCalendarDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = utcDate(value);
   // An impossible month is an Invalid Date, whose toISOString throws.

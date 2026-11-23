@@ -33,6 +33,9 @@ test.beforeEach(async () => {
 
 const GSW_LAL = "00000000-0000-4000-8000-000000000401";
 
+// The stub's slate day on /games, which otherwise opens on today.
+const SLATE = "/games?date=2099-10-22";
+
 function row(page: Page, team: string) {
   return page.getByRole("row").filter({ hasText: team });
 }
@@ -43,9 +46,9 @@ test.describe("sign-in", () => {
   test("an anonymous visitor is offered sign-in, returning to the page they were on", async ({
     page,
   }) => {
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     const signIn = accountNav(page).getByRole("link", { name: "Sign in" });
-    await expect(signIn).toHaveAttribute("href", "/signin?callbackUrl=%2Fschedule");
+    await expect(signIn).toHaveAttribute("href", "/signin?callbackUrl=%2Fgames");
     await signIn.click();
     await expect(page.getByRole("heading", { name: "Sign in", level: 1 })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
@@ -179,7 +182,7 @@ test.describe("admin access", () => {
 
 test.describe("picks", () => {
   test("an anonymous visitor sees the pick buttons and is sent to sign in", async ({ page }) => {
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     await expect(row(page, "GSW")).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Your pick" })).toBeVisible();
     // The steps are a popup, not a banner above the table.
@@ -188,7 +191,7 @@ test.describe("picks", () => {
     const steps = page.getByRole("dialog", { name: "How picks work" });
     await expect(steps).toContainText("Add a stake, if you want");
     await steps.getByRole("link", { name: "Sign in to start" }).click();
-    await expect(page).toHaveURL(/\/signin\?callbackUrl=%2Fschedule/);
+    await expect(page).toHaveURL(/\/signin\?callbackUrl=%2Fgames%3Fdate%3D2099-10-22/);
 
     await page.goto("/picks");
     await expect(page.getByText("Sign in to pick winners")).toBeVisible();
@@ -203,7 +206,7 @@ test.describe("picks", () => {
 
   test("pick a winner, add a stake, switch sides, and clear it", async ({ page, context }) => {
     const userId = await signInAs(context, visitor());
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     const game = row(page, "GSW");
     await page.getByRole("button", { name: "Your pick", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "How picks work" })).toContainText(
@@ -247,7 +250,7 @@ test.describe("picks", () => {
     // It is there after a reload, and on the picks page.
     await page.reload();
     await expect(row(page, "GSW").getByText("$1,000 to win $1,300")).toBeVisible();
-    await page.getByRole("link", { name: "Your picks" }).click();
+    await page.getByRole("link", { name: "Your picks →" }).click();
     await expect(page).toHaveURL(/\/picks$/);
     await expect(page.getByRole("heading", { name: "Your picks", level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "Show" }).click();
@@ -259,7 +262,7 @@ test.describe("picks", () => {
     await expect(page.getByText("$1,000 riding on open picks")).toBeVisible();
     await expect(page.getByText(/balance|started at/i)).toHaveCount(0);
 
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     await row(page, "GSW")
       .getByRole("button", { name: /Clear pick/ })
       .click();
@@ -281,7 +284,7 @@ test.describe("picks", () => {
 
   test("a game with no moneyline takes a pick but offers no stake", async ({ page, context }) => {
     await signInAs(context, visitor());
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     const game = row(page, "MIA");
     await game.getByRole("button", { name: "Pick MIA" }).click();
     await expect(game.getByRole("button", { name: "Pick MIA" })).toHaveAttribute(
@@ -305,7 +308,7 @@ test.describe("picks", () => {
     // account was deleted elsewhere. The first call 404s; the page must not
     // just lose its pick column.
     const staleId = await signInAs(context, visitor({ stale: true }));
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     const game = row(page, "GSW");
     await game.getByRole("button", { name: "Pick GSW" }).click();
     await expect(game.getByRole("button", { name: /Clear pick/ })).toBeVisible();
@@ -333,14 +336,14 @@ test.describe("picks", () => {
     await signInAs(theirs, visitor({ name: "Theirs" }));
 
     const myPage = await mine.newPage();
-    await myPage.goto("/schedule");
+    await myPage.goto(SLATE);
     await row(myPage, "GSW").getByRole("button", { name: "Pick GSW" }).click();
     await expect(row(myPage, "GSW").getByRole("button", { name: /Clear pick/ })).toBeVisible();
 
     const theirPage = await theirs.newPage();
     await theirPage.goto("/picks");
     await expect(theirPage.getByText("No picks yet").first()).toBeVisible();
-    await theirPage.goto("/schedule");
+    await theirPage.goto(SLATE);
     await expect(row(theirPage, "GSW").getByRole("button", { name: "Pick GSW" })).toHaveAttribute(
       "aria-pressed",
       "false"
@@ -354,7 +357,7 @@ test.describe("picks", () => {
     await blockUser(userId as string);
     await page.goto("/picks");
     await expect(page.getByText("This account has been blocked.")).toBeVisible();
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     await expect(row(page, "GSW")).toBeVisible();
     await expect(page.getByTestId("pick-cell")).toHaveCount(0);
   });
@@ -644,7 +647,7 @@ test.describe("feature flags", () => {
     const userContext = await browser.newContext();
     await signInAs(userContext, visitor());
     const user = await userContext.newPage();
-    await user.goto("/schedule");
+    await user.goto(SLATE);
     await expect(row(user, "GSW")).toBeVisible();
     await expect(user.getByTestId("pick-cell")).toHaveCount(0);
     await user.goto("/picks");
@@ -687,7 +690,7 @@ test.describe("account", () => {
 
   test("signing out from the profile menu ends the session", async ({ page, context }) => {
     await signInAs(context, visitor());
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     await accountNav(page)
       .getByRole("button", { name: /Pat Tester/ })
       .click();
@@ -700,13 +703,13 @@ test.describe("account", () => {
 
   test("a chosen time zone shifts game times and is remembered", async ({ page, context }) => {
     await signInAs(context, visitor());
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     await expect(row(page, "GSW")).toContainText("7:30 PM ET");
 
     await page.goto("/account");
     await page.getByLabel("Time zone").selectOption({ label: "Pacific (Los Angeles)" });
     await expect(page.getByLabel("Time zone")).toHaveValue("America/Los_Angeles");
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     await expect(row(page, "GSW")).toContainText(/4:30 PM P[DS]T/);
     await page.goto("/account");
     await expect(page.getByTestId("member-since")).toHaveText("Member since October 3, 2026");
@@ -731,7 +734,7 @@ test.describe("account", () => {
       .click();
     await expect(page).toHaveURL(/\/teams\/golden-state-warriors/);
 
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     await expect(row(page, "GSW")).toHaveAttribute("data-followed", "true");
     await page.getByRole("switch", { name: "Only my teams" }).click();
     await expect(page).toHaveURL(/mine=1/);
@@ -767,7 +770,7 @@ test.describe("account", () => {
 
   test("deleting the account asks twice, removes it, and signs out", async ({ page, context }) => {
     const userId = await signInAs(context, visitor());
-    await page.goto("/schedule");
+    await page.goto(SLATE);
     await row(page, "GSW").getByRole("button", { name: "Pick GSW" }).click();
     await expect(row(page, "GSW").getByRole("button", { name: /Clear pick/ })).toBeVisible();
 

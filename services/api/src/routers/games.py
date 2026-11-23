@@ -13,6 +13,7 @@ from schemas import (
     ClosestGame,
     GameCollapse,
     GameDate,
+    GameDay,
     GameDetail,
     GameFlow,
     GameHighlight,
@@ -107,6 +108,35 @@ def list_game_dates(
     )
 
 
+# A week strip asks for seven days; a little over a month leaves room without
+# letting one request scan the season.
+MAX_GAME_DAYS_SPAN = 31
+
+
+@router.get("/days", response_model=PaginatedResponse[GameDay])
+def list_game_days(
+    from_date: Annotated[date, Query(alias="from")],
+    to_date: Annotated[date, Query(alias="to")],
+    repo: GamesRepository = Depends(get_games_repository),
+) -> PaginatedResponse[GameDay]:
+    """Each date from `from` to `to` (inclusive) with any game, oldest first, counted by state.
+
+    Dates with no games are left out. Unpaginated.
+    """
+    if to_date < from_date:
+        raise HTTPException(status_code=422, detail="'to' must not be before 'from'")
+    if (to_date - from_date).days >= MAX_GAME_DAYS_SPAN:
+        raise HTTPException(
+            status_code=422, detail=f"At most {MAX_GAME_DAYS_SPAN} days per request"
+        )
+    rows = repo.list_game_days(from_date=from_date, to_date=to_date)
+    data = [GameDay.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=len(data), offset=0),
+    )
+
+
 @router.get("/highlights", response_model=PaginatedResponse[GameHighlight])
 def list_daily_highlights(
     season: Annotated[str | None, Query()] = None,
@@ -179,7 +209,7 @@ def list_recent_games(
 
 
 # Declared after the fixed paths above: /collapses, /closest, /largest-margins, /dates,
-# /highlights and /upsets would otherwise be parsed as a game id and fail UUID validation.
+# /days, /highlights and /upsets would otherwise be parsed as a game id and fail UUID validation.
 @router.get("/{game_id}", response_model=ItemResponse[GameDetail])
 def get_game(
     game_id: UUID,

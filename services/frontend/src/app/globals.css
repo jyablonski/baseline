@@ -355,6 +355,109 @@
     font-size: var(--ct-fs-num);
   }
 
+  /* A .data-table laid out as a grid: the tracks come from an inline
+     grid-template-columns and every row is a subgrid of them, so columns line
+     up and shrink together while rows keep their borders and tints. */
+  .schedule-grid {
+    display: grid;
+  }
+
+  .schedule-grid thead,
+  .schedule-grid tbody {
+    display: contents;
+  }
+
+  .schedule-grid tr {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: center;
+  }
+
+  /* .data-table fixes a row's height; here it is a floor. */
+  .schedule-grid tbody tr {
+    height: auto;
+    min-height: 40px;
+  }
+
+  .schedule-grid td[data-cell="away"] {
+    padding-right: var(--ct-space-1);
+  }
+
+  .schedule-grid td[data-cell="home"] {
+    padding-left: var(--ct-space-1);
+  }
+
+  /* Phones: each game is a card. Time and matchup on top, the numbers under
+     them with their column names, the pick cell across the bottom. */
+  @media (width < 40rem) {
+    .schedule-grid {
+      grid-template-columns: max-content max-content max-content minmax(0, 1fr) !important;
+    }
+
+    .schedule-grid thead {
+      display: none;
+    }
+
+    .schedule-grid tbody tr {
+      grid-template-areas:
+        "time away home home"
+        "win odds injuries tv"
+        "pick pick pick pick";
+      align-items: start;
+      row-gap: var(--ct-space-2);
+      padding: var(--ct-space-3) 0;
+    }
+
+    .schedule-grid td {
+      padding: 0 var(--ct-space-3) 0 0;
+    }
+
+    .schedule-grid td[data-cell="time"] {
+      grid-area: time;
+    }
+
+    .schedule-grid td[data-cell="away"] {
+      grid-area: away;
+    }
+
+    .schedule-grid td[data-cell="home"] {
+      grid-area: home;
+      padding-left: 0;
+    }
+
+    .schedule-grid td[data-cell="win"] {
+      grid-area: win;
+    }
+
+    .schedule-grid td[data-cell="odds"] {
+      grid-area: odds;
+    }
+
+    .schedule-grid td[data-cell="injuries"] {
+      grid-area: injuries;
+    }
+
+    .schedule-grid td[data-cell="tv"] {
+      grid-area: tv;
+    }
+
+    .schedule-grid td[data-cell="pick"] {
+      grid-area: pick;
+    }
+
+    .schedule-grid td[data-label]::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: 2px;
+      font-size: var(--ct-fs-colhead);
+      font-weight: 500;
+      letter-spacing: var(--ct-ls-colhead);
+      text-transform: uppercase;
+      color: var(--ct-ink-2);
+    }
+  }
+
   .field {
     height: var(--ct-control-page);
     border: 1px solid var(--ct-border-field);

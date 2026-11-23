@@ -14,7 +14,7 @@ The product name is **Baseline**. One header bar holds the lockup, tabs, and a l
 
 ## Pages
 
-Tabs: **Home · Schedule · Past Games · Players · Teams · Social · Ask** — the list in `src/lib/nav.ts`. About, Privacy, Terms and Contact are in the footer (`src/components/layout/footer.tsx`).
+Tabs: **Home · Games · Teams · Players · Social · Ask** — the list in `src/lib/nav.ts`. About, Privacy, Terms and Contact are in the footer (`src/components/layout/footer.tsx`).
 
 `/predictions`, `/players/compare`, and `/admin` are reachable routes with no tab of their own.
 
@@ -23,9 +23,9 @@ Each page's behaviour is documented with its feature:
 | Route                                           | Doc                                                                                                                                                                                                                            |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `/`                                             | [Home](features/home.md)                                                                                                                                                                                                       |
-| `/games`                                        | [Results and notables](features/results-and-notables.md), [Upsets](features/upsets.md)                                                                                                                                         |
+| `/games`                                        | [Results and notables](features/results-and-notables.md), [Schedule](features/schedule.md), [Upsets](features/upsets.md)                                                                                                       |
 | `/games/[id]`                                   | [Game page](features/game-page.md)                                                                                                                                                                                             |
-| `/schedule`                                     | [Schedule](features/schedule.md)                                                                                                                                                                                               |
+| `/schedule`, `/past-games`                      | Redirect to `/games` ([Results and notables](features/results-and-notables.md))                                                                                                                                                |
 | `/players`, `/players/[id]`, `/players/compare` | [Players and MVP score](features/players.md), [Player trends](features/player-trends.md)                                                                                                                                       |
 | `/teams`, `/teams/[id]`                         | [Teams and standings](features/teams.md), [Team stats](features/team-stats.md)                                                                                                                                                 |
 | `/predictions`                                  | [Predictions](features/predictions.md)                                                                                                                                                                                         |
@@ -61,6 +61,6 @@ make test-frontend-e2e                              # Playwright
 
 ## Not built
 
-Transactions have no page of their own, by design: they appear on team and player pages. Upsets have none either: they are a tab of the `/games` notables, on the game page and in `/picks`. Injuries have no page of their own: they appear on the game page, as a `/schedule` chip, on player pages, and on team pages.
+Transactions have no page of their own, by design: they appear on team and player pages. Upsets have none either: they are a tab of the `/games` notables, on the game page and in `/picks`. Injuries have no page of their own: they appear on the game page, as a chip on `/games`, on player pages, and on team pages.
 
 Also not built: betting features, streaming Ask, live in-game win probability, a season-leaders API.

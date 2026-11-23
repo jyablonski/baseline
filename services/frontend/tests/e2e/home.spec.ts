@@ -8,9 +8,9 @@ test("home desk shows the latest slate, next games, standings, and r/nba", async
   await page.clock.setFixedTime(new Date("2026-10-20T16:00:00Z"));
   await mockApi(page);
   await page.goto("/");
-  // The fixture slate is long past, so it is the latest one, not last night's.
-  await expect(page.getByRole("heading", { name: "Latest results" })).toBeVisible();
-  await expect(page.getByText("Tuesday, October 22 · 1 game")).toBeVisible();
+  // The fixture slate is long past, so it is titled with its own day, not "Last night".
+  await expect(page.getByRole("heading", { name: "Tuesday, October 22" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Last night" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "LAL 110, GSW 120: game flow" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "What stood out" })).toHaveCount(0);
   await expect(page.getByText("Stephen Curry 38, LeBron James 35")).toBeVisible();
@@ -37,12 +37,14 @@ test("home modules link out to their full views", async ({ page }) => {
   await mockApi(page);
   await page.goto("/");
   // Every module heads with a link at its top right.
-  await expect(
-    page.getByRole("link", { name: "See all latest results →", exact: true })
-  ).toHaveAttribute("href", /^\/games/);
-  await expect(
-    page.getByRole("link", { name: "See full schedule →", exact: true })
-  ).toHaveAttribute("href", /^\/schedule/);
+  await expect(page.getByRole("link", { name: "All results →", exact: true })).toHaveAttribute(
+    "href",
+    "/games?date=2024-10-22"
+  );
+  await expect(page.getByRole("link", { name: "Full schedule →", exact: true })).toHaveAttribute(
+    "href",
+    "/games"
+  );
   await expect(page.getByRole("link", { name: "Social →", exact: true })).toHaveAttribute(
     "href",
     "/social"

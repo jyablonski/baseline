@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  daysBetween,
   defaultMonth,
   formatMonth,
   monthGrid,
   monthOf,
   seasonMonths,
+  shiftDay,
   shiftMonth,
+  stripWeek,
 } from "@/lib/calendar";
 
 describe("monthGrid", () => {
@@ -65,5 +68,33 @@ describe("months", () => {
 
   it("names a month in full", () => {
     expect(formatMonth("2026-10")).toBe("October 2026");
+  });
+});
+
+describe("week strip", () => {
+  it("shifts days across month and year ends", () => {
+    expect(shiftDay("2026-10-31", 1)).toBe("2026-11-01");
+    expect(shiftDay("2027-01-01", -1)).toBe("2026-12-31");
+    expect(daysBetween("2026-10-22", "2026-11-01")).toBe(10);
+    expect(daysBetween("2026-11-01", "2026-10-22")).toBe(-10);
+  });
+
+  it("centres today's week on today and steps whole weeks from it", () => {
+    const week = ["2026-11-19", "2026-11-20", "2026-11-21", "2026-11-22"];
+    expect(stripWeek("2026-11-22", "2026-11-22").slice(0, 4)).toEqual(week);
+    // Any day already on the strip keeps it where it is.
+    expect(stripWeek("2026-11-19", "2026-11-22")[0]).toBe("2026-11-19");
+    expect(stripWeek("2026-11-25", "2026-11-22")[6]).toBe("2026-11-25");
+    // The next and previous weeks.
+    expect(stripWeek("2026-11-26", "2026-11-22")[0]).toBe("2026-11-26");
+    expect(stripWeek("2026-11-18", "2026-11-22")).toEqual([
+      "2026-11-12",
+      "2026-11-13",
+      "2026-11-14",
+      "2026-11-15",
+      "2026-11-16",
+      "2026-11-17",
+      "2026-11-18",
+    ]);
   });
 });

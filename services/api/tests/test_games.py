@@ -175,6 +175,55 @@ def test_list_schedule_dates_sql_counts_unplayed_games_oldest_first() -> None:
 
 
 @pytest.mark.unit
+def test_list_game_days(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [
+                mapping_row({"game_date": date(2026, 11, 21), "total": 6, "final": 6, "live": 0}),
+                mapping_row({"game_date": date(2026, 11, 22), "total": 7, "final": 2, "live": 1}),
+            ]
+        )
+    ]
+    response = client.get("/api/v1/games/days", params={"from": "2026-11-19", "to": "2026-11-25"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"date": "2026-11-21", "total": 6, "final": 6, "live": 0, "scheduled": 0},
+            {"date": "2026-11-22", "total": 7, "final": 2, "live": 1, "scheduled": 4},
+        ],
+        "meta": {"total": 2, "limit": 2, "offset": 0},
+    }
+    _, params = session.calls[-1]
+    assert params == {"from_date": date(2026, 11, 19), "to_date": date(2026, 11, 25)}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "params",
+    [
+        {},
+        {"from": "2026-11-19"},
+        {"from": "2026-11-19", "to": "soon"},
+        {"from": "2026-11-25", "to": "2026-11-19"},
+        {"from": "2026-10-01", "to": "2026-11-01"},
+    ],
+)
+def test_list_game_days_rejects_a_bad_range(client, params) -> None:
+    assert client.get("/api/v1/games/days", params=params).status_code == 422
+
+
+@pytest.mark.unit
+def test_list_game_days_sql_splits_by_state_on_the_eastern_clock() -> None:
+    from queries.games import LIST_GAME_DAYS
+
+    sql = str(LIST_GAME_DAYS)
+    assert "FROM gold.fct_games_schedule" in sql
+    assert "fct_games_schedule.game_date BETWEEN :from_date AND :to_date" in sql
+    assert "AT TIME ZONE 'America/New_York' <= now()" in sql
+    assert "ORDER BY fct_games_schedule.game_date ASC" in sql
+
+
+@pytest.mark.unit
 def test_list_largest_margins(client, session, mapping_row, query_result) -> None:
     from queries.games import LIST_LARGEST_MARGINS
 

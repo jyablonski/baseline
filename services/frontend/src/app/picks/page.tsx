@@ -287,8 +287,8 @@ function OpenPicks({ picks }: { picks: UserPick[] }) {
             </button>
           </>
         )}
-        <Link href="/schedule" className="ml-auto text-sm text-primary">
-          Schedule →
+        <Link href="/games" className="ml-auto text-sm text-primary">
+          Games →
         </Link>
       </div>
       {expanded ? (

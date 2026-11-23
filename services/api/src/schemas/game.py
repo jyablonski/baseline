@@ -141,6 +141,21 @@ class GameDate(BaseModel):
     game_count: int
 
 
+class GameDay(BaseModel):
+    """One date's games by state, for the Games page's week strip.
+
+    `live` is tipped by the clock but not Final (no live feed); `scheduled` is
+    not yet tipped. The three add up to `total`.
+    """
+
+    # Served as "date"; the attribute cannot share its type's name.
+    game_date: date = Field(serialization_alias="date")
+    total: int
+    final: int
+    live: int
+    scheduled: int
+
+
 class LargestMarginGame(BaseModel):
     """A Final game ranked by its winning margin, from gold.fct_game_flow."""
 

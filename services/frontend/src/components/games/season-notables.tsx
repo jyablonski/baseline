@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
-import { PageNav } from "@/components/page-nav";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { TeamLogo } from "@/components/team-logo";
 import { TeamSelect } from "@/components/team-select";
@@ -73,36 +72,37 @@ export function SeasonNotables({ season }: { season: string }) {
 
   return (
     <section aria-label="Season notables" className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="type-module">Season notables</h2>
-        <TeamSelect
-          team={team}
-          teams={teamOptions}
-          setTeam={(value) => router.replace(hrefWith({ team: value }), { scroll: false })}
-        />
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 border-b border-rule-strong">
+        <nav
+          aria-label="Notable games"
+          // Scrolls sideways on phones; the scrollbar itself is hidden so it does
+          // not draw a stray bar at the end of the tabs.
+          className="-mb-px flex overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {NOTABLE_TABS.map((item) => (
+            <Link
+              key={item}
+              href={hrefWith({ tab: item === "comebacks" ? "" : item })}
+              replace
+              scroll={false}
+              aria-current={item === tab ? "page" : undefined}
+              className={cn(
+                "border-b-[3px] border-transparent px-3 py-2.5 text-ink-2 hover:text-foreground",
+                item === tab && "border-primary font-semibold text-foreground"
+              )}
+            >
+              {NOTABLE_TAB_INFO[item].label}
+            </Link>
+          ))}
+        </nav>
+        <div className="pb-2">
+          <TeamSelect
+            team={team}
+            teams={teamOptions}
+            setTeam={(value) => router.replace(hrefWith({ team: value }), { scroll: false })}
+          />
+        </div>
       </div>
-      <nav
-        aria-label="Notable games"
-        // Scrolls sideways on phones; the scrollbar itself is hidden so it does
-        // not draw a stray bar at the end of the tabs.
-        className="flex overflow-x-auto border-b border-rule-strong whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {NOTABLE_TABS.map((item) => (
-          <Link
-            key={item}
-            href={hrefWith({ tab: item === "comebacks" ? "" : item })}
-            replace
-            scroll={false}
-            aria-current={item === tab ? "page" : undefined}
-            className={cn(
-              "-mb-px border-b-[3px] border-transparent px-3 py-2.5 text-ink-2 hover:text-foreground",
-              item === tab && "border-primary font-semibold text-foreground"
-            )}
-          >
-            {NOTABLE_TAB_INFO[item].label}
-          </Link>
-        ))}
-      </nav>
       <p className="text-sm text-ink-2">{info.description}</p>
       <NotableList tab={tab} team={team} season={season} teamIds={teamIds} />
     </section>
@@ -142,35 +142,26 @@ function NotableList({
   teamIds: Map<string, string>;
 }) {
   const info = NOTABLE_TAB_INFO[tab];
-  // Back to the first page whenever the tab, team or season changes. Held as
-  // the filter it belongs to rather than reset in an effect, so a new filter
-  // never fetches its page 2 first.
-  const filterKey = `${tab}|${team}|${season}`;
-  const [paging, setPaging] = useState({ filterKey, page: 0 });
-  const page = paging.filterKey === filterKey ? paging.page : 0;
-  const query = useQuery({
-    queryKey: ["notables", tab, season, team, page],
+  // A new tab, team or season is a new key, so it starts again from ten rows.
+  const query = useInfiniteQuery({
+    queryKey: ["notables", tab, season, team],
+    initialPageParam: 0,
     // One row past the page: these routes report the page's own length as the
-    // total, so the extra row is the only sign there is a next page.
-    queryFn: () =>
+    // total, so the extra row is the only sign there is more.
+    queryFn: ({ pageParam }) =>
       fetchRows(tab, {
         season: season || undefined,
         team: team || undefined,
         limit: PAGE_SIZE + 1,
-        offset: page * PAGE_SIZE,
+        offset: pageParam,
       }),
-    // Keep the previous rows mounted while the next page or filter loads, so
-    // the page height does not collapse and throw the reader back up the page.
+    getNextPageParam: (lastPage, _pages, lastOffset) =>
+      lastPage.length > PAGE_SIZE ? lastOffset + PAGE_SIZE : undefined,
+    // Keep the previous rows mounted while a new filter loads, so the page
+    // height does not collapse and throw the reader back up the page.
     placeholderData: keepPreviousData,
   });
-  const fetched = query.data ?? [];
-  const rows = fetched.slice(0, PAGE_SIZE);
-  const hasNext = fetched.length > PAGE_SIZE;
-  const shownPage = query.isPlaceholderData ? paging.page : page;
-
-  function goTo(next: number) {
-    setPaging({ filterKey, page: next });
-  }
+  const rows = (query.data?.pages ?? []).flatMap((page) => page.slice(0, PAGE_SIZE));
 
   if (query.isPending) return <LoadingState label="Loading notable games…" />;
   if (query.isError) return <ErrorState message={queryErrorMessage(query.error)} />;
@@ -202,26 +193,20 @@ function NotableList({
           </thead>
           <tbody>
             {rows.map((row, index) => (
-              <NotableTableRow
-                key={row.gameId}
-                row={row}
-                rank={shownPage * PAGE_SIZE + index + 1}
-                teamIds={teamIds}
-              />
+              <NotableTableRow key={row.gameId} row={row} rank={index + 1} teamIds={teamIds} />
             ))}
           </tbody>
         </table>
       </div>
-      {page > 0 || hasNext ? (
-        <PageNav
-          label="Notable games pages"
-          status={`Page ${page + 1}`}
-          hasPrev={page > 0}
-          hasNext={hasNext}
-          loading={query.isPlaceholderData}
-          onPrev={() => goTo(page - 1)}
-          onNext={() => goTo(page + 1)}
-        />
+      {query.hasNextPage ? (
+        <button
+          type="button"
+          className="mt-3 text-sm text-primary hover:underline disabled:text-ink-3 disabled:no-underline"
+          disabled={query.isFetchingNextPage}
+          onClick={() => query.fetchNextPage()}
+        >
+          {query.isFetchingNextPage ? "Loading…" : "Show next 10 →"}
+        </button>
       ) : null}
     </div>
   );
@@ -247,9 +232,8 @@ function NotableTableRow({
         <Link
           href={`/games/${row.gameId}`}
           aria-label={rowLine(row)}
-          className="inline-flex flex-wrap items-center gap-x-1.5 align-middle after:absolute after:inset-0 group-hover:underline"
+          className="inline-flex items-center gap-x-1.5 align-middle whitespace-nowrap after:absolute after:inset-0 group-hover:underline"
         >
-          {/* Each logo stays on the line with its abbreviation when the row wraps. */}
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
             <TeamLogo teamId={teamIds.get(row.team)} abbreviation={row.team} />
             <span className="font-semibold">{row.team}</span>
@@ -276,7 +260,7 @@ function NotableTableRow({
           </span>
         ) : null}
         {/* The date column is hidden on phones, so the date leads this line there. */}
-        <span className="mt-0.5 block text-xs text-ink-2">
+        <span className="mt-0.5 block text-xs whitespace-nowrap text-ink-2">
           <span className="sm:hidden">
             {formatDate(row.date)}
             {row.context || row.note ? " · " : null}

@@ -4,7 +4,6 @@ import { SITE_URL } from "@/lib/site";
 
 const PUBLIC_PATHS = [
   "/",
-  "/schedule",
   "/games",
   "/players",
   "/teams",

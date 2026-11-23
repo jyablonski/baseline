@@ -175,24 +175,24 @@ function ResultsStrip({
   const shown = keepFollowed(rankSlate(games), followed, SLATE_LIMIT);
   const day = date?.slice(0, 10);
   // The scrape lands the morning after, so "last night" only holds until the
-  // next one; an off day or the offseason shows an older slate.
-  const title =
-    date && date.slice(0, 10) === isoDayBefore(isoDateET()) ? "Last night" : "Latest results";
+  // next one; an off day or the offseason titles the block with its own day.
+  const lastNight = day === isoDayBefore(isoDateET());
+  const title = !day ? "Latest results" : lastNight ? "Last night" : formatDayTitle(day);
   return (
     <>
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <div className="flex flex-wrap items-baseline gap-x-3">
           <h2 className="type-module">{title}</h2>
-          {date ? (
+          {day ? (
             <p className="text-sm text-ink-2">
-              {formatDayTitle(date.slice(0, 10))} · {games.length}{" "}
-              {games.length === 1 ? "game" : "games"}
+              {lastNight ? `${formatDayTitle(day)} · ` : null}
+              {games.length} {games.length === 1 ? "game" : "games"}
             </p>
           ) : null}
         </div>
         {/* Pinned to the night, so it still lands there once a newer slate is in. */}
         <Link href={day ? `/games?date=${day}` : "/games"} className="text-sm text-primary">
-          See all latest results →
+          All results →
         </Link>
       </div>
       {isLoading ? (
@@ -329,11 +329,8 @@ function UpcomingList({
       <div className="mb-2">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="type-module">{title}</h2>
-          <Link
-            href={withSeason("/schedule", season)}
-            className="text-sm whitespace-nowrap text-primary"
-          >
-            See full schedule →
+          <Link href="/games" className="text-sm whitespace-nowrap text-primary">
+            Full schedule →
           </Link>
         </div>
         {date ? (

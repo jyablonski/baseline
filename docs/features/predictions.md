@@ -23,7 +23,7 @@ The product view. Model internals, training, backfill and the value report are i
 
 ## What users see
 
-- **`/schedule`:** the live model's win % for each upcoming game in the coming week.
+- **`/games`:** the live model's win % for each upcoming game in the coming week.
 - **Game page:** the live model's number, split into points of spread ("What goes into the number": strength, home court, and for Elo v2 / v3 confidence, back-to-back and injuries).
 - **Team page calendar:** the team's win % on each upcoming game.
 - **`/picks`:** "vs. the model" compares a visitor's picks with the live model's favourite.

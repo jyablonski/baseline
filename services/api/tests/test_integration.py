@@ -167,6 +167,27 @@ def test_games_and_seasons(integration_client, postgres_engine) -> None:
         == []
     )
 
+    # Both Finals and the two games to play, counted by state. Dates with no
+    # games are left out; the seed has no tip times, so nothing is live.
+    days = integration_client.get(
+        "/api/v1/games/days", params={"from": "2024-10-20", "to": "2024-10-26"}
+    ).json()
+    assert days["data"] == [
+        {"date": "2024-10-22", "total": 1, "final": 1, "live": 0, "scheduled": 0},
+        {"date": "2024-10-25", "total": 1, "final": 1, "live": 0, "scheduled": 0},
+    ]
+    soon = integration_client.get(
+        "/api/v1/games/days",
+        params={
+            "from": (today + timedelta(days=14)).isoformat(),
+            "to": (today + timedelta(days=20)).isoformat(),
+        },
+    ).json()["data"]
+    assert [(row["date"], row["scheduled"]) for row in soon] == [
+        ((today + timedelta(days=14)).isoformat(), 1),
+        ((today + timedelta(days=15)).isoformat(), 1),
+    ]
+
     seasons = integration_client.get("/api/v1/seasons")
     assert seasons.status_code == 200
     assert seasons.json()["data"] == ["2024-25"]

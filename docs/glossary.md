@@ -40,7 +40,7 @@ Terms that mean something specific here, and where they live in code. When the p
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
 | Report       | Basketball-Reference's current injury list. Our history is one snapshot per scrape day, the morning report, not the official inactive list | `source.player_injuries`, `source.player_injuries_history` |
 | Notable      | A team's top 2 or the league's top 30 by game score. Feeds Elo v2, so widening it changes a model                                          | `is_notable`, `injury_notable_*` vars                      |
-| Key          | Wider than notable (league top 100). Only decides the `/schedule` Injuries column                                                          | `is_key`, `injury_key_league_rank`                         |
+| Key          | Wider than notable (league top 100). Only decides the `/games` Injuries column                                                             | `is_key`, `injury_key_league_rank`                         |
 | Injury score | Everyone missing from one side rolled into one number; Elo v3's input                                                                      | `fct_game_injury_scores`                                   |
 
 ## Models and odds

@@ -17,7 +17,9 @@ export function ColumnHelp({
   children: React.ReactNode;
 }) {
   return (
-    <th className={className}>
+    // The role is spelled out for grid-laid tables (.schedule-grid), where a
+    // changed display can strip a th's implicit one.
+    <th className={className} role="columnheader">
       <Popover>
         <PopoverTrigger
           // Inherits the heading's type; only the dotted rule marks it as pressable.

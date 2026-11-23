@@ -106,10 +106,7 @@ function GameBody() {
 
       <p className="flex flex-wrap gap-x-6 text-sm">
         <Link href="/games" className="text-primary hover:underline">
-          All results →
-        </Link>
-        <Link href="/schedule" className="text-primary hover:underline">
-          Full schedule →
+          All games →
         </Link>
       </p>
     </div>

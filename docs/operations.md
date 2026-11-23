@@ -131,7 +131,7 @@ Sessions issued before Google sign-in was added carry no provider and are refuse
 `source.feature_flags` holds one row per switchable feature, and the Settings tab on `/admin` turns each on or off. A change applies to the next request, with no deploy or restart. Current flags:
 
 - `chatbot` — the signed-in chat at `/chat`. Off makes `POST /api/v1/account/chat` return 503 and puts Ask back in the nav.
-- `picks` — game picks on `/schedule` and `/picks`. Off hides them and makes the picks routes return 503. Existing picks are kept.
+- `picks` — game picks on `/games` and `/picks`. Off hides them and makes the picks routes return 503. Existing picks are kept.
 - `feedback` — the public form at `/feedback`. Off makes `POST /api/v1/feedback` return 503 and shows the contact email instead. The switch to reach for if spam gets past the honeypot and rate limits ([features/feedback.md](features/feedback.md)).
 
 The API enforces a flag, the UI only reflects it, so a page left open after a flag is switched off still gets refused. `GET /api/v1/features` is the public read, and it reports what the UI should offer rather than the raw flags: `chatbot` is true only when the flag is on **and** `NLP_LLM_API_KEY` is set.

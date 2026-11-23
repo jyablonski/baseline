@@ -167,7 +167,7 @@ describe("game flow page", () => {
       expect(screen.getByText("No PBP data available.")).toBeInTheDocument();
     });
     expect(screen.getByText("There's no scoring timeline for this game.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "All results →" })).toHaveAttribute("href", "/games");
+    expect(screen.getByRole("link", { name: "All games →" })).toHaveAttribute("href", "/games");
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByText("Recent final games")).not.toBeInTheDocument();
     expect(screen.queryByText(/dbt/i)).not.toBeInTheDocument();
