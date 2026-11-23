@@ -251,7 +251,7 @@ describe("games page", () => {
     expect(api.listGameDays).toHaveBeenCalledWith({ from: "2026-10-19", to: "2026-10-25" });
     const today = screen.getByRole("button", { name: /Thu 22/ });
     expect(today).toHaveAttribute("aria-current", "date");
-    expect(today).toHaveClass("bg-foreground");
+    expect(today).toHaveClass("bg-primary");
   });
 
   it("lists a mixed day as finals, then live, then upcoming", async () => {

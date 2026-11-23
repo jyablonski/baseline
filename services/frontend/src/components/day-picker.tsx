@@ -124,7 +124,7 @@ export function DayCalendar({
                         className={cn(
                           "relative flex h-9 w-full flex-col items-center justify-center tabular",
                           hasGames ? "font-semibold hover:bg-tint" : "cursor-default text-ink-3",
-                          selected && "bg-foreground text-background hover:bg-foreground"
+                          selected && "bg-primary text-primary-foreground hover:bg-primary"
                         )}
                       >
                         {Number(cell.date.slice(8, 10))}
@@ -133,7 +133,7 @@ export function DayCalendar({
                             aria-hidden="true"
                             className={cn(
                               "absolute bottom-1 size-1 rounded-full",
-                              selected ? "bg-background" : "bg-primary"
+                              selected ? "bg-primary-foreground" : "bg-primary"
                             )}
                           />
                         ) : null}

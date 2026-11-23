@@ -90,7 +90,7 @@ export function WeekStrip({
               className={cn(
                 "flex min-w-[5.5rem] flex-1 flex-col items-center justify-center gap-0.5 border-r border-rule px-2 py-2.5 last:border-r-0 whitespace-nowrap",
                 isSelected
-                  ? "bg-foreground text-raised"
+                  ? "bg-primary text-primary-foreground"
                   : cn("hover:bg-tint", isToday && "bg-[#ece8df]")
               )}
             >
@@ -98,7 +98,7 @@ export function WeekStrip({
               <span
                 className={cn(
                   "min-h-[1lh] text-xs tabular",
-                  isSelected ? "text-raised/80" : "text-ink-2"
+                  isSelected ? "text-primary-foreground/80" : "text-ink-2"
                 )}
               >
                 {counts ? dayMeta(date, today, counts.get(date)) : null}
