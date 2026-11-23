@@ -17,6 +17,7 @@ import type {
   ClosestGame,
   GameCollapse,
   GameDate,
+  GameDay,
   LargestMarginGame,
   GameUpset,
   Transaction,
@@ -459,6 +460,12 @@ export const api = {
   listGameDates: async (params: { season?: string } = {}) =>
     asPaginated<GameDate>(
       await fetchApi(`/api/v1/games/dates${buildQuery({ season: params.season })}`)
+    ),
+
+  /** Dates from `from` to `to` (inclusive, at most 31 days) that have games, counted by state. */
+  listGameDays: async (params: { from: string; to: string }) =>
+    asPaginated<GameDay>(
+      await fetchApi(`/api/v1/games/days${buildQuery({ from: params.from, to: params.to })}`)
     ),
 
   /** Every date with a game still to play from `from_date` (API default: today), oldest first. */

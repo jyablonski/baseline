@@ -358,6 +358,15 @@ export type GameDate = {
   game_count: number;
 };
 
+/** One date's games by state, for the Games week strip. `live` is tipped by the clock but not Final. */
+export type GameDay = {
+  date: string;
+  total: number;
+  final: number;
+  live: number;
+  scheduled: number;
+};
+
 export type SeasonInfo = {
   season: string;
 };

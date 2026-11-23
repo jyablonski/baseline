@@ -1,60 +1,42 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
-import { DayHeader, DayPicker } from "@/components/day-picker";
+import { DayCalendar, DayHeader } from "@/components/day-picker";
 
 describe("DayHeader", () => {
-  it("draws a strong rule by default and a light one when a table head follows", () => {
-    const { container, rerender } = render(
-      <DayHeader title="Latest · Saturday, June 13" summary="Finals · 1 game">
-        <span>picker</span>
+  it("puts the summary beside the title and controls on the right", () => {
+    render(
+      <DayHeader title="Today · Sunday, November 22" summary="7 games · PST">
+        <span>My teams</span>
       </DayHeader>
     );
-    const row = container.firstElementChild as HTMLElement;
-    expect(row).toHaveClass("border-rule-strong");
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "Latest · Saturday, June 13"
+      "Today · Sunday, November 22"
     );
-    expect(screen.getByText("Finals · 1 game")).toBeInTheDocument();
-    expect(screen.getByText("picker")).toBeInTheDocument();
-
-    rerender(
-      <DayHeader title="Today · Thursday, October 22" rule="light">
-        <span>picker</span>
-      </DayHeader>
-    );
-    expect(row).toHaveClass("border-rule");
-    expect(row).not.toHaveClass("border-rule-strong");
-  });
-
-  it("keeps the summary line's height while the day loads, so the rule does not jump", () => {
-    const { container } = render(
-      <DayHeader title="Friday, October 23" summary={null}>
-        <span />
-      </DayHeader>
-    );
-    const summary = container.querySelector("h2 + p");
-    expect(summary).toBeEmptyDOMElement();
-    expect(summary).toHaveClass("min-h-[1lh]");
+    expect(screen.getByText("7 games · PST")).toBeInTheDocument();
+    expect(screen.getByText("My teams")).toBeInTheDocument();
   });
 });
 
-describe("DayPicker", () => {
-  it("gives the date button a fixed width so the arrows do not move between days", () => {
+describe("DayCalendar", () => {
+  it("opens a month grid where only game days can be picked, with a way back to today", () => {
+    const onPick = vi.fn();
     render(
-      <DayPicker
-        current="2026-10-22"
+      <DayCalendar
+        current="2026-10-24"
         home="2026-10-22"
         homeLabel="Today"
-        older={null}
-        newer="2026-10-24"
         gameDays={["2026-10-24", "2026-10-22"]}
-        onPick={() => {}}
+        onPick={onPick}
       />
     );
-    const trigger = screen.getByRole("button", { name: /Pick a game day, showing Thu, Oct 22/ });
-    expect(trigger).toHaveClass("min-w-[9.5em]", "justify-center");
-    expect(screen.getByRole("button", { name: "Earlier game day" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Later game day" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: /Pick a game day, showing Sat, Oct 24/ }));
+    expect(screen.getByRole("button", { name: "Fri, Oct 23, no games" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sat, Oct 24" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    expect(onPick).toHaveBeenCalledWith("2026-10-22");
   });
 });

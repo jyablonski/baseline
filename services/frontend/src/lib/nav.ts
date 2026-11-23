@@ -1,9 +1,8 @@
 export const PRIMARY_NAV = [
   { href: "/", label: "Home" },
-  { href: "/schedule", label: "Schedule" },
-  { href: "/games", label: "Past Games" },
-  { href: "/players", label: "Players" },
+  { href: "/games", label: "Games" },
   { href: "/teams", label: "Teams" },
+  { href: "/players", label: "Players" },
   { href: "/social", label: "Social" },
   { href: "/ask", label: "Ask" },
 ] as const;

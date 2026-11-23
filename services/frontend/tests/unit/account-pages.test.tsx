@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * The signed-in surfaces: header links, the schedule's pick column, and the
+ * The signed-in surfaces: header links, the Games page's pick columns, and the
  * Picks, Chat and Account pages. Session and flags are mocked at the hook, and
  * the server actions at the module, so each state a visitor can be in renders.
  */
@@ -14,9 +14,11 @@ const state = vi.hoisted(() => ({
     isAdmin?: boolean;
   } | null,
   flags: { chatbot: true, picks: true, isLoading: false },
-  pathname: "/schedule",
-  search: "season=2026-27",
+  pathname: "/games",
+  search: "date=2026-10-22",
   replace: vi.fn(),
+  // Finals for a past day on /games; none unless a test sets them.
+  finals: [] as Record<string, unknown>[],
 }));
 const actions = vi.hoisted(() => ({
   getProfileAction: vi.fn(),
@@ -71,6 +73,12 @@ vi.mock("@/lib/api", () => ({
       meta: { total: 1, limit: 1, offset: 0 },
     }),
     listSchedule: async () => ({ data: [game], meta: { total: 1, limit: 50, offset: 0 } }),
+    listGameDays: async () => ({ data: [], meta: { total: 0, limit: 0, offset: 0 } }),
+    listGameDates: async () => ({ data: [], meta: { total: 0, limit: 0, offset: 0 } }),
+    listGames: async () => ({
+      data: state.finals,
+      meta: { total: state.finals.length, limit: 20, offset: 0 },
+    }),
     listTeams: async () => ({
       data: [
         { team_id: "den", abbreviation: "DEN", team_name: "Denver Nuggets", city: "Denver" },
@@ -93,8 +101,8 @@ vi.mock("@/lib/api", () => ({
 
 import AccountPage from "@/app/account/page";
 import ChatPage from "@/app/chat/page";
+import GamesPage from "@/app/games/page";
 import PicksPage from "@/app/picks/page";
-import SchedulePage from "@/app/schedule/page";
 import { Header } from "@/components/layout/header";
 import { Providers } from "@/components/providers";
 
@@ -137,6 +145,27 @@ function pick(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function finalGame(
+  gameId: string,
+  home: string,
+  away: string,
+  overrides: Record<string, unknown> = {}
+) {
+  return {
+    game_id: gameId,
+    season: "2026-27",
+    season_type: "Regular Season",
+    game_date: "2026-10-18",
+    home_team_id: `h-${gameId}`,
+    away_team_id: `a-${gameId}`,
+    home_team_abbreviation: home,
+    away_team_abbreviation: away,
+    home_score: 120,
+    away_score: 110,
+    ...overrides,
+  };
+}
+
 function quota(remaining: number, maxTurns = 6) {
   return {
     daily_limit: 10,
@@ -172,8 +201,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.account = { name: "Pat", hasAccount: true };
   state.flags = { chatbot: true, picks: true, isLoading: false };
-  state.pathname = "/schedule";
-  state.search = "season=2026-27";
+  state.pathname = "/games";
+  state.search = "date=2026-10-22";
+  state.finals = [];
   actions.getPickSheetAction.mockResolvedValue(sheet());
   actions.getProfileAction.mockResolvedValue(profile());
 });
@@ -338,7 +368,7 @@ describe("header", () => {
   });
 });
 
-describe("schedule picks", () => {
+describe("games page picks", () => {
   // The fixture game tips at 7:30 PM Eastern on Oct 22 and locks from then, so
   // the clock is pinned two days before it; unpinned, these fail on the evening
   // of the fixture date.
@@ -351,20 +381,20 @@ describe("schedule picks", () => {
 
   it("shows an anonymous visitor the pick buttons, which lead to sign-in", async () => {
     state.account = null;
-    page(<SchedulePage />);
+    page(<GamesPage />);
     expect(await screen.findByRole("link", { name: "GSW" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Your pick" })).toBeInTheDocument();
     // The steps stay out of the way until asked for.
     expect(screen.queryByText("Pick a winner")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Your picks" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Your picks →" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Pick GSW" }));
     const steps = await screen.findByRole("dialog", { name: "How picks work" });
     expect(steps).toHaveTextContent("Pretend dollars, paid at the moneyline. Nothing is charged.");
-    // Back to the same season after signing in.
+    // Back to the same day after signing in.
     expect(within(steps).getByRole("link", { name: "Sign in to start" })).toHaveAttribute(
       "href",
-      "/signin?callbackUrl=%2Fschedule%3Fseason%3D2026-27"
+      "/signin?callbackUrl=%2Fgames%3Fdate%3D2026-10-22"
     );
     expect(actions.savePickAction).not.toHaveBeenCalled();
     expect(actions.getPickSheetAction).not.toHaveBeenCalled();
@@ -372,7 +402,7 @@ describe("schedule picks", () => {
 
   it("shows no pick column when picks are switched off", async () => {
     state.flags = { chatbot: true, picks: false, isLoading: false };
-    page(<SchedulePage />);
+    page(<GamesPage />);
     expect(await screen.findByRole("link", { name: "GSW" })).toBeInTheDocument();
     expect(screen.queryByText("Your pick")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Your pick" })).not.toBeInTheDocument();
@@ -380,17 +410,17 @@ describe("schedule picks", () => {
 
     // Nor to an anonymous visitor: there is nothing to sign in for.
     state.account = null;
-    page(<SchedulePage />);
+    page(<GamesPage />);
     await waitFor(() => expect(screen.getAllByRole("link", { name: "GSW" })).toHaveLength(2));
     expect(screen.queryByRole("button", { name: "Your pick" })).not.toBeInTheDocument();
   });
 
   it("shows start times in the account's time zone, Eastern unless one is chosen", async () => {
-    const { unmount } = page(<SchedulePage />);
+    const { unmount } = page(<GamesPage />);
     expect(await screen.findByText("7:30 PM ET")).toBeInTheDocument();
     unmount();
     actions.getProfileAction.mockResolvedValue(profile("America/Los_Angeles"));
-    page(<SchedulePage />);
+    page(<GamesPage />);
     expect(await screen.findByText("4:30 PM PDT")).toBeInTheDocument();
     expect(screen.queryByText("7:30 PM ET")).not.toBeInTheDocument();
   });
@@ -400,10 +430,10 @@ describe("schedule picks", () => {
       sheet([], { ...emptySummary, wins: 12, losses: 7, net: 37.15 })
     );
     actions.savePickAction.mockResolvedValue(sheet([pick()], { ...emptySummary, pending: 1 }));
-    page(<SchedulePage />);
+    page(<GamesPage />);
     expect(await screen.findByText("Your pick")).toBeInTheDocument();
     // The record and net live on the picks page, not here.
-    expect(screen.getByRole("link", { name: "Your picks" })).toHaveAttribute("href", "/picks");
+    expect(screen.getByRole("link", { name: "Your picks →" })).toHaveAttribute("href", "/picks");
     fireEvent.click(screen.getByRole("button", { name: "Your pick" }));
     const steps = await screen.findByRole("dialog", { name: "How picks work" });
     expect(steps).toHaveTextContent("Track your net");
@@ -428,7 +458,7 @@ describe("schedule picks", () => {
     actions.savePickAction.mockResolvedValue(
       sheet([pick({ stake: 50 })], { ...emptySummary, pending: 1, staked_open: 50 })
     );
-    page(<SchedulePage />);
+    page(<GamesPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Add stake" }));
     const editor = screen.getByTestId("stake-editor");
     expect(screen.getByRole("dialog", { name: "GSW to win" })).toHaveTextContent("−150");
@@ -444,7 +474,7 @@ describe("schedule picks", () => {
   it("closes the stake popover on Escape or when the pick is removed", async () => {
     actions.getPickSheetAction.mockResolvedValue(sheet([pick()]));
     actions.removePickAction.mockResolvedValue(sheet());
-    page(<SchedulePage />);
+    page(<GamesPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Add stake" }));
     fireEvent.keyDown(screen.getByTestId("stake-editor"), { key: "Escape" });
     await waitFor(() => expect(screen.queryByTestId("stake-editor")).not.toBeInTheDocument());
@@ -461,7 +491,7 @@ describe("schedule picks", () => {
       ok: false,
       message: "Accounts are not available right now.",
     });
-    page(<SchedulePage />);
+    page(<GamesPage />);
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Accounts are not available right now."
     );
@@ -473,7 +503,7 @@ describe("schedule picks", () => {
       ok: false,
       message: "Picks for this game are locked.",
     });
-    page(<SchedulePage />);
+    page(<GamesPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Pick LAL" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Picks for this game are locked.");
   });
@@ -481,7 +511,7 @@ describe("schedule picks", () => {
   it("clears a pick", async () => {
     actions.getPickSheetAction.mockResolvedValue(sheet([pick()]));
     actions.removePickAction.mockResolvedValue(sheet());
-    page(<SchedulePage />);
+    page(<GamesPage />);
     fireEvent.click(await screen.findByRole("button", { name: /Clear pick/ }));
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: /Clear pick/ })).not.toBeInTheDocument()
@@ -490,7 +520,51 @@ describe("schedule picks", () => {
   });
 });
 
-describe("schedule for followed teams", () => {
+describe("games page settled picks", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-20T16:00:00Z") });
+    state.search = "date=2026-10-18";
+    state.finals = [finalGame("g-8", "GSW", "LAL"), finalGame("g-9", "BOS", "MIA")];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("marks each past game with the visitor's pick and how it went", async () => {
+    actions.getPickSheetAction.mockResolvedValue(
+      sheet([
+        pick({ game_id: "g-8", picked_team_id: "h-g-8", home_team_id: "h-g-8", result: "won" }),
+        pick({
+          game_id: "g-9",
+          picked_team_id: "a-g-9",
+          away_team_id: "a-g-9",
+          away_team_abbreviation: "MIA",
+          result: "lost",
+        }),
+      ])
+    );
+    page(<GamesPage />);
+    const won = await screen.findByText("✓ You: GSW");
+    expect(won).toHaveClass("text-primary");
+    expect(screen.getByText("✗ You: MIA")).toHaveClass("text-destructive");
+    expect(screen.getByText(/Your settled picks show on the right/)).toBeInTheDocument();
+  });
+
+  it("leaves the cell empty on a game the visitor did not pick", async () => {
+    actions.getPickSheetAction.mockResolvedValue(
+      sheet([
+        pick({ game_id: "g-8", picked_team_id: "h-g-8", home_team_id: "h-g-8", result: "won" }),
+      ])
+    );
+    page(<GamesPage />);
+    await screen.findByText("✓ You: GSW");
+    const cells = screen.getAllByTestId("settled-pick");
+    expect(cells).toHaveLength(2);
+    expect(cells[1]).toBeEmptyDOMElement();
+  });
+});
+
+describe("games page for followed teams", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-20T16:00:00Z") });
   });
@@ -502,7 +576,7 @@ describe("schedule for followed teams", () => {
     actions.getProfileAction.mockResolvedValue(
       profile(null, quota(10), [followed("home", "Golden State Warriors", "GSW")])
     );
-    page(<SchedulePage />);
+    page(<GamesPage />);
     const row = (await screen.findByRole("link", { name: "GSW" })).closest("tr");
     const toggle = screen.getByRole("switch", { name: "Only my teams" });
     expect(toggle).toHaveAttribute("aria-checked", "false");
@@ -510,29 +584,43 @@ describe("schedule for followed teams", () => {
     expect(row).toHaveClass("bg-tint");
 
     fireEvent.click(toggle);
-    expect(state.replace).toHaveBeenCalledWith("/schedule?season=2026-27&mine=1", {
+    expect(state.replace).toHaveBeenCalledWith("/games?date=2026-10-22&mine=1", {
       scroll: false,
     });
   });
 
   it("says so when none of the followed teams play that day", async () => {
-    state.search = "season=2026-27&mine=1";
+    state.search = "date=2026-10-22&mine=1";
     actions.getProfileAction.mockResolvedValue(
       profile(null, quota(10), [followed("other", "Denver Nuggets", "DEN")])
     );
-    page(<SchedulePage />);
+    page(<GamesPage />);
     expect(await screen.findByText("None of your teams play on this date.")).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "Only my teams" })).toHaveAttribute(
       "aria-checked",
       "true"
     );
     fireEvent.click(screen.getByRole("switch", { name: "Only my teams" }));
-    expect(state.replace).toHaveBeenCalledWith("/schedule?season=2026-27", { scroll: false });
+    expect(state.replace).toHaveBeenCalledWith("/games?date=2026-10-22", { scroll: false });
+  });
+
+  it("filters a past day's results to followed teams too", async () => {
+    state.search = "date=2026-10-18&mine=1";
+    state.finals = [
+      finalGame("g-8", "GSW", "LAL", { home_team_id: "home", away_team_id: "away" }),
+      finalGame("g-9", "BOS", "MIA"),
+    ];
+    actions.getProfileAction.mockResolvedValue(
+      profile(null, quota(10), [followed("home", "Golden State Warriors", "GSW")])
+    );
+    page(<GamesPage />);
+    expect(await screen.findByRole("link", { name: "GSW 120, LAL 110" })).toBeInTheDocument();
+    expect(screen.getAllByTestId("result-row")).toHaveLength(1);
   });
 
   it("ignores the filter for a visitor who follows nobody", async () => {
-    state.search = "season=2026-27&mine=1";
-    page(<SchedulePage />);
+    state.search = "date=2026-10-22&mine=1";
+    page(<GamesPage />);
     expect(await screen.findByRole("link", { name: "GSW" })).toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: "Only my teams" })).not.toBeInTheDocument();
   });

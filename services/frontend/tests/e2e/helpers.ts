@@ -1,14 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-export const PRIMARY_NAV = [
-  "Home",
-  "Schedule",
-  "Past Games",
-  "Players",
-  "Teams",
-  "Social",
-  "Ask",
-] as const;
+export const PRIMARY_NAV = ["Home", "Games", "Teams", "Players", "Social", "Ask"] as const;
 
 export type MockApiOptions = {
   empty?: boolean;
@@ -1289,8 +1281,26 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         });
       }
 
+      // The week strip's counts, from the same fixtures as /games and /schedule.
+      if (url.includes("/games/days")) {
+        const params = new URL(url, "http://localhost").searchParams;
+        const from = params.get("from") ?? "";
+        const to = params.get("to") ?? "";
+        const days = empty
+          ? []
+          : [
+              { date: "2024-10-20", total: 1, final: 1, live: 0, scheduled: 0 },
+              { date: "2024-10-22", total: 1, final: 1, live: 0, scheduled: 0 },
+              { date: "2026-10-22", total: 1, final: 0, live: 0, scheduled: 1 },
+              ...(scheduleSecondDay
+                ? [{ date: "2026-10-24", total: 1, final: 0, live: 0, scheduled: 1 }]
+                : []),
+            ].filter((day) => day.date >= from && day.date <= to);
+        return json({ data: days, meta: { total: days.length, limit: days.length, offset: 0 } });
+      }
+
       // One game by id. After /games/highlights, /games/collapses,
-      // /games/closest, /games/largest-margins, /games/dates and /games/upsets,
+      // /games/closest, /games/largest-margins, /games/dates, /games/days and /games/upsets,
       // which would otherwise read as an id.
       const singleGame = url.match(/\/api\/v1\/games\/([^/?]+)(?:\?|$)/);
       if (singleGame) {
@@ -1404,26 +1414,30 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
       }
 
       if (url.includes("/games")) {
+        // A day other than the fixture's has no finals; no date is the latest slate.
+        const gameDate = new URL(url, "http://localhost").searchParams.get("game_date");
+        const otherDay = gameDate != null && gameDate !== "2024-10-22";
         return json({
-          data: empty
-            ? []
-            : [
-                {
-                  game_id: "0022400001",
-                  season: "2025-26",
-                  season_type: "Regular Season",
-                  game_date: "2024-10-22",
-                  home_team_id: 1610612744,
-                  away_team_id: 1610612747,
-                  home_team_abbreviation: "GSW",
-                  away_team_abbreviation: "LAL",
-                  home_score: 120,
-                  away_score: 110,
-                  score_margin: 10,
-                  arena_city: "San Francisco",
-                  lead_highlight: "Stephen Curry 38, LeBron James 35",
-                },
-              ],
+          data:
+            empty || otherDay
+              ? []
+              : [
+                  {
+                    game_id: "0022400001",
+                    season: "2025-26",
+                    season_type: "Regular Season",
+                    game_date: "2024-10-22",
+                    home_team_id: 1610612744,
+                    away_team_id: 1610612747,
+                    home_team_abbreviation: "GSW",
+                    away_team_abbreviation: "LAL",
+                    home_score: 120,
+                    away_score: 110,
+                    score_margin: 10,
+                    arena_city: "San Francisco",
+                    lead_highlight: "Stephen Curry 38, LeBron James 35",
+                  },
+                ],
           meta: { total: empty ? 0 : 1, limit: 10, offset: 0 },
         });
       }

@@ -63,7 +63,7 @@ Elo v1 is the most accurate. Logit v1 is the best calibrated (its 70% means abou
 - `model_name=elo`, `model_version=elo-v0`
 - grain is `game_id` + `model_version`: each run overwrites the row in place, so the table holds one prediction per game per model and the last pregame run is the one that gets graded. There is no history of how a number moved
 - a game whose `start_time_et` has passed is not rescored, so the hourly catch-up (`docs/operations.md`) can rerun `score` during game time without replacing a graded pregame row. A game with no published tip-off time falls back to the date window
-- nothing is kept past the horizon: `score` deletes rows for games dated beyond it, so `/schedule` shows a win probability only for the coming week. A number for a game months out is just today's ratings, and it would be rewritten every day until tip anyway
+- nothing is kept past the horizon: `score` deletes rows for games dated beyond it, so `/games` shows a win probability only for the coming week. A number for a game months out is just today's ratings, and it would be rewritten every day until tip anyway
 - `model_wp` is the **home** win probability; away is `1 - model_wp`
 - `market_wp` is copied from matching odds when present: a calibration reference, not the label
 
@@ -118,7 +118,7 @@ Elo is refit from the loaded Finals on every run, so deleting a season would oth
 
 ### Local demo data
 
-`/schedule` is empty in the off-season. `make seed-demo` (local only) writes fake data into the latest season via `scripts/demo/seed.sql`, then runs `make dbt`, `make ml`, and `make ml-backfill`:
+`/games` has no upcoming games in the off-season. `make seed-demo` (local only) writes fake data into the latest season via `scripts/demo/seed.sql`, then runs `make dbt`, `make ml`, and `make ml-backfill`:
 
 - two weeks of Scheduled games from today (ids `0000de30-…`)
 - two-book h2h and spread odds for the first week (`odds_event_id` `demo-…`)

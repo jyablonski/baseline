@@ -31,7 +31,7 @@ Only the site owner sees `/admin`; it is not in the nav. It shows ingestion, dbt
 Everyone else sees the effect of the flags:
 
 - `chatbot`: the signed-in chat at `/chat`. Off makes `POST /api/v1/account/chat` return 503 and puts Ask back in the header ([ask-and-chat.md](ask-and-chat.md)).
-- `picks`: game picks on `/schedule` and `/picks`. Off hides them and makes the picks routes return 503. Existing picks are kept ([picks.md](picks.md)).
+- `picks`: game picks on `/games` and `/picks`. Off hides them and makes the picks routes return 503. Existing picks are kept ([picks.md](picks.md)).
 - `feedback`: the public form at `/feedback`. Off makes `POST /api/v1/feedback` return 503 and shows the contact email instead. Existing reports are kept ([feedback.md](feedback.md)).
 
 ## How it works

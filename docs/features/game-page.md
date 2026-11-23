@@ -30,7 +30,7 @@ related:
 - **Once Final:** a headline from the series or the result ("Knicks win the NBA Finals, 4–1."); recap cards (the winner's star, a turning point from the flow and the same biggest run the chart shades, falling back to the winner's max lead and share of the game led when there was no decisive run or comeback, and the losing side's top scorer); a "Before tip-off" bar with the market's and the model's favourite and the visitor's graded pick (an "Upset" tag leads it when the market had the loser at 60% or better), whose Compare toggle opens one row each on a loser-to-winner axis; the flow chart; the box score (one team at a time, winner first, a Shooting % toggle, a team totals row); then the series panel beside This season (the other stages' records and the injury report).
 - **In any state:** "Why the model says DAL 74%" splits the live model's number into points of spread ([predictions.md](predictions.md)); absent for a prediction stored without a breakdown.
 - Regular-season game pages have no recap headline (the scoreboard says it); playoff, Finals, Cup and Play-In games keep theirs. The Finals is a playoff series between conferences; any other is "Playoffs".
-- A Final game's "← Past Games" link returns to that game's day on `/games`; an upcoming one's goes to the schedule.
+- A "← Games" link returns to the game's day on `/games`, finished or not; "All games →" at the foot goes to `/games`.
 
 ## How it works
 

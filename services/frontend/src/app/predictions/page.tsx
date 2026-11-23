@@ -41,7 +41,7 @@ function Predictions() {
         <h1 className="type-page">How accurate is the model?</h1>
         <p className="mt-1 text-ink-2">
           {live ? `${modelLabel(live)} sets` : "Our pregame model sets"} the win % on the{" "}
-          <Link href="/schedule" className="underline underline-offset-2">
+          <Link href="/games" className="underline underline-offset-2">
             schedule
           </Link>
           . Here is its record{live ? ` in ${live.season}` : ""}.

@@ -1,8 +1,10 @@
 ---
-summary: The upcoming slate one day at a time, with model win %, market odds, injuries, back-to-backs and national TV.
+summary: Today's and upcoming days on the Games page, with model win %, market odds, injuries, back-to-backs, national TV and picks.
 status: current
 code:
-  - services/frontend/src/app/schedule/
+  - services/frontend/src/app/games/page.tsx
+  - services/frontend/src/components/games/schedule-table.tsx
+  - services/frontend/src/components/games/week-strip.tsx
   - services/frontend/src/components/day-picker.tsx
   - services/frontend/src/components/games/b2b-badge.tsx
   - services/frontend/src/lib/calendar.ts
@@ -24,16 +26,19 @@ related:
 
 ## What users see
 
-`/schedule`: the upcoming slate (not Final, from the Eastern date three hours ago, so a late game stays on past midnight), one game day at a time. No scores.
+The **Schedule & results** view of `/games` ("Games" in the nav), one day at a time. This doc covers today and later days; finished days and the week strip are in [results-and-notables.md](results-and-notables.md). `/schedule` redirects here (307), keeping its query, so `/schedule?date=…` lands on that day.
 
-- Opens on the soonest game day (`?date=` for any other), titled "Today · …" when its games are the ones being played and "Next up · …" otherwise, with a game count and the same ← [date ▾] → picker as `/games`: arrows skip days off, the month grid dots game days, and its button returns to the soonest day. A date with no games says so.
-- **Status** reads "Live" for three hours from the scheduled tip and "Awaiting final" after that, by the clock alone (no live feed, so no score or game clock); a game with no tip time is never called live. A Status column appears only on a day with a game under way. From tip the pregame numbers dim and the pick cell locks ([picks.md](picks.md)).
+- Opens on today's Eastern date (`?date=` for any other). The title is "Today · Sunday, November 22" or "Tomorrow · …", with "7 games · PST" beside it (the account's zone, ET by default). The day view renders in the browser only, since "today" is the visitor's clock.
+- **Rows** for games not yet Final: Time, Matchup (away, then "@ home", each in its own track so the "@" lines up), TV, Win %, Odds, Injuries and, with picks on, Your pick. No scores. A day that is partly played lists its finals first (result rows), then live games, then the ones still to tip.
+- **Status** sits under the tip time: "Live" for three hours from the scheduled tip and "Awaiting final" after that, by the clock alone (no live feed, so no score or game clock); a game with no tip time is never called live. Games still to finish are read from the Eastern date three hours ago, so a late game stays on today past midnight. From tip the pregame numbers dim and the pick cell locks ([picks.md](picks.md)).
 - **Injuries** column ([injuries.md](injuries.md)).
-- **B2B badge** beside a team that played last night, with last night's result in its popover and a "Played last night" legend on the day's summary line; every away slot makes room for it so the "@" lines up.
+- **B2B badge** beside a team that played last night, with last night's result in its popover and a "B2B Played last night" legend beside the day's summary, on today and later days only.
 - **Time** gives the local tip time and links to the game page; a row only adds a date when the tip falls on another local day.
-- **The live model's win %** (away / home) and a **sportsbook consensus moneyline** with the home spread under it. Copy labels them as a model estimate and market odds, not betting advice. Any missing side renders `—`. Links to `/predictions`, and to `/games` for finished games.
-- **Followed teams** ([accounts-and-follows.md](accounts-and-follows.md)): their rows are tinted, and a "My teams" switch beside the picker keeps only their games (`?mine=1`, ignored for anyone who follows none).
-- The home page's slate shows matchups and national TV only; streaks and back-to-backs are left to `/schedule` and the game page.
+- **The live model's win %** (away / home) and a **sportsbook consensus moneyline** with the home spread under it. Copy labels them as a model estimate and market odds, not betting advice. Any missing side renders `—`. Links to `/predictions`.
+- A muted footnote under the rows: "Picks lock at tip-off." (when picks are on) and "Win % from Baseline's model; injuries in red include a key player."
+- **Followed teams** ([accounts-and-follows.md](accounts-and-follows.md)): their rows are tinted, and a "My teams" switch on the right of the day header keeps only their games, past and upcoming alike (`?mine=1`, ignored for anyone who follows none).
+- **Layout:** the table is a CSS grid of subgrid rows (`.schedule-grid` in `globals.css`) with shrinkable `minmax` tracks, so it fits a 900px window without sideways scroll; TV and the pick cell may wrap, times, teams, odds and "Add stake" never do. Below 640px each game stacks into a card: time and matchup, then win %, odds, injuries and TV with their names, then the pick cell. The table's ARIA roles are explicit, since a changed `display` can strip them.
+- The home page's slate shows matchups and national TV only; streaks and back-to-backs are left to `/games` and the game page.
 
 ## How it works
 
@@ -46,7 +51,7 @@ related:
 ## Surfaces
 
 - `GET /api/v1/schedule`: the champion pregame WP, the consensus moneyline and spread, `national_tv`, injury counts, and each side's back-to-back flag with last night's opponent, venue and score (`*_is_back_to_back`, `*_last_night_*`). Shared SQL with `GET /api/v1/games/{id}`.
-- `GET /api/v1/schedule/dates`: every date with a game still to play from `from_date` (default today; the frontend sends the Eastern date three hours ago), oldest first, unpaginated, for the day picker.
+- `GET /api/v1/schedule/dates`: every date with a game still to play from `from_date` (default today), oldest first, unpaginated. `/games` asks from today for the calendar's dots and the empty day's "next games" link.
 - MCP `get_games_schedule`, `get_game_odds`.
 
 ## Invariants

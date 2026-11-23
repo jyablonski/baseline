@@ -2,44 +2,40 @@ import { expect, test } from "@playwright/test";
 
 import { API_FAILURE_DETAIL, expectNo2010Range, mockApi, waitForApiCall } from "./helpers";
 
-test("games index opens on the latest day and steps between game days", async ({ page }) => {
+test("a past day lists its results, each linked to its game page", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/games");
-  await expect(page.getByRole("heading", { name: "Past Games", level: 1 })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Latest · Tuesday, October 22" })).toBeVisible();
-  // Scoped to the results: the notables below also name teams.
-  const results = page.getByRole("region", { name: "Results" });
-  await expect(results.getByTestId("result-row")).not.toContainText("GSW by 10");
-  await expect(page.getByRole("button", { name: "Later game day" })).toBeDisabled();
+  await page.goto("/games?date=2024-10-22");
+  await expect(page.getByRole("heading", { name: "Games", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tuesday, October 22, 2024" })).toBeVisible();
+  await expect(page.getByText("1 game · final")).toBeVisible();
+  const row = page.getByTestId("result-row");
+  await expect(row).toContainText("Stephen Curry 38, LeBron James 35");
+  await expect(
+    page.getByText("Tags and notes from play-by-play. Click a game for the box score.")
+  ).toBeVisible();
   await expectNo2010Range(page);
 
-  await page.getByRole("button", { name: "Earlier game day" }).click();
-  await expect(page).toHaveURL(/\/games\?date=2024-10-20/);
-  await expect(page.getByRole("heading", { name: "Sunday, October 20" })).toBeVisible();
-  await expect(results.getByTestId("result-row")).toContainText("Celtics erase a 21-point deficit");
-
-  // The picker jumps straight back to the latest day.
-  await page.getByRole("button", { name: /Pick a game day/ }).click();
-  await expect(page.getByRole("button", { name: "Mon, Oct 21, no games" })).toBeDisabled();
-  await page.getByRole("button", { name: "Latest" }).click();
-  await expect(page).toHaveURL(/\/games$/);
-
-  await expect(page.getByRole("heading", { name: "Season notables" })).toBeVisible();
-  await expect(
-    page.getByTestId("notable-row").getByRole("link", { name: "BOS beat MIA, 118–115" })
-  ).toBeVisible();
-
-  await results.getByTestId("result-row").getByRole("link").click();
+  await row.getByRole("link").click();
   await expect(page).toHaveURL(/\/games\/0022400001/);
   await expect(page.getByText("No PBP data available.")).toBeVisible();
   await expect(page.getByText("There's no scoring timeline for this game.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "All results →" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "All games →" })).toBeVisible();
+  await page.getByRole("link", { name: "← Games" }).click();
+  await expect(page).toHaveURL(/\/games\?date=2024-10-22$/);
 });
 
-test("games index empty warehouse", async ({ page }) => {
-  await mockApi(page, { empty: true });
+test("season notables open from the view tab", async ({ page }) => {
+  await mockApi(page);
   await page.goto("/games");
-  await expect(page.getByText("No completed games to show yet.")).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Games views" })
+    .getByRole("link", { name: "Season notables" })
+    .click();
+  await expect(page).toHaveURL(/\/games\?view=notables$/);
+  await expect(page.getByRole("group", { name: "Game days" })).toHaveCount(0);
+  await expect(
+    page.getByTestId("notable-row").getByRole("link", { name: "BOS beat MIA, 118–115" })
+  ).toBeVisible();
 });
 
 test("game flow page narrates the comeback and charts the differential", async ({ page }) => {
@@ -61,7 +57,7 @@ test("game flow page narrates the comeback and charts the differential", async (
 
 test("a notable row links through to that game", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/games");
+  await page.goto("/games?view=notables");
 
   const row = page.getByTestId("notable-row");
   await expect(row).toContainText("trailed by 21 in Q3");
@@ -95,14 +91,14 @@ test("game flow surfaces the API failure instead of the no-play-by-play copy", a
 
 test("notables switch tabs and filter by either side of a game", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/games");
+  await page.goto("/games?view=notables");
   const notables = page.getByRole("region", { name: "Season notables" });
   await expect(notables.getByRole("link", { name: "BOS beat MIA, 118–115" })).toBeVisible();
 
   // MIA blew it, so its view reads from the losing side.
   await notables.getByLabel("Team").selectOption("MIA");
   await waitForApiCall(page, "team=MIA");
-  await expect(page).toHaveURL(/\/games\?team=MIA/);
+  await expect(page).toHaveURL(/\/games\?view=notables&team=MIA/);
   await expect(notables.getByRole("link", { name: "MIA lost to BOS, 115–118" })).toBeVisible();
   await expect(notables.getByText("Blew it")).toBeVisible();
 
@@ -128,7 +124,7 @@ test("changing the notables team holds the scroll position", async ({ page }) =>
   // collapses document height and the browser clamps scrollTop to the new max.
   await page.setViewportSize({ width: 800, height: 300 });
   await mockApi(page, { delayMs: 400, collapseRows: 10 });
-  await page.goto("/games");
+  await page.goto("/games?view=notables");
   const table = page.getByTestId("notables-table");
   await expect(table).toBeVisible();
 
@@ -163,10 +159,10 @@ test("game page carries a box score with shooting splits under the chart", async
 });
 
 test("game page previews an upcoming game from its schedule row", async ({ page }) => {
-  // /schedule asks from today's Eastern date, so pin before the fixtures' Oct 22 slate.
+  // Rows lock by the clock, so pin before the fixtures' Oct 22 slate.
   await page.clock.setFixedTime(new Date("2026-10-20T16:00:00Z"));
   await mockApi(page);
-  await page.goto("/schedule");
+  await page.goto("/games?date=2026-10-22");
   await page.locator('a[href="/games/0022500999"]').click();
   await expect(page).toHaveURL(/\/games\/0022500999/);
 
@@ -201,10 +197,10 @@ test("game page recaps a final with the model's call and no regular-season headl
 });
 
 test("schedule opens the injury report and the game page lists it", async ({ page }) => {
-  // /schedule asks from today's Eastern date, so pin before the fixtures' Oct 22 slate.
+  // Rows lock by the clock, so pin before the fixtures' Oct 22 slate.
   await page.clock.setFixedTime(new Date("2026-10-20T16:00:00Z"));
   await mockApi(page);
-  await page.goto("/schedule");
+  await page.goto("/games?date=2026-10-22");
   const field = page.getByTestId("injury-field");
   await expect(field).toHaveText(/1 listed/);
   await field.click();

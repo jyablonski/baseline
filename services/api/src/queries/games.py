@@ -156,6 +156,31 @@ LIST_SCHEDULE_DATES = text(
     """
 )
 
+# Every date with a game between :from_date and :to_date, split by state, for
+# the Games page's week strip. "Live" is the clock's guess, as on the frontend:
+# not Final and past its Eastern tip time, which includes a game still awaiting
+# its final. A game with no tip time is never live.
+LIST_GAME_DAYS = text(
+    """
+    SELECT
+        fct_games_schedule.game_date,
+        count(*) AS total,
+        count(*) FILTER (
+            WHERE lower(fct_games_schedule.status) IN ('final', '3')
+        ) AS final,
+        count(*) FILTER (
+            WHERE
+                lower(fct_games_schedule.status) NOT IN ('final', '3')
+                AND (fct_games_schedule.game_date + fct_games_schedule.start_time_et)
+                    AT TIME ZONE 'America/New_York' <= now()
+        ) AS live
+    FROM gold.fct_games_schedule
+    WHERE fct_games_schedule.game_date BETWEEN :from_date AND :to_date
+    GROUP BY fct_games_schedule.game_date
+    ORDER BY fct_games_schedule.game_date ASC
+    """
+)
+
 GAME_EXISTS = text(
     """
     SELECT 1

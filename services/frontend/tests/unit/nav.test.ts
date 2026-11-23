@@ -6,10 +6,9 @@ describe("nav", () => {
   it("lists primary tabs including Ask", () => {
     expect(PRIMARY_NAV.map((item) => item.label)).toEqual([
       "Home",
-      "Schedule",
-      "Past Games",
-      "Players",
+      "Games",
       "Teams",
+      "Players",
       "Social",
       "Ask",
     ]);
@@ -23,8 +22,6 @@ describe("nav", () => {
     expect(isNavActive("/teams/1", "/teams")).toBe(true);
     expect(isNavActive("/games/0022400001", "/games")).toBe(true);
     expect(isNavActive("/games", "/games")).toBe(true);
-    expect(isNavActive("/schedule", "/schedule")).toBe(true);
-    expect(isNavActive("/schedule", "/games")).toBe(false);
   });
 
   it("decodes a route slug so an accented name still matches its player", () => {

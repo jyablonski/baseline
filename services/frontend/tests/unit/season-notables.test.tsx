@@ -72,7 +72,7 @@ function renderPage() {
 }
 
 beforeEach(() => {
-  navigation.search = "";
+  navigation.search = "view=notables";
   navigation.replace.mockReset();
   listBiggestCollapses.mockReset();
   listUpsets.mockReset();
@@ -102,19 +102,21 @@ describe("season notables", () => {
     expect(within(row).getByText("26 pts")).toBeInTheDocument();
     expect(within(row).getByText("Won by 3")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Comebacks" })).toHaveAttribute("aria-current", "page");
-    // A short page has no more to show.
-    expect(
-      screen.queryByRole("navigation", { name: "Notable games pages" })
-    ).not.toBeInTheDocument();
+    // The game on one line, how it went on its own line under it.
+    expect(within(row).getByText("trailed by 26 in Q2").closest("span.block")).toHaveClass(
+      "whitespace-nowrap"
+    );
+    // A short list has no more to show.
+    expect(screen.queryByRole("button", { name: "Show next 10 →" })).not.toBeInTheDocument();
   });
 
   it("links each tab, keeps the team, and always shows the newest season", async () => {
-    navigation.search = "team=SAC&season=2025-26";
+    navigation.search = "view=notables&team=SAC&season=2025-26";
     renderPage();
     await screen.findByTestId("notable-row");
     expect(screen.getByRole("link", { name: "Upsets" })).toHaveAttribute(
       "href",
-      "/games?team=SAC&season=2025-26&tab=upsets"
+      "/games?view=notables&team=SAC&season=2025-26&tab=upsets"
     );
     // A stale ?season= from Upcoming is ignored: older seasons have no notables.
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
@@ -132,13 +134,13 @@ describe("season notables", () => {
     await screen.findByTestId("notable-row");
     await waitFor(() => expect(screen.getByRole("option", { name: "LAL" })).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Team"), { target: { value: "LAL" } });
-    expect(navigation.replace).toHaveBeenCalledWith("/games?team=LAL", {
+    expect(navigation.replace).toHaveBeenCalledWith("/games?view=notables&team=LAL", {
       scroll: false,
     });
   });
 
-  it("pages ten at a time, ranking on from the page before", async () => {
-    // Eleven rows means a next page; the eleventh is never shown.
+  it("shows ten, then appends ten more at a time, ranking on", async () => {
+    // Eleven rows means there is more; the eleventh is never shown.
     const first = Array.from({ length: 11 }, (_, index) => ({
       ...COLLAPSE,
       game_id: `g-${index}`,
@@ -148,27 +150,23 @@ describe("season notables", () => {
     );
     renderPage();
     await waitFor(() => expect(screen.getAllByTestId("notable-row")).toHaveLength(10));
-    expect(screen.getByRole("button", { name: "← Prev" })).toBeDisabled();
-    expect(screen.getByText("Page 1")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next →" }));
-    await waitFor(() => expect(screen.getAllByTestId("notable-row")).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "Show next 10 →" }));
+    await waitFor(() => expect(screen.getAllByTestId("notable-row")).toHaveLength(11));
     expect(listBiggestCollapses).toHaveBeenLastCalledWith({
       season: "2026-27",
       team: undefined,
       limit: 11,
       offset: 10,
     });
-    expect(within(screen.getByTestId("notable-row")).getByText("11")).toBeInTheDocument();
-    expect(screen.getByText("Page 2")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Next →" })).toBeDisabled();
-
-    fireEvent.click(screen.getByRole("button", { name: "← Prev" }));
-    await waitFor(() => expect(screen.getAllByTestId("notable-row")).toHaveLength(10));
+    const rows = screen.getAllByTestId("notable-row");
+    expect(within(rows[10]).getByText("11")).toBeInTheDocument();
+    // The second batch was short: nothing more to show.
+    expect(screen.queryByRole("button", { name: "Show next 10 →" })).not.toBeInTheDocument();
   });
 
   it("shows upsets with the odds in words", async () => {
-    navigation.search = "tab=upsets";
+    navigation.search = "view=notables&tab=upsets";
     listUpsets.mockResolvedValue(
       page([
         {
@@ -199,7 +197,7 @@ describe("season notables", () => {
   });
 
   it("ranks the largest margins with the final score in its own column", async () => {
-    navigation.search = "tab=margins";
+    navigation.search = "view=notables&tab=margins";
     listLargestMargins.mockResolvedValue(
       page([
         {
@@ -230,7 +228,7 @@ describe("season notables", () => {
   });
 
   it("says plainly when a tab has nothing yet", async () => {
-    navigation.search = "tab=upsets";
+    navigation.search = "view=notables&tab=upsets";
     renderPage();
     expect(
       await screen.findByText(
@@ -246,7 +244,7 @@ describe("season notables", () => {
   });
 
   it("names the team when its filter leaves nothing", async () => {
-    navigation.search = "tab=closest&team=lal";
+    navigation.search = "view=notables&tab=closest&team=lal";
     renderPage();
     expect(await screen.findByText("No closest games involving LAL yet.")).toBeInTheDocument();
     expect(listClosestGames).toHaveBeenCalledWith({

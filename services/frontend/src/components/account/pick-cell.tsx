@@ -92,7 +92,7 @@ export function PickCell({
         })}
       </div>
       {pick && picked ? (
-        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-ink-2">
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs whitespace-nowrap text-ink-2">
           {pick.stake && pick.moneyline != null ? (
             <span className="text-primary">
               {formatMoney(pick.stake)} to win {formatMoney(pickProfit(pick.stake, pick.moneyline))}
