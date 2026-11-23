@@ -2,6 +2,11 @@
 -- Basketball-Reference files personal, shooting, take, flagrant and
 -- away-from-play fouls in the fouled team's column, and a parser that trusts
 -- the column credits the foul (and once the fouler himself) to the opponent.
+--
+-- store_failures keeps the offending rows in dbt_test__audit: a later catch-up
+-- re-scrape can clean gold before anyone looks, and the log only has a count.
+{{ config(store_failures=true) }}
+
 with play_by_play as (
     select * from {{ ref('fct_play_by_play') }}
     where

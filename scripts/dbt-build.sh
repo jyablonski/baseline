@@ -10,7 +10,8 @@
 # best effort and never changes it.
 #
 # The failed nodes come from dbt's own summary lines ("Failure in test x",
-# "Database Error in model y") rather than target/run_results.json, because
+# "Database Error in model y"; dbt 1.12+ prints "[ERROR]: in test x") rather
+# than target/run_results.json, because
 # `compose run --rm` discards the container and its target/ with it. Output is
 # still streamed live; it is only tee'd so it can be read back.
 set -euo pipefail
@@ -52,7 +53,7 @@ all_failed=()
 if [[ "$DBT_EXIT" -ne 0 ]]; then
   mapfile -t all_failed < <(
     sed -e 's/\x1b\[[0-9;]*m//g' "$LOG_FILE" \
-      | sed -nE 's/.*(Failure|Error) in (model|test|seed|snapshot|unit_test) ([^ ]+).*/\2 \3/p' \
+      | sed -nE 's/.*(Failure|Error|\[ERROR\]:) in(model|test|seed|snapshot|unit_test) ([^ ]+).*/\2 \3/p' \
       | awk '!seen[$0]++'
   )
 fi
