@@ -313,8 +313,10 @@ function ScheduleRow({
           </span>
         )}
       </td>
+      {/* Block-level flex in both halves: an inline-flex sits on a text line, and the away
+          side's baseline comes from its logo, the home side's from "@", so they drifted apart. */}
       <td role="cell" data-cell="away">
-        <span className="inline-flex items-center gap-1 font-semibold whitespace-nowrap">
+        <span className="flex items-center gap-1 font-semibold whitespace-nowrap">
           {game.away_team_id ? (
             <TeamAbbrLink
               teamId={game.away_team_id}
@@ -328,7 +330,7 @@ function ScheduleRow({
         </span>
       </td>
       <td role="cell" data-cell="home">
-        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+        <span className="flex items-center gap-1.5 whitespace-nowrap">
           <span className="text-muted-foreground">@</span>
           {game.home_team_id ? (
             <TeamAbbrLink

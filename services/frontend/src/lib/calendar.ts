@@ -98,6 +98,11 @@ export function formatMonth(month: string) {
   });
 }
 
+/** "October" for "2026-10". */
+export function formatMonthLong(month: string) {
+  return utcDate(`${month}-01`).toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+}
+
 /** "Oct" for "2026-10". */
 export function formatMonthShort(month: string) {
   return utcDate(`${month}-01`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });

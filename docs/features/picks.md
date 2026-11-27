@@ -5,6 +5,7 @@ code:
   - services/frontend/src/app/picks/
   - services/frontend/src/components/account/pick-cell.tsx
   - services/frontend/src/components/account/settled-picks.tsx
+  - services/frontend/src/components/account/picks-calendar.tsx
   - services/frontend/src/components/games/result-row.tsx
   - services/frontend/src/components/games/game-pick.tsx
   - services/frontend/src/lib/picks.ts
@@ -24,7 +25,7 @@ related:
 
 - **`/games` and the game page:** a pick cell or "Who wins?" cards with the consensus price and implied %, and an optional stake. From tip the cell locks: the side taken behind a lock icon, "vs" / "at" the opponent, and "Locked at tip" with the stake and what it wins (or "record only"). Signed-out cards lead to sign-in.
 - **Finished days on `/games`:** a right-hand cell on each result the visitor picked, "✓ You: DAL" (green) for a win or "✗ You: BOS" (red) for a loss, matched from the pick sheet by `game_id` ([results-and-notables.md](results-and-notables.md)).
-- **`/picks`**, the signed-in visitor's sheet: four KPIs (record, net, vs. the model, best call), a Last 20 strip of W/L tiles, newest on the right, compared with the season once there are more than 20 graded picks, and Open picks folded behind a one-line count and first lock. Settled is a table (date, result, pick, final, stake, net; a whole row opens the game) with Last 7 days / Season, All / Wins / Losses, a Show model switch that adds the model's side and how it came out, and a team filter on the side picked. Breakdown lists the record and net of each split (favorites or underdogs, home or away, staked or record only, with or against the model); a chosen split or team becomes a chip, and the summary line over the table totals whatever is left. Filters are not kept in the URL.
+- **`/picks`**, the signed-in visitor's sheet: four KPIs (record, net, vs. the model, best call), a Last 20 strip of W/L tiles, newest on the right, compared with the season once there are more than 20 graded picks, and Open picks folded behind a one-line count and first lock. Below them, Settled and Calendar tabs (not kept in the URL). Settled is a table (date, result, pick, final, stake, net; a whole row opens the game) with Last 7 days / Season, All / Wins / Losses, a Show model switch that adds the model's side and how it came out, and a team filter on the side picked. Breakdown lists the record and net of each split (favorites or underdogs, home or away, staked or record only, with or against the model); a chosen split or team becomes a chip, and the summary line over the table totals whatever is left. Filters are not kept in the URL. Calendar is a month grid, opening on the current month: each day shows its record (green when more wins than losses, red when fewer), the net of its settled stakes, how many picks are still open, and "No picks" on a finished game day the visitor skipped. Skipped days count only from the visitor's first pick and only once the day is over, so a new account is not a month of misses. A day opens that date on `/games`; under the grid, the month's record, % correct, net, and "picked on N of M game days", counting finished days only.
 - **Game page, once Final:** the visitor's graded pick on the Before tip-off bar.
 
 ## How it works

@@ -283,7 +283,14 @@ function SettledRow({ pick, showModel }: { pick: UserPick; showModel: boolean })
   );
 }
 
-export function SettledPicks({ picks }: { picks: UserPick[] }) {
+export function SettledPicks({
+  picks,
+  heading = <h2 className="type-module">Settled</h2>,
+}: {
+  picks: UserPick[];
+  /** Replaces the "Settled" title; null when tabs above already name the view. */
+  heading?: React.ReactNode;
+}) {
   const [shown, setShown] = useState(SETTLED_PAGE);
   const [showModel, setShowModel] = useState(false);
   const [filters, setFilters] = useState<SettledFilters>({
@@ -308,8 +315,8 @@ export function SettledPicks({ picks }: { picks: UserPick[] }) {
   return (
     <section>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule-strong pb-3">
-        <h2 className="type-module">Settled</h2>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {heading}
+        <div className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-2">
           <Segments
             label="Range"
             options={RANGES}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
+import { PicksCalendar } from "@/components/account/picks-calendar";
 import { PickGameLink, SettledPicks } from "@/components/account/settled-picks";
 import { SignInPrompt } from "@/components/account/sign-in-prompt";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
@@ -210,8 +211,66 @@ function Sheet({ sheet }: { sheet: PickSheet }) {
 
       <OpenPicks picks={open} />
 
-      {settled.length > 0 ? <SettledPicks picks={settled} /> : null}
+      {picks.length > 0 ? <PastPicks picks={picks} settled={settled} /> : null}
     </div>
+  );
+}
+
+const PAST_VIEWS = [
+  { value: "settled", label: "Settled" },
+  { value: "calendar", label: "Calendar" },
+] as const;
+
+/** Settled picks as a list or a month calendar, under underline tabs like the Games header's. */
+function PastPicks({ picks, settled }: { picks: UserPick[]; settled: UserPick[] }) {
+  const [view, setView] = useState<(typeof PAST_VIEWS)[number]["value"]>("settled");
+  // Arrow keys move between tabs, as a tablist promises; only the selected one is in the tab order.
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const index = PAST_VIEWS.findIndex((option) => option.value === view);
+    const step = event.key === "ArrowRight" ? 1 : -1;
+    const next = PAST_VIEWS[(index + step + PAST_VIEWS.length) % PAST_VIEWS.length].value;
+    setView(next);
+    document.getElementById(`past-tab-${next}`)?.focus();
+  };
+  return (
+    <section>
+      <div
+        role="tablist"
+        aria-label="Past picks"
+        className="flex gap-5 border-b border-rule-strong"
+        onKeyDown={onKeyDown}
+      >
+        {PAST_VIEWS.map((option) => (
+          <button
+            key={option.value}
+            id={`past-tab-${option.value}`}
+            type="button"
+            role="tab"
+            aria-selected={view === option.value}
+            aria-controls="past-panel"
+            tabIndex={view === option.value ? 0 : -1}
+            className={cn(
+              "ct-tab -mb-px pt-1 whitespace-nowrap",
+              view === option.value && "ct-tab-active"
+            )}
+            onClick={() => setView(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <div id="past-panel" role="tabpanel" aria-labelledby={`past-tab-${view}`} className="pt-3">
+        {view === "calendar" ? (
+          <PicksCalendar picks={picks} />
+        ) : settled.length > 0 ? (
+          <SettledPicks picks={settled} heading={null} />
+        ) : (
+          <p className="type-caption">Nothing settled yet. Picks settle after the final.</p>
+        )}
+      </div>
+    </section>
   );
 }
 

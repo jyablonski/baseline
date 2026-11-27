@@ -134,6 +134,90 @@ export function recentForm(picks: UserPick[], size = 20) {
   return { picks: recent, wins, losses, trend };
 }
 
+/** One calendar day of the pick sheet. `missed` is a past game day with no pick on it. */
+export type PickDay = {
+  date: string;
+  wins: number;
+  losses: number;
+  net: number;
+  /** Any settled stake that day, so a $0 net still shows. */
+  staked: boolean;
+  open: number;
+  missed: boolean;
+};
+
+/**
+ * The pick sheet by Eastern game date, for the picks calendar. `gameDates` are
+ * the days with a finished game. A day counts as missed only from the first
+ * pick on, and only once it is over, so a new account is not a wall of misses
+ * and today never is one while games are still to play.
+ */
+export function pickDays(picks: UserPick[], gameDates: string[], today = isoDateET()) {
+  const byDate = new Map<string, UserPick[]>();
+  for (const pick of picks) {
+    if (!pick.game_date) continue;
+    const date = pick.game_date.slice(0, 10);
+    const dayPicks = byDate.get(date);
+    if (dayPicks) dayPicks.push(pick);
+    else byDate.set(date, [pick]);
+  }
+  const days = new Map<string, PickDay>();
+  for (const [date, dayPicks] of byDate) {
+    const { wins, losses, net } = pickTotals(dayPicks);
+    days.set(date, {
+      date,
+      wins,
+      losses,
+      net,
+      staked: dayPicks.some((pick) => pick.profit != null),
+      open: dayPicks.filter((pick) => pick.result === "pending").length,
+      missed: false,
+    });
+  }
+  const first = [...byDate.keys()].sort()[0];
+  if (first) {
+    for (const raw of gameDates) {
+      const date = raw.slice(0, 10);
+      if (date < first || date >= today || days.has(date)) continue;
+      days.set(date, {
+        date,
+        wins: 0,
+        losses: 0,
+        net: 0,
+        staked: false,
+        open: 0,
+        missed: true,
+      });
+    }
+  }
+  return days;
+}
+
+/**
+ * A month's line under the picks calendar: record, net, and game days picked.
+ * Days picked count only once over, as misses do, so open picks for tomorrow
+ * do not pad "picked on N of M game days".
+ */
+export function monthPickSummary(days: Iterable<PickDay>, month: string, today = isoDateET()) {
+  let wins = 0;
+  let losses = 0;
+  let netCents = 0;
+  let staked = false;
+  let picked = 0;
+  let missed = 0;
+  for (const day of days) {
+    if (!day.date.startsWith(month)) continue;
+    wins += day.wins;
+    losses += day.losses;
+    netCents += Math.round(day.net * 100);
+    staked ||= day.staked;
+    if (day.date >= today) continue;
+    if (day.missed) missed += 1;
+    else picked += 1;
+  }
+  return { wins, losses, net: netCents / 100, staked, picked, missed };
+}
+
 /** The side the model favoured, from whether its favourite won. Null if it made no call. */
 export function modelTeamId(pick: UserPick) {
   if (pick.model_correct == null || pick.home_score == null || pick.away_score == null) return null;
