@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
+import { PicksCalendar } from "@/components/account/picks-calendar";
 import { PickGameLink, SettledPicks } from "@/components/account/settled-picks";
 import { SignInPrompt } from "@/components/account/sign-in-prompt";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
@@ -210,8 +211,52 @@ function Sheet({ sheet }: { sheet: PickSheet }) {
 
       <OpenPicks picks={open} />
 
-      {settled.length > 0 ? <SettledPicks picks={settled} /> : null}
+      {picks.length > 0 ? <PastPicks picks={picks} settled={settled} /> : null}
     </div>
+  );
+}
+
+const PAST_VIEWS = [
+  { value: "settled", label: "Settled" },
+  { value: "calendar", label: "Calendar" },
+] as const;
+
+/** Settled picks as a list or a month calendar, under underline tabs like the Games header's. */
+function PastPicks({ picks, settled }: { picks: UserPick[]; settled: UserPick[] }) {
+  const [view, setView] = useState<(typeof PAST_VIEWS)[number]["value"]>("settled");
+  return (
+    <section>
+      <div
+        role="tablist"
+        aria-label="Past picks"
+        className="flex gap-5 border-b border-rule-strong"
+      >
+        {PAST_VIEWS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            role="tab"
+            aria-selected={view === option.value}
+            className={cn(
+              "ct-tab -mb-px pt-1 whitespace-nowrap",
+              view === option.value && "ct-tab-active"
+            )}
+            onClick={() => setView(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" className="pt-3">
+        {view === "calendar" ? (
+          <PicksCalendar picks={picks} />
+        ) : settled.length > 0 ? (
+          <SettledPicks picks={settled} heading={null} />
+        ) : (
+          <p className="type-caption">Nothing settled yet. Picks settle after the final.</p>
+        )}
+      </div>
+    </section>
   );
 }
 

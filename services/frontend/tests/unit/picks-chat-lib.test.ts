@@ -12,7 +12,9 @@ import {
   formatSignedMoney,
   marketTotals,
   modelTeam,
+  monthPickSummary,
   openSummary,
+  pickDays,
   pickLabel,
   pickProfit,
   picksCsv,
@@ -278,5 +280,38 @@ describe("picks page summaries", () => {
     expect(openSummary([pick({ game_date: "2026-11-02", start_time_et: null })], null, now)).toBe(
       "1 open"
     );
+  });
+});
+
+describe("pickDays", () => {
+  it("groups picks by date and marks finished game days without one as missed", () => {
+    const days = pickDays(
+      [
+        pick({ game_id: "a", game_date: "2026-11-03", result: "won", stake: 10, profit: 9.09 }),
+        pick({ game_id: "b", game_date: "2026-11-03", result: "lost" }),
+        pick({ game_id: "c", game_date: "2026-11-05", result: "pending" }),
+      ],
+      ["2026-11-01", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"],
+      "2026-11-05"
+    );
+    expect(days.get("2026-11-03")).toMatchObject({ wins: 1, losses: 1, net: 9.09, staked: true });
+    expect(days.get("2026-11-04")).toMatchObject({ missed: true, picked: 0 });
+    expect(days.get("2026-11-05")).toMatchObject({ open: 1, missed: false });
+    // Before the first pick, and from today on, nothing is missed yet.
+    expect(days.has("2026-11-01")).toBe(false);
+    expect(days.has("2026-11-06")).toBe(false);
+
+    expect(monthPickSummary(days.values(), "2026-11")).toEqual({
+      wins: 1,
+      losses: 1,
+      net: 9.09,
+      staked: true,
+      picked: 2,
+      missed: 1,
+    });
+  });
+
+  it("marks nothing missed before the first pick", () => {
+    expect(pickDays([], ["2026-11-01"], "2026-11-05").size).toBe(0);
   });
 });

@@ -19,6 +19,8 @@ const state = vi.hoisted(() => ({
   replace: vi.fn(),
   // Finals for a past day on /games; none unless a test sets them.
   finals: [] as Record<string, unknown>[],
+  // Days with a Final game, for the picks calendar.
+  gameDates: [] as string[],
 }));
 const actions = vi.hoisted(() => ({
   getProfileAction: vi.fn(),
@@ -74,7 +76,10 @@ vi.mock("@/lib/api", () => ({
     }),
     listSchedule: async () => ({ data: [game], meta: { total: 1, limit: 50, offset: 0 } }),
     listGameDays: async () => ({ data: [], meta: { total: 0, limit: 0, offset: 0 } }),
-    listGameDates: async () => ({ data: [], meta: { total: 0, limit: 0, offset: 0 } }),
+    listGameDates: async () => ({
+      data: state.gameDates.map((date) => ({ game_date: date, season: "2026-27", game_count: 1 })),
+      meta: { total: state.gameDates.length, limit: 0, offset: 0 },
+    }),
     listGames: async () => ({
       data: state.finals,
       meta: { total: state.finals.length, limit: 20, offset: 0 },
@@ -204,6 +209,7 @@ beforeEach(() => {
   state.pathname = "/games";
   state.search = "date=2026-10-22";
   state.finals = [];
+  state.gameDates = [];
   actions.getPickSheetAction.mockResolvedValue(sheet());
   actions.getProfileAction.mockResolvedValue(profile());
 });
@@ -1393,5 +1399,52 @@ describe("account page", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Try again.");
     expect(screen.getByRole("button", { name: "Yes, delete everything" })).toBeEnabled();
     expect(assign).not.toHaveBeenCalled();
+  });
+});
+
+describe("picks calendar", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-26T16:00:00Z") });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows each day's record and net, and the game days with no pick", async () => {
+    state.gameDates = ["2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-25"];
+    actions.getPickSheetAction.mockResolvedValue(
+      sheet(
+        [
+          pick({ game_id: "open", game_date: "2026-10-27" }),
+          pick({ game_id: "a", game_date: "2026-10-23", result: "won", stake: 10, profit: 6.67 }),
+          pick({ game_id: "b", game_date: "2026-10-23", result: "won" }),
+          pick({ game_id: "c", game_date: "2026-10-23", result: "lost", stake: 20, profit: -20 }),
+          pick({ game_id: "d", game_date: "2026-10-21", result: "lost" }),
+        ],
+        { ...emptySummary, wins: 2, losses: 2, net: -13.33 }
+      )
+    );
+    page(<PicksPage />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Calendar" }));
+    expect(screen.getByRole("tab", { name: "Calendar" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("heading", { name: "October 2026" })).toBeInTheDocument();
+
+    const day = (date: string) =>
+      screen.getAllByTestId("pick-day").find((cell) => cell.dataset.date === date)!;
+    expect(within(day("2026-10-23")).getByText("2–1")).toHaveClass("text-primary");
+    expect(within(day("2026-10-23")).getByText("−$13.33")).toBeInTheDocument();
+    expect(within(day("2026-10-21")).getByText("0–1")).toHaveClass("text-destructive");
+    expect(within(day("2026-10-27")).getByText("1 open")).toBeInTheDocument();
+    // Missed from the first pick on: the 22nd and 25th, not the 20th before it.
+    expect(within(day("2026-10-22")).getByText("No picks")).toBeInTheDocument();
+    expect(within(day("2026-10-25")).getByText("No picks")).toBeInTheDocument();
+    expect(day("2026-10-20")).toBeUndefined();
+    expect(within(day("2026-10-23")).getByRole("link")).toHaveAttribute(
+      "href",
+      "/games?date=2026-10-23"
+    );
+    expect(screen.getByTestId("calendar-summary")).toHaveTextContent(
+      "2–2 in October · 50% correct · net −$13.33 · picked on 3 of 5 game days"
+    );
   });
 });
