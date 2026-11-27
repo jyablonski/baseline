@@ -3,11 +3,18 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 
-import { MonthNav } from "@/components/month-nav";
+import { DayNumber, MonthNav, WeekdayHead } from "@/components/month-nav";
 import { ErrorState, LoadingState } from "@/components/query-state";
 import { useGameDates } from "@/hooks/use-game-dates";
 import { queryErrorMessage } from "@/lib/api";
-import { formatMonth, monthGrid, monthOf, seasonMonths, type CalendarCell } from "@/lib/calendar";
+import {
+  formatMonth,
+  formatMonthLong,
+  monthGrid,
+  monthOf,
+  seasonMonths,
+  type CalendarCell,
+} from "@/lib/calendar";
 import { formatScheduleDate, isoDateET } from "@/lib/format";
 import {
   formatSignedMoney,
@@ -18,8 +25,6 @@ import {
 } from "@/lib/picks";
 import type { UserPick } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** The pick sheet as a month grid: each day's record and net, and the game days skipped. */
 export function PicksCalendar({ picks }: { picks: UserPick[] }) {
@@ -40,21 +45,13 @@ export function PicksCalendar({ picks }: { picks: UserPick[] }) {
   if (datesQuery.isPending) return <LoadingState label="Loading calendar…" />;
   if (datesQuery.isError) return <ErrorState message={queryErrorMessage(datesQuery.error)} />;
 
-  const summary = monthPickSummary(days.values(), month);
+  const summary = monthPickSummary(days.values(), month, today);
   return (
     <div data-testid="picks-calendar">
       <MonthNav month={month} months={months} onChange={setChosen} />
       <table className="w-full table-fixed border-collapse text-sm">
         <caption className="sr-only">{formatMonth(month)} picks</caption>
-        <thead>
-          <tr>
-            {WEEKDAYS.map((day) => (
-              <th key={day} scope="col" className="type-eyebrow pb-1 text-left font-normal">
-                {day}
-              </th>
-            ))}
-          </tr>
-        </thead>
+        <WeekdayHead />
         <tbody>
           {monthGrid(month).map((week) => (
             <tr key={week[0].date}>
@@ -74,7 +71,7 @@ export function PicksCalendar({ picks }: { picks: UserPick[] }) {
       <p className="mt-2 text-sm text-ink-2" data-testid="calendar-summary">
         {[
           summary.wins + summary.losses > 0
-            ? `${summary.wins}–${summary.losses} in ${formatMonth(month).split(" ")[0]}`
+            ? `${summary.wins}–${summary.losses} in ${formatMonthLong(month)}`
             : null,
           percentCorrect(summary.wins, summary.losses),
           summary.staked ? `net ${formatSignedMoney(summary.net)}` : null,
@@ -89,9 +86,11 @@ export function PicksCalendar({ picks }: { picks: UserPick[] }) {
   );
 }
 
+type DayTone = "won" | "lost" | "even" | null;
+
 function DayCell({ cell, today, day }: { cell: CalendarCell; today: boolean; day?: PickDay }) {
   const graded = day ? day.wins + day.losses : 0;
-  const tone =
+  const tone: DayTone =
     !day || graded === 0
       ? null
       : day.wins > day.losses
@@ -111,28 +110,13 @@ function DayCell({ cell, today, day }: { cell: CalendarCell; today: boolean; day
       data-testid={day ? "pick-day" : undefined}
       data-date={day ? cell.date : undefined}
     >
-      <span
-        className={cn(
-          "block text-xs tabular",
-          today && "inline-block bg-primary px-1 font-semibold text-primary-foreground"
-        )}
-      >
-        {Number(cell.date.slice(8, 10))}
-      </span>
+      <DayNumber date={cell.date} today={today} />
       {day ? <DayEntry day={day} graded={graded} tone={tone} /> : null}
     </td>
   );
 }
 
-function DayEntry({
-  day,
-  graded,
-  tone,
-}: {
-  day: PickDay;
-  graded: number;
-  tone: "won" | "lost" | "even" | null;
-}) {
+function DayEntry({ day, graded, tone }: { day: PickDay; graded: number; tone: DayTone }) {
   const label = day.missed
     ? `${formatScheduleDate(day.date)}, no picks`
     : [

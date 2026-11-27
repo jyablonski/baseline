@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
-import { MonthNav } from "@/components/month-nav";
+import { DayNumber, MonthNav, WeekdayHead } from "@/components/month-nav";
 import { TeamLogo } from "@/components/team-logo";
 import {
   defaultMonth,
@@ -17,7 +17,6 @@ import { formatGameTime } from "@/lib/timezones";
 import type { TeamSeasonGame } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const CELL_LOGO_SIZE = 20;
 
 /** A team's season as a month grid, every game linking to its page. */
@@ -43,15 +42,7 @@ export function SeasonCalendar({
       <MonthNav month={month} months={months} onChange={setMonth} />
       <table className="w-full table-fixed border-collapse text-sm">
         <caption className="sr-only">{formatMonth(month)} games</caption>
-        <thead>
-          <tr>
-            {WEEKDAYS.map((day) => (
-              <th key={day} scope="col" className="type-eyebrow pb-1 text-left font-normal">
-                {day}
-              </th>
-            ))}
-          </tr>
-        </thead>
+        <WeekdayHead />
         <tbody>
           {monthGrid(month).map((week) => (
             <tr key={week[0].date}>
@@ -95,14 +86,7 @@ function DayCell({
         !cell.inMonth && "bg-muted/40 text-ink-3"
       )}
     >
-      <span
-        className={cn(
-          "block text-xs tabular",
-          today && "inline-block bg-primary px-1 font-semibold text-primary-foreground"
-        )}
-      >
-        {Number(cell.date.slice(8, 10))}
-      </span>
+      <DayNumber date={cell.date} today={today} />
       {/* One team never plays twice on a date, but stack rather than assume it. */}
       {games.map((game) => (
         <GameEntry key={game.game_id} game={game} timezone={timezone} />

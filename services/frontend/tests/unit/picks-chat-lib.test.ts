@@ -295,18 +295,19 @@ describe("pickDays", () => {
       "2026-11-05"
     );
     expect(days.get("2026-11-03")).toMatchObject({ wins: 1, losses: 1, net: 9.09, staked: true });
-    expect(days.get("2026-11-04")).toMatchObject({ missed: true, picked: 0 });
+    expect(days.get("2026-11-04")).toMatchObject({ missed: true });
     expect(days.get("2026-11-05")).toMatchObject({ open: 1, missed: false });
     // Before the first pick, and from today on, nothing is missed yet.
     expect(days.has("2026-11-01")).toBe(false);
     expect(days.has("2026-11-06")).toBe(false);
 
-    expect(monthPickSummary(days.values(), "2026-11")).toEqual({
+    // The 5th is today, so its open pick is not yet a day picked.
+    expect(monthPickSummary(days.values(), "2026-11", "2026-11-05")).toEqual({
       wins: 1,
       losses: 1,
       net: 9.09,
       staked: true,
-      picked: 2,
+      picked: 1,
       missed: 1,
     });
   });

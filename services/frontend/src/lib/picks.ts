@@ -143,7 +143,6 @@ export type PickDay = {
   /** Any settled stake that day, so a $0 net still shows. */
   staked: boolean;
   open: number;
-  picked: number;
   missed: boolean;
 };
 
@@ -158,7 +157,9 @@ export function pickDays(picks: UserPick[], gameDates: string[], today = isoDate
   for (const pick of picks) {
     if (!pick.game_date) continue;
     const date = pick.game_date.slice(0, 10);
-    byDate.set(date, [...(byDate.get(date) ?? []), pick]);
+    const dayPicks = byDate.get(date);
+    if (dayPicks) dayPicks.push(pick);
+    else byDate.set(date, [pick]);
   }
   const days = new Map<string, PickDay>();
   for (const [date, dayPicks] of byDate) {
@@ -170,7 +171,6 @@ export function pickDays(picks: UserPick[], gameDates: string[], today = isoDate
       net,
       staked: dayPicks.some((pick) => pick.profit != null),
       open: dayPicks.filter((pick) => pick.result === "pending").length,
-      picked: dayPicks.length,
       missed: false,
     });
   }
@@ -186,7 +186,6 @@ export function pickDays(picks: UserPick[], gameDates: string[], today = isoDate
         net: 0,
         staked: false,
         open: 0,
-        picked: 0,
         missed: true,
       });
     }
@@ -194,8 +193,12 @@ export function pickDays(picks: UserPick[], gameDates: string[], today = isoDate
   return days;
 }
 
-/** A month's line under the picks calendar: record, net, and game days picked. */
-export function monthPickSummary(days: Iterable<PickDay>, month: string) {
+/**
+ * A month's line under the picks calendar: record, net, and game days picked.
+ * Days picked count only once over, as misses do, so open picks for tomorrow
+ * do not pad "picked on N of M game days".
+ */
+export function monthPickSummary(days: Iterable<PickDay>, month: string, today = isoDateET()) {
   let wins = 0;
   let losses = 0;
   let netCents = 0;
@@ -208,6 +211,7 @@ export function monthPickSummary(days: Iterable<PickDay>, month: string) {
     losses += day.losses;
     netCents += Math.round(day.net * 100);
     staked ||= day.staked;
+    if (day.date >= today) continue;
     if (day.missed) missed += 1;
     else picked += 1;
   }

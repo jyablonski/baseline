@@ -1427,6 +1427,11 @@ describe("picks calendar", () => {
     page(<PicksPage />);
     fireEvent.click(await screen.findByRole("tab", { name: "Calendar" }));
     expect(screen.getByRole("tab", { name: "Calendar" })).toHaveAttribute("aria-selected", "true");
+    // Arrow keys move along the tabs.
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Calendar" }), { key: "ArrowLeft" });
+    expect(screen.getByRole("tab", { name: "Settled" })).toHaveFocus();
+    expect(screen.getByRole("tabpanel")).toHaveAccessibleName("Settled");
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Settled" }), { key: "ArrowRight" });
     expect(await screen.findByRole("heading", { name: "October 2026" })).toBeInTheDocument();
 
     const day = (date: string) =>
@@ -1444,7 +1449,7 @@ describe("picks calendar", () => {
       "/games?date=2026-10-23"
     );
     expect(screen.getByTestId("calendar-summary")).toHaveTextContent(
-      "2–2 in October · 50% correct · net −$13.33 · picked on 3 of 5 game days"
+      "2–2 in October · 50% correct · net −$13.33 · picked on 2 of 4 game days"
     );
   });
 });
